@@ -11,8 +11,6 @@ function log(level, message, details = null) {
   };
   appLogs.push(entry);
   if (appLogs.length > 1000) appLogs.shift();
-  
-  // Console logging for debugging
   console.log(`[${level}] ${message}`, details || '');
 }
 
@@ -27,27 +25,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           loading: message.loading || false,
           timestamp: Date.now()
         };
-        log("STATE_CHANGE", `SET_DATA for Tab ${tabId}`, { 
+        log("SUCCESS", `Extracted Data from Tab ${tabId}`, { 
             platform: message.data?.platform, 
-            msgCount: message.data?.messages?.length 
+            count: message.data?.messages?.length 
         });
         sendResponse({ success: true });
         break;
 
       case "GET_DATA":
         const state = tabStates[tabId];
-        log("STATE_ACCESS", `GET_DATA for Tab ${tabId}`, { found: !!state });
         sendResponse(state || { data: null, loading: false });
         break;
 
       case "CLEAR_DATA":
         delete tabStates[tabId];
-        log("STATE_CHANGE", `CLEAR_DATA for Tab ${tabId}`);
         sendResponse({ success: true });
         break;
 
       case "LOG_ERROR":
         log("ERROR", message.message, message.details);
+        sendResponse({ success: true });
+        break;
+        
+      case "LOG_INFO":
+        log("INFO", message.message, message.details);
         sendResponse({ success: true });
         break;
         
