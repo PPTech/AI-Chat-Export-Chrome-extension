@@ -14,3 +14,8 @@ Feature: Multi-platform chat export reliability
     When extraction runs
     Then only conversation messages are included
     And navigation/sidebar text is excluded
+
+  Scenario: Export photos from detected chat image URLs
+    Given extracted messages contain image URLs or image tokens
+    When the user clicks Export Photos
+    Then image files are downloaded or bundled for download

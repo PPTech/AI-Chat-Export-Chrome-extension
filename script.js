@@ -141,9 +141,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!currentChatData) return;
     const imageList = extractAllImageSources(currentChatData.messages);
     if (!imageList.length) return showError(new Error('No images found in extracted chat data.'));
+
     const files = [];
     let idx = 1;
     for (const src of imageList) {
+      if (/^https?:\/\//i.test(src)) {
+        const extGuess = src.includes('png') ? 'png' : (src.includes('webp') ? 'webp' : 'jpg');
+        chrome.downloads.download({ url: src, filename: `ai_chat_exporter/photo_${String(idx).padStart(3, '0')}.${extGuess}`, saveAs: false });
+        idx += 1;
+        continue;
+      }
       try {
         const b = await fetch(src).then((r) => r.blob());
         const ext = (b.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
@@ -151,13 +158,15 @@ document.addEventListener('DOMContentLoaded', () => {
         files.push({ name: `photo_${String(idx).padStart(3, '0')}.${ext}`, content: data, mime: b.type || 'application/octet-stream' });
         idx += 1;
       } catch {
-        // skip failed image
+        // skip failed inline image
       }
     }
-    if (!files.length) return showError(new Error('Images exist but could not be downloaded due to remote restrictions.'));
-    const zip = await createRobustZip(files);
-    const date = new Date().toISOString().slice(0, 10);
-    downloadBlob(zip, `${(currentChatData.platform || 'Export').replace(/[^a-zA-Z0-9]/g, '')}_${date}_photos.zip`);
+
+    if (files.length) {
+      const zip = await createRobustZip(files);
+      const date = new Date().toISOString().slice(0, 10);
+      downloadBlob(zip, `${(currentChatData.platform || 'Export').replace(/[^a-zA-Z0-9]/g, '')}_${date}_photos.zip`);
+    }
   };
 
   document.getElementById('link-legal').onclick = () => showInfo('Legal', 'Local processing developer version. User is responsible for lawful and compliant use in their jurisdiction.');
