@@ -1,13 +1,237 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// content.js - Platform Engine Orchestrator v0.10.3
+// content.js - Platform Engine Orchestrator v0.10.4
 
 (() => {
   if (window.hasRunContent) return;
   window.hasRunContent = true;
 
   const CHATGPT_ANALYSIS_KEY = 'CHATGPT_DOM_ANALYSIS';
+
+
+  class GeminiExtractor {
+    constructor(options = {}) {
+      this.options = options;
+      this.maxProbeNodes = 1200;
+    }
+
+    getAllElementsDeep(root = document) {
+      const out = [];
+      const stack = [root];
+      while (stack.length) {
+        const current = stack.pop();
+        if (!current) continue;
+        const children = current instanceof ShadowRoot ? Array.from(current.children) : Array.from((current.children || []));
+        for (let i = children.length - 1; i >= 0; i -= 1) {
+          const child = children[i];
+          out.push(child);
+          if (child.shadowRoot) stack.push(child.shadowRoot);
+          stack.push(child);
+          if (out.length > this.maxProbeNodes) return out;
+        }
+      }
+      return out;
+    }
+
+    countTextNodes(el) {
+      let count = 0;
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) {
+        if ((walker.currentNode.textContent || '').trim().length > 2) count += 1;
+      }
+      return count;
+    }
+
+    isScrollable(el) {
+      if (!el || !(el instanceof Element)) return false;
+      const cs = getComputedStyle(el);
+      return ['auto', 'scroll', 'overlay'].includes(cs.overflowY) && el.scrollHeight > el.clientHeight + 80;
+    }
+
+    detectScope() {
+      const viewportH = window.innerHeight || 1;
+      const candidates = [];
+      const seen = new Set();
+
+      const addCandidate = (el, method) => {
+        if (!el || seen.has(el)) return;
+        seen.add(el);
+        const rect = el.getBoundingClientRect();
+        const heightRatio = rect.height / viewportH;
+        const scrollable = this.isScrollable(el) ? 1 : 0;
+        const textNodes = this.countTextNodes(el);
+        const turnHints = el.querySelectorAll('[data-test-id*="user"], [data-test-id*="model"], article, [role="listitem"], pre, img').length;
+        const score = (heightRatio * 3) + (scrollable * 3) + Math.min(3, textNodes / 80) + Math.min(2, turnHints / 15);
+        candidates.push({
+          el,
+          method,
+          score,
+          diagnostics: { heightRatio: Number(heightRatio.toFixed(2)), scrollable, textNodes, turnHints }
+        });
+      };
+
+      document.querySelectorAll('[role="main"], main').forEach((el) => addCandidate(el, 'aria-main'));
+      this.getAllElementsDeep(document).forEach((el) => {
+        if (!(el instanceof Element)) return;
+        if (this.isScrollable(el) && el.getBoundingClientRect().height > viewportH * 0.7) addCandidate(el, 'scroll-probe');
+      });
+
+      if (!candidates.length) addCandidate(document.scrollingElement || document.documentElement, 'document-fallback');
+      candidates.sort((a, b) => b.score - a.score);
+      const top = candidates[0];
+      return {
+        rootEl: top ? top.el : null,
+        method: top ? top.method : 'none',
+        confidence: top ? Math.min(0.98, top.score / 8.5) : 0,
+        candidates: candidates.slice(0, 10)
+      };
+    }
+
+    collectTurnCandidates(rootEl) {
+      if (!rootEl) return [];
+      const nodes = [];
+      const seen = new Set();
+      const probe = this.getAllElementsDeep(rootEl);
+
+      probe.forEach((el, idx) => {
+        if (!(el instanceof Element) || seen.has(el)) return;
+        const textLen = (el.innerText || '').trim().length;
+        const hasCode = !!el.querySelector('pre,code');
+        const hasImg = !!el.querySelector('img');
+        const marker = `${el.getAttribute('data-test-id') || ''} ${el.getAttribute('aria-label') || ''} ${el.tagName}`.toLowerCase();
+        const hintScore = /(user|query|model|response|prompt|gemini)/.test(marker) ? 2 : 0;
+        let score = Math.min(5, textLen / 160) + (hasCode ? 2 : 0) + (hasImg ? 1.5 : 0) + hintScore;
+        if (textLen < 4 && !hasImg && !hasCode) score -= 2;
+        if (el.children.length > 15 && !hasCode && !hasImg) score -= 1;
+        if (score < 1.6) return;
+        seen.add(el);
+        nodes.push({
+          el,
+          indexInDom: idx,
+          score: Number(score.toFixed(2)),
+          signals: [
+            textLen > 0 ? `text:${textLen}` : null,
+            hasCode ? 'has-code' : null,
+            hasImg ? 'has-image' : null,
+            hintScore ? 'attribute-role-hint' : null
+          ].filter(Boolean)
+        });
+      });
+
+      nodes.sort((a, b) => b.score - a.score);
+      const selected = [];
+      for (const node of nodes) {
+        const nestedBetter = nodes.some((other) => other !== node && node.el.contains(other.el) && other.score >= node.score);
+        if (nestedBetter) continue;
+        const overlap = selected.some((kept) => kept.el.contains(node.el) || node.el.contains(kept.el));
+        if (!overlap) selected.push(node);
+      }
+      return selected.sort((a, b) => a.indexInDom - b.indexInDom);
+    }
+
+    inferRole(el, scopeEl) {
+      const evidence = [];
+      let role = 'unknown';
+      let confidence = 0.35;
+      const txt = (el.innerText || '').toLowerCase();
+      const aria = `${el.getAttribute('aria-label') || ''} ${el.getAttribute('data-test-id') || ''}`.toLowerCase();
+
+      const avatarUser = !!el.querySelector('img[src*="googleusercontent"], img[alt*="profile" i], img[alt*="avatar" i]');
+      if (avatarUser || /user-query|user/.test(aria)) {
+        role = 'user';
+        confidence += 0.3;
+        evidence.push('user-avatar-or-aria-hint');
+      }
+
+      const modelHint = /gemini|model/.test(aria) || /regenerate|draft response|thought/i.test(txt);
+      const geminiIcon = !!el.querySelector('svg[aria-label*="Gemini" i], [aria-label*="Gemini" i], [aria-label*="Model" i]');
+      if (modelHint || geminiIcon) {
+        role = 'assistant';
+        confidence += 0.3;
+        evidence.push('model-aria-or-control-hint');
+      }
+
+      if (scopeEl) {
+        const rect = el.getBoundingClientRect();
+        const sRect = scopeEl.getBoundingClientRect();
+        const delta = (rect.left + rect.width / 2) - (sRect.left + sRect.width / 2);
+        if (delta > sRect.width * 0.12) {
+          evidence.push('layout:right');
+          if (role === 'unknown') role = 'user';
+          confidence += 0.1;
+        } else if (delta < -sRect.width * 0.12) {
+          evidence.push('layout:left');
+          if (role === 'unknown') role = 'assistant';
+          confidence += 0.1;
+        }
+      }
+
+      confidence = Math.min(0.98, confidence);
+      if (confidence < 0.5) role = 'unknown';
+      return { role, confidence: Number(confidence.toFixed(2)), evidence };
+    }
+
+    parseBlocks(el) {
+      const blocks = [];
+      const diagnostics = [];
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) {
+        const node = walker.currentNode;
+        if (node.nodeType === Node.TEXT_NODE) {
+          const cleaned = (node.textContent || '').replace(/\[(\d+)\]/g, '').replace(/\s+/g, ' ').trim();
+          if (cleaned) blocks.push({ type: 'text', text: cleaned });
+          continue;
+        }
+        const tag = node.tagName ? node.tagName.toLowerCase() : '';
+        if (tag === 'pre' || tag === 'code') {
+          const code = node.textContent || '';
+          if (code.trim()) {
+            const langHint = (node.previousElementSibling?.textContent || '').trim().slice(0, 24);
+            blocks.push({ type: 'code', code, language: /[a-z]{2,}/i.test(langHint) ? langHint : '' });
+          }
+        } else if (tag === 'img') {
+          const src = node.currentSrc || node.getAttribute('src') || node.getAttribute('data-src') || '';
+          if (src) blocks.push({ type: 'image', src, alt: node.getAttribute('alt') || '' });
+        } else if (tag === 'a') {
+          const href = node.getAttribute('href') || '';
+          if (href) blocks.push({ type: 'link', href, text: (node.textContent || '').trim() });
+        } else if (tag === 'blockquote') {
+          const text = (node.textContent || '').trim();
+          if (text) blocks.push({ type: 'quote', text });
+        } else if (tag === 'ul' || tag === 'ol') {
+          const items = Array.from(node.querySelectorAll(':scope > li')).map((li) => (li.textContent || '').trim()).filter(Boolean);
+          if (items.length) blocks.push({ type: 'list', ordered: tag === 'ol', items });
+        }
+      }
+      const textPlain = blocks.filter((b) => b.type === 'text').map((b) => b.text).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+      diagnostics.push(`block-count:${blocks.length}`);
+      return { blocks, textPlain, diagnostics };
+    }
+
+    async run() {
+      const scope = this.detectScope();
+      const turns = this.collectTurnCandidates(scope.rootEl);
+      const messages = turns.map((turn) => {
+        const inferredRole = this.inferRole(turn.el, scope.rootEl);
+        const parsed = this.parseBlocks(turn.el);
+        return {
+          ...turn,
+          inferredRole,
+          parsed,
+          signature: `${turn.el.tagName.toLowerCase()}#${turn.el.childElementCount}`
+        };
+      });
+
+      return {
+        platform: 'Gemini',
+        timestamp: new Date().toISOString(),
+        root: scope,
+        messageCount: messages.length,
+        messages
+      };
+    }
+  }
 
   const PlatformEngines = {
     chatgpt: {
@@ -50,16 +274,20 @@
     gemini: {
       name: 'Gemini',
       matches: () => location.hostname.includes('gemini.google.com'),
-      selectors: ['user-query-item', 'model-response-item', '.user-query-container', '.model-response-container', '.query-container', '.response-container', '[data-test-id*="message"]', '[data-test-id="uploaded-img"]', 'img.preview-image', 'img.image.animate.loaded'],
       async extract(options, utils) {
-        const nodes = utils.adaptiveQuery(this.selectors.join(','), 1).filter((n) => utils.hasMeaningfulContent(n));
+        const extractor = new GeminiExtractor(options);
+        const analysis = await extractor.run();
+        window.GEMINI_DOM_ANALYSIS = analysis;
+
         const messages = [];
-        for (const node of nodes) {
-          const marker = `${node.tagName} ${node.className}`.toLowerCase();
-          const isUser = marker.includes('user') || marker.includes('query') || marker.includes('uploaded-img');
-          const content = await utils.extractNodeContent(node, options, isUser, this.name, 'gemini-node');
-          if (content) messages.push({ role: isUser ? 'User' : 'Gemini', content, meta: { platform: this.name, sourceSelector: 'gemini-node' } });
+        for (const m of analysis.messages) {
+          const role = m.inferredRole.role === 'assistant' ? 'Gemini' : (m.inferredRole.role === 'user' ? 'User' : 'Unknown');
+          const content = composeContentFromBlocks(m.parsed.blocks, options);
+          if (content) {
+            messages.push({ role, content, meta: { platform: this.name, sourceSelector: m.signature, confidence: m.inferredRole.confidence, evidence: m.inferredRole.evidence } });
+          }
         }
+
         return { platform: this.name, title: document.title, messages };
       }
     },
