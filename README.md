@@ -1,10 +1,10 @@
-# 🚀 AI Chat Exporter Pro
+# 🚀 AI Chat Exporter Ultimate
 
-**Version**: 0.9.22  
-**License**: MIT (Pro Edition)  
+**Version**: 0.9.24  
+**License**: MIT (Ultimate Edition)  
 **Code Source**: Generated with support from CODEX and CODEX CLI.  
 **Owner / Management**: Dr. Babak Sorkhpour ([@Drbabakskr](https://x.com/Drbabakskr))  
-**Author**: Dr. Babak Sorkhpour with support from ChatGPT
+**Author**: Dr. Babak Sorkhpour with support from **Gemini 2.0 Flash (Google)**
 
 ---
 
@@ -13,19 +13,20 @@
 | Format | Status | Notes |
 |:---|:---|:---|
 | **Markdown** | 🟢 **Stable** | Standard text formatting supported. |
-| **HTML** | 🟢 **Stable** | Full layout with responsive design. |
-| **JSON** | 🟢 **Stable** | Raw data output for developers. |
-| **DOCX** | 🟢 **Stable** | Includes offline embedded images. |
-| **CSV** | 🟢 **Stable** | Excel compatible (UTF-8). |
-| **SQL** | 🟡 **Dev** | In development (beta availability). |
-| **PDF** | 🟡 **Waiting** | Currently relies on browser print dialog. |
+| **HTML** | 🟢 **Stable** | Full layout, embedded images, responsive. |
+| **JSON** | 🟢 **Stable** | Minified (no newlines) for data analysis. |
+| **DOCX** | 🟢 **Stable** | Offline embedded images (Word ready). |
+| **CSV** | 🟢 **Stable** | Excel compatible (UTF-8, single line rows). |
+| **SQL** | 🟢 **Stable** | PostgreSQL compatible dumps. |
+| **PDF** | 🟡 **Basic** | Standalone file download. **Note: Does not support complex layouts or non-Latin characters (e.g., Persian/Arabic) due to font limitations.** Use HTML for rich content. |
 
 ## 🛠 Features
 
-*   **Secure Isolation**: Each extraction process runs independently within its own tab context, preventing data leaks or cross-contamination.
-*   **Zero-Dependency**: The extension operates entirely locally without external API calls, ensuring data privacy.
-*   **Industrial Archiving**: Generates robust ZIP archives validated with CRC32 checksums for data integrity.
+*   **Secure Isolation**: Each extraction process runs independently within its own tab context.
+*   **Zero-Dependency**: Operates entirely locally without external API calls.
+*   **Industrial Archiving**: CRC32 validated ZIP archives.
 *   **Embedded Media**: Automatically converts remote images to Base64 for fully offline Word and HTML documents.
+*   **Security Hardened**: Input sanitization prevents XSS in exported files.
 
 ## 🚀 One-Click Installation
 
@@ -40,7 +41,7 @@ To install the developer preview directly from GitHub:
 ## ⚖️ Legal & Privacy
 
 *   **Data Control**: The user acts as the sole Data Controller. This software is a local processing tool.
-*   **Security**: Enforced Content Security Policy (CSP) prevents remote code execution.
+*   **Security**: Enforced Content Security Policy (CSP).
 *   **Copyright**: Dr. Babak Sorkhpour © 2026. All rights reserved.
 
 ---

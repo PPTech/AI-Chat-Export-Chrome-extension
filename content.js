@@ -1,4 +1,5 @@
-// content.js - Industrial Extraction Engine v3.1
+// content.js - Industrial Extraction Engine v3.2
+// Powered by Gemini 2.0 Flash (Google)
 (() => {
   if (window.hasRunContent) return;
   window.hasRunContent = true;
@@ -24,6 +25,7 @@
       else if (hostname.includes('aistudio.google.com')) result = await parseAIStudio(options);
     } catch (e) {
       console.error("Extraction failed:", e);
+      chrome.runtime.sendMessage({ action: "LOG_ERROR", message: "Extraction JS Error", details: e.message });
     }
     return result;
   }
@@ -31,6 +33,7 @@
   // --- Helpers ---
   async function urlToBase64(url) {
     try {
+      if (url.startsWith('data:')) return url;
       const response = await fetch(url);
       const blob = await response.blob();
       return new Promise((resolve) => {
@@ -64,7 +67,7 @@
             img.remove(); 
         } else {
             const width = img.getAttribute('width') || img.clientWidth || img.naturalWidth;
-            if (width > 50) {
+            if (width > 50 || img.src.startsWith('data:')) {
                 if (options.convertImages) {
                    const b64 = await urlToBase64(img.src);
                    img.replaceWith(`\n![Image](${b64})\n`);
@@ -96,12 +99,12 @@
   }
 
   async function parseGemini(options) {
-    // Extended selectors for Gemini 2026 updates
-    const containers = document.querySelectorAll('user-query-item, model-response-item, .user-query-container, .model-response-container, .query-container, .response-container');
+    // Selectors for Gemini 2026 updates
+    const containers = document.querySelectorAll('user-query-item, model-response-item, .user-query-container, .model-response-container, .query-container, .response-container, .message-container');
     
-    // Fallback: Check for raw text chunks if structured items fail
     if (containers.length === 0) {
-        const prose = document.querySelectorAll('.markdown');
+        // Fallback for raw markdown blocks
+        const prose = document.querySelectorAll('.markdown, .prose');
         if (prose.length > 0) {
              const messages = [];
              for(const p of prose) {
@@ -122,11 +125,26 @@
   }
 
   async function parseClaude(options) {
+    // Claude DOM updates frequently. Checking data-testid and common classes.
     const chat = document.querySelector('.flex-1.overflow-y-auto') || document.body;
-    const items = Array.from(chat.querySelectorAll('.grid, .group, [class*="chat-item"]')).filter(el => el.innerText.length > 5);
+    
+    // Attempt 1: Specific Claude Message classes
+    let items = Array.from(chat.querySelectorAll('.font-claude-message, .font-user-message'));
+    
+    // Attempt 2: Grid/Flex layouts if Attempt 1 fails
+    if (items.length === 0) {
+        items = Array.from(chat.querySelectorAll('[data-test-id^="chat-message"]'));
+    }
+
+    // Attempt 3: Fallback broad search
+    if (items.length === 0) {
+         items = Array.from(chat.querySelectorAll('.grid, .group, [class*="chat-item"]')).filter(el => el.innerText.length > 5);
+    }
+    
     const messages = [];
     for (const el of items) {
-        const isAI = el.innerHTML.includes('claude-avatar');
+        // AI detection: Claude avatar or class
+        const isAI = el.innerHTML.includes('claude-avatar') || el.classList.contains('font-claude-message') || el.getAttribute('data-is-streaming') !== null;
         const content = await processNodeContent(el, options, !isAI);
         if (content) messages.push({ role: isAI ? "Claude" : "User", content });
     }
@@ -134,10 +152,24 @@
   }
 
   async function parseAIStudio(options) {
-    const bubbles = document.querySelectorAll('ms-chat-bubble');
+    // AI Studio uses ms-chat-bubble usually
+    const bubbles = document.querySelectorAll('ms-chat-bubble, .chat-bubble, .message-bubble');
     const messages = [];
+    
+    // Fallback if shadow DOM or new layout
+    if (bubbles.length === 0) {
+        // Try looking for text blocks directly
+        const blocks = document.querySelectorAll('.text-block, .markdown-content');
+        if (blocks.length > 0) {
+             for (const b of blocks) {
+                 messages.push({ role: "Model/User", content: await processNodeContent(b, options, false)});
+             }
+             return { success: true, platform: "AI Studio (Text)", title: "AI Studio Export", messages };
+        }
+    }
+
     for (const el of bubbles) {
-        const isUser = el.getAttribute('is-user') === 'true';
+        const isUser = el.getAttribute('is-user') === 'true' || el.classList.contains('user-bubble');
         const content = await processNodeContent(el, options, isUser);
         messages.push({ role: isUser ? "User" : "Model", content });
     }

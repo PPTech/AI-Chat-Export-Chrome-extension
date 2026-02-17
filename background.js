@@ -10,7 +10,9 @@ function log(level, message, details = null) {
     details: details ? JSON.stringify(details) : ''
   };
   appLogs.push(entry);
-  if (appLogs.length > 1000) appLogs.shift(); // Keep last 1000 logs
+  if (appLogs.length > 1000) appLogs.shift();
+  
+  // Console logging for debugging
   console.log(`[${level}] ${message}`, details || '');
 }
 
@@ -25,17 +27,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           loading: message.loading || false,
           timestamp: Date.now()
         };
-        log("INFO", `Data updated for tab ${tabId}`, { loading: message.loading });
+        log("STATE_CHANGE", `SET_DATA for Tab ${tabId}`, { 
+            platform: message.data?.platform, 
+            msgCount: message.data?.messages?.length 
+        });
         sendResponse({ success: true });
         break;
 
       case "GET_DATA":
-        sendResponse(tabStates[tabId] || { data: null, loading: false });
+        const state = tabStates[tabId];
+        log("STATE_ACCESS", `GET_DATA for Tab ${tabId}`, { found: !!state });
+        sendResponse(state || { data: null, loading: false });
         break;
 
       case "CLEAR_DATA":
         delete tabStates[tabId];
-        log("INFO", `Data cleared for tab ${tabId}`);
+        log("STATE_CHANGE", `CLEAR_DATA for Tab ${tabId}`);
         sendResponse({ success: true });
         break;
 
@@ -53,6 +60,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
   } catch (e) {
     console.error("Background error:", e);
+    log("CRITICAL", "Background Script Error", e.message);
   }
   return true;
 });

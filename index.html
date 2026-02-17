@@ -35,7 +35,7 @@
       overflow-x: hidden;
     }
 
-    .container { display: flex; flex-direction: column; min-height: 580px; }
+    .container { display: flex; flex-direction: column; min-height: 560px; }
 
     header {
       padding: 12px 16px;
@@ -95,13 +95,11 @@
     .modal-header h2 { margin: 0; font-size: 18px; font-weight: 700; }
     .close-btn { width: 100%; padding: 12px; margin-top: 24px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; font-weight: 700; }
 
-    /* Error Modal Specifics */
     .error-header { display: flex; align-items: center; gap: 10px; color: var(--danger); margin-bottom: 15px; }
     .error-title { font-weight: 800; font-size: 16px; }
     .error-detail-box { background: var(--surface); padding: 12px; border-radius: 8px; border: 1px solid var(--border); font-family: monospace; font-size: 11px; margin-bottom: 12px; color: var(--text-main); word-break: break-all; }
     .error-suggestion { font-size: 12px; color: var(--text-sub); line-height: 1.5; }
     
-    /* About Modal Specifics */
     .about-row { margin-bottom: 12px; font-size: 12px; color: var(--text-main); line-height: 1.5; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
     .about-label { font-weight: 700; display: block; margin-bottom: 2px; color: var(--text-sub); }
     .about-link { color: var(--primary); text-decoration: none; }
@@ -111,11 +109,6 @@
     .setting-label { font-size: 13px; font-weight: 600; }
     .setting-info { font-size: 10px; color: var(--text-sub); }
     
-    .input-field {
-        width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px;
-        background: var(--surface); color: var(--text-main); font-size: 12px; box-sizing: border-box;
-    }
-
     footer { padding: 12px; text-align: center; border-top: 1px solid var(--border); background: var(--surface); margin-top: auto; }
     .copyright { font-size: 10px; font-weight: 700; }
     .footer-links { font-size: 9px; color: var(--text-sub); display: flex; justify-content: center; gap: 12px; margin-top: 4px; }
@@ -160,7 +153,7 @@
         <div class="format-item" data-ext="csv"><label>Excel CSV</label><span class="tooltip">Spreadsheet</span></div>
         <div class="format-item" data-ext="sql"><label>SQL DB</label><span class="tooltip">Database Dump</span></div>
         <div class="format-item" data-ext="txt"><label>Plain Text</label><span class="tooltip">Simple text</span></div>
-        <div class="format-item" data-ext="pdf"><label>PDF</label><span class="tooltip">Print View</span></div>
+        <div class="format-item" data-ext="pdf"><label>PDF</label><span class="tooltip">Standalone File</span></div>
       </div>
 
       <button id="btn-export-main" class="export-action" disabled>Generate Package</button>
@@ -171,7 +164,7 @@
       <div class="footer-links">
         <span id="link-legal">Legal</span>
         <span id="link-security">Security</span>
-        <span class="version">v0.9.23</span>
+        <span class="version">v0.9.24</span>
       </div>
     </footer>
 
@@ -195,7 +188,7 @@
                 <div class="setting-item">
                     <label class="setting-row"><span class="setting-label">ZIP Compression</span><input type="checkbox" id="check-zip"></label>
                 </div>
-
+                <!-- Encryption Removed per Security Audit -->
                 <button id="btn-download-logs" style="width:100%; padding:8px; border:1px solid var(--border); background:var(--surface); border-radius:6px; cursor:pointer; font-size:11px;">Download Error Logs</button>
             </div>
             <button class="close-btn" id="btn-save-settings">Save</button>
@@ -220,10 +213,10 @@
         <div class="modal-content">
             <div class="modal-header"><h2>About</h2><button id="btn-close-about" style="border:none;background:none;cursor:pointer;">✕</button></div>
             <div class="about-row"><span class="about-label">Owner & Management</span>Dr. Babak Sorkhpour <a href="https://x.com/Drbabakskr" target="_blank" class="about-link">(@Drbabakskr)</a></div>
-            <div class="about-row"><span class="about-label">Author & Engineering</span>Dr. Babak Sorkhpour with support from ChatGPT</div>
+            <div class="about-row"><span class="about-label">Author & Engineering</span>Dr. Babak Sorkhpour with support from Gemini 2.0 Flash (Google)</div>
             <div class="about-row"><span class="about-label">License</span>MIT License (Ultimate Edition)</div>
             <div class="about-row"><span class="about-label">Technology</span>Generated via CODEX CLI</div>
-            <div class="about-row"><span class="about-label">Version</span>0.9.23</div>
+            <div class="about-row"><span class="about-label">Version</span>0.9.24</div>
             <button class="close-btn" id="btn-ack-about">Close</button>
         </div>
     </div>
