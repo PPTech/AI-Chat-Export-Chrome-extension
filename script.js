@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// script.js - Main Controller v0.9.33
+// script.js - Main Controller v0.9.35
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;

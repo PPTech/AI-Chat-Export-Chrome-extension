@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// content.js - Industrial Extraction Engine v0.9.34
+// content.js - Industrial Extraction Engine v0.9.35
 
 (() => {
   if (window.hasRunContent) return;
@@ -79,7 +79,7 @@
       const cls = (img.className || '').toLowerCase();
 
       if (!src) continue;
-      if (isUser && !(alt.includes('generated') || alt.includes('uploaded image'))) continue;
+      if (isUser && alt.includes('avatar')) continue;
       if (alt.includes('avatar') || cls.includes('avatar') || cls.includes('icon')) continue;
 
       const normalized = options.convertImages ? await urlToBase64(src) : src;
@@ -136,8 +136,7 @@
     for (const node of nodes) {
       const roleAttr = node.querySelector('[data-message-author-role]')?.getAttribute('data-message-author-role') || node.getAttribute('data-message-author-role') || '';
       const isAssistant = /assistant|tool/i.test(roleAttr) || !!node.querySelector('[data-message-author-role="assistant"]');
-      const contentNode = node.querySelector('.markdown,.prose,.whitespace-pre-wrap,[data-message-id],[class*="message"]') || node;
-      const content = await processNodeContent(contentNode, options, !isAssistant);
+      const content = await processNodeContent(node, options, !isAssistant);
       if (content.length > 0) messages.push({ role: isAssistant ? 'Assistant' : 'User', content });
     }
 
@@ -153,8 +152,7 @@
     for (const node of nodes) {
       const marker = `${node.getAttribute('data-testid') || ''} ${node.className || ''}`.toLowerCase();
       const isUser = marker.includes('user');
-      const body = node.querySelector('.font-claude-response-body,[data-testid="message-content"],.prose,.markdown,div,p') || node;
-      const content = await processNodeContent(body, options, isUser);
+      const content = await processNodeContent(node, options, isUser);
       if (content.length > 0) messages.push({ role: isUser ? 'User' : 'Claude', content });
     }
 

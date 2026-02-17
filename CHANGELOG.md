@@ -4,7 +4,7 @@
 
 # Changelog
 
-## 0.9.34 - 2026-02-17
+## 0.9.35 - 2026-02-17
 - Improved photo extraction by resolving `src`, lazy `data-src`, and `srcset` image candidates in content parsing.
 - Fixed HTML/DOC image rendering to support both `[[IMG:...]]` tokens and markdown image syntax fallback.
 - Reworked PDF generation back to text-first standalone PDF output (selectable text with UTF-16 encoding path).
