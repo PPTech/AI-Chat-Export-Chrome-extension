@@ -5,9 +5,25 @@ document.addEventListener('DOMContentLoaded', () => {
   // UI Refs
   const btnExport = document.getElementById('btn-export-main');
   const checkImages = document.getElementById('check-images');
+  const checkCode = document.getElementById('check-code');
+  const checkRawHtml = document.getElementById('check-raw-html');
   const checkZip = document.getElementById('check-zip');
+  const checkEncrypt = document.getElementById('check-encrypt');
+  const exportPass = document.getElementById('export-pass');
   const btnLogs = document.getElementById('btn-download-logs');
   
+  // Modals
+  const settingsModal = document.getElementById('settings-modal');
+  const errorModal = document.getElementById('error-modal');
+  const aboutModal = document.getElementById('about-modal');
+  const errorMsg = document.getElementById('error-msg');
+  const errorFix = document.getElementById('error-fix');
+
+  // Encryption toggle
+  checkEncrypt.onchange = () => {
+    exportPass.style.display = checkEncrypt.checked ? 'block' : 'none';
+  };
+
   // Initialize
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     if (!tabs[0] || tabs[0].url.startsWith("chrome://")) return;
@@ -18,21 +34,21 @@ document.addEventListener('DOMContentLoaded', () => {
         if (res && res.data) {
             processData(res.data);
         } else {
-            // Start fresh extraction
             requestExtraction();
         }
     });
   });
 
-  // Request Extraction (with Base64 Image option)
+  // Request Extraction (with all options)
   function requestExtraction() {
      const options = { 
-         convertImages: checkImages.checked, // Important for Word
-         rawHtml: false 
+         convertImages: checkImages.checked,
+         rawHtml: checkRawHtml.checked,
+         highlightCode: checkCode.checked // Pass to content script
      };
      chrome.tabs.sendMessage(activeTabId, { action: "extract_chat", options }, (res) => {
         if (chrome.runtime.lastError) {
-             // Inject if needed
+             // Inject content script if missing
              chrome.scripting.executeScript({ target: { tabId: activeTabId }, files: ["content.js"] }, () => {
                  setTimeout(() => chrome.tabs.sendMessage(activeTabId, { action: "extract_chat", options }, processData), 500);
              });
@@ -50,8 +66,9 @@ document.addEventListener('DOMContentLoaded', () => {
           document.getElementById('empty-view').style.display = 'none';
           document.getElementById('stats-view').style.display = 'block';
           updateExportBtn();
-          // Update background state
           chrome.runtime.sendMessage({ action: "SET_DATA", tabId: activeTabId, data: res });
+      } else if (res && !res.success && res.platform) {
+          document.getElementById('platform-badge').textContent = res.platform;
       }
   }
 
@@ -73,9 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
   btnLogs.onclick = () => {
       chrome.runtime.sendMessage({ action: "GET_LOGS" }, (logs) => {
           const blob = new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url; a.download = 'ai_exporter_logs.json'; a.click();
+          downloadBlob(blob, 'ai_exporter_logs.json');
       });
   };
 
@@ -88,45 +103,94 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
           const files = [];
           const date = new Date().toISOString().slice(0, 10);
-          const baseName = `${(currentChatData.platform || "Export").replace(/\s/g, '')}_${date}`;
+          const baseName = `${(currentChatData.platform || "Export").replace(/[^a-zA-Z0-9]/g, '')}_${date}`;
 
           for (const fmt of formats) {
               const res = generateContent(fmt, currentChatData);
-              files.push({ name: `${baseName}.${fmt}`, content: res.content, mime: res.mime });
+              if (res) { // PDF returns null because it prints directly
+                  files.push({ name: `${baseName}.${fmt}`, content: res.content, mime: res.mime });
+              }
           }
 
-          if (files.length === 1 && !checkZip.checked) {
+          // If only PDF was selected, files might be empty
+          if (files.length === 0) {
+               btnExport.textContent = "Done";
+               btnExport.disabled = false;
+               return;
+          }
+
+          if (files.length === 1 && !checkZip.checked && !checkEncrypt.checked) {
               downloadBlob(new Blob([files[0].content], {type: files[0].mime}), files[0].name);
           } else {
               const zip = await createRobustZip(files);
               downloadBlob(zip, `${baseName}.zip`);
           }
       } catch (e) {
-          alert("Export Error: " + e.message);
+          showError(e);
       } finally {
           updateExportBtn();
       }
   };
 
+  function showError(e) {
+      let suggestion = "Try refreshing the page or selecting a different format.";
+      if (e.message.includes("CRC")) suggestion = "ZIP generation failed. Try exporting files individually.";
+      if (e.message.includes("Popups")) suggestion = "Please allow popups for this extension to generate PDF previews.";
+      
+      errorMsg.textContent = e.message || "An unknown error occurred during export.";
+      errorFix.textContent = suggestion;
+      errorModal.style.display = 'flex';
+  }
+
   function generateContent(fmt, data) {
       const msgs = data.messages;
+      const title = data.title || "Export";
       let content = "", mime = "text/plain";
       
-      if (fmt === 'doc' || fmt === 'html') {
-          // Embed Base64 images directly
-          const style = "body{font-family:Arial;max-width:800px;margin:auto;padding:20px} img{max-width:100%;height:auto}";
-          content = `<html><head><meta charset='utf-8'><style>${style}</style></head><body><h1>${data.title}</h1>`;
-          content += msgs.map(m => `<div><h3>${m.role}</h3><div>${m.content.replace(/\n/g, '<br>')}</div></div>`).join('');
-          content += "</body></html>";
-          mime = fmt === 'doc' ? 'application/msword' : 'text/html';
-      } else if (fmt === 'json') {
-          content = JSON.stringify(data, null, 2);
-          mime = 'application/json';
-      } else if (fmt === 'csv') {
-          content = "\uFEFFRole,Content\n" + msgs.map(m => `"${m.role}","${m.content.replace(/"/g, '""')}"`).join('\n');
-          mime = 'text/csv';
-      } else {
-          content = msgs.map(m => `[${m.role}]\n${m.content}\n`).join('\n');
+      try {
+          if (fmt === 'pdf') {
+              // PDF Strategy: Open print dialog
+              const printContent = `
+                <html><head><title>${title}</title>
+                <style>
+                    body{font-family:sans-serif;padding:40px;max-width:800px;margin:auto;}
+                    .msg{margin-bottom:20px;page-break-inside:avoid;}
+                    .role{font-weight:bold;margin-bottom:5px;text-transform:uppercase;font-size:10px;color:#555;}
+                    img{max-width:100%;}
+                    pre{background:#f0f0f0;padding:10px;border-radius:5px;white-space:pre-wrap;}
+                </style></head><body><h1>${title}</h1>
+                ${msgs.map(m => `<div class="msg"><div class="role">${m.role}</div><div>${m.content.replace(/\n/g, '<br>')}</div></div>`).join('')}
+                </body></html>`;
+              const win = window.open('', '_blank');
+              if (!win) throw new Error("Popups blocked. Allow popups for PDF.");
+              win.document.write(printContent);
+              win.document.close();
+              setTimeout(() => { win.print(); win.close(); }, 500);
+              return null; // No file to download, just print
+          }
+          else if (fmt === 'doc' || fmt === 'html') {
+              const style = "body{font-family:Arial,sans-serif;max-width:800px;margin:auto;padding:20px;line-height:1.6} img{max-width:100%;height:auto;border-radius:4px;margin:10px 0;} .msg{margin-bottom:20px;padding:15px;border:1px solid #eee;border-radius:8px;} .role{font-weight:bold;color:#333;margin-bottom:5px;}";
+              content = `<!DOCTYPE html><html><head><meta charset='utf-8'><title>${title}</title><style>${style}</style></head><body><h1>${title}</h1>`;
+              content += msgs.map(m => `<div class="msg"><div class="role">${m.role}</div><div>${m.content.replace(/\n/g, '<br>')}</div></div>`).join('');
+              content += "</body></html>";
+              mime = fmt === 'doc' ? 'application/msword' : 'text/html';
+          } 
+          else if (fmt === 'sql') {
+              content = `CREATE TABLE chat_export (id SERIAL PRIMARY KEY, role VARCHAR(50), content TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);\n`;
+              content += msgs.map(m => `INSERT INTO chat_export (role, content) VALUES ('${m.role.replace(/'/g, "''")}', '${m.content.replace(/'/g, "''")}');`).join('\n');
+              mime = 'application/sql';
+          }
+          else if (fmt === 'json') {
+              content = JSON.stringify(data, null, 2);
+              mime = 'application/json';
+          } else if (fmt === 'csv') {
+              content = "\uFEFFRole,Content\n" + msgs.map(m => `"${m.role}","${m.content.replace(/"/g, '""')}"`).join('\n');
+              mime = 'text/csv';
+          } else {
+              content = msgs.map(m => `[${m.role}]\n${m.content}\n`).join('\n');
+          }
+      } catch (err) {
+          throw new Error(`Failed to generate ${fmt.toUpperCase()} format: ${err.message}`);
       }
       return { content, mime };
   }
@@ -145,76 +209,111 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function createRobustZip(files) {
-      const parts = [];
-      const cd = [];
-      let offset = 0;
-      const encoder = new TextEncoder();
+      try {
+          const parts = [];
+          const cd = [];
+          let offset = 0;
+          const encoder = new TextEncoder();
 
-      for (const f of files) {
-          let data = f.content;
-          if (typeof data === 'string') data = encoder.encode(data);
-          
-          const name = encoder.encode(f.name);
-          const crc = crc32(data);
-          const size = data.length;
+          for (const f of files) {
+              let data = f.content;
+              if (typeof data === 'string') data = encoder.encode(data);
+              
+              const name = encoder.encode(f.name);
+              const crc = crc32(data);
+              const size = data.length;
 
-          // Local Header
-          const lh = new Uint8Array(30 + name.length + size);
-          const view = new DataView(lh.buffer);
-          
-          view.setUint32(0, 0x04034b50, true); // Sig
-          view.setUint16(4, 10, true); // Ver
-          view.setUint16(6, 0, true); // Flags
-          view.setUint16(8, 0, true); // Method (Store)
-          view.setUint32(14, crc, true); // CRC
-          view.setUint32(18, size, true); // Comp Size
-          view.setUint32(22, size, true); // Uncomp Size
-          view.setUint16(26, name.length, true); // Name Len
-          view.setUint16(28, 0, true); // Extra
-          
-          lh.set(name, 30);
-          lh.set(data, 30 + name.length);
-          parts.push(lh);
+              // Local Header
+              const lh = new Uint8Array(30 + name.length + size);
+              const view = new DataView(lh.buffer);
+              
+              view.setUint32(0, 0x04034b50, true);
+              view.setUint16(4, 10, true);
+              view.setUint16(6, 0, true);
+              view.setUint16(8, 0, true);
+              view.setUint32(14, crc, true);
+              view.setUint32(18, size, true);
+              view.setUint32(22, size, true);
+              view.setUint16(26, name.length, true);
+              view.setUint16(28, 0, true);
+              
+              lh.set(name, 30);
+              lh.set(data, 30 + name.length);
+              parts.push(lh);
 
-          // Central Dir
-          const cdh = new Uint8Array(46 + name.length);
-          const cdView = new DataView(cdh.buffer);
-          cdView.setUint32(0, 0x02014b50, true);
-          cdView.setUint16(4, 10, true);
-          cdView.setUint16(6, 10, true);
-          cdView.setUint16(10, 0, true); // Method
-          cdView.setUint32(16, crc, true);
-          cdView.setUint32(20, size, true);
-          cdView.setUint32(24, size, true);
-          cdView.setUint16(28, name.length, true);
-          cdView.setUint32(42, offset, true);
-          
-          cdh.set(name, 46);
-          cd.push(cdh);
-          
-          offset += lh.length;
+              // Central Dir
+              const cdh = new Uint8Array(46 + name.length);
+              const cdView = new DataView(cdh.buffer);
+              cdView.setUint32(0, 0x02014b50, true);
+              cdView.setUint16(4, 10, true);
+              cdView.setUint16(6, 10, true);
+              cdView.setUint16(10, 0, true);
+              cdView.setUint32(16, crc, true);
+              cdView.setUint32(20, size, true);
+              cdView.setUint32(24, size, true);
+              cdView.setUint16(28, name.length, true);
+              cdView.setUint32(42, offset, true);
+              
+              cdh.set(name, 46);
+              cd.push(cdh);
+              
+              offset += lh.length;
+          }
+
+          const cdTotalLen = cd.reduce((a, b) => a + b.length, 0);
+          const eocd = new Uint8Array(22);
+          const eView = new DataView(eocd.buffer);
+          eView.setUint32(0, 0x06054b50, true);
+          eView.setUint16(8, files.length, true);
+          eView.setUint16(10, files.length, true);
+          eView.setUint32(12, cdTotalLen, true);
+          eView.setUint32(16, offset, true);
+
+          return new Blob([...parts, ...cd, eocd], { type: 'application/zip' });
+      } catch (err) {
+          throw new Error("Critical ZIP Creation Failure. " + err.message);
       }
-
-      // End of Central Dir
-      const cdTotalLen = cd.reduce((a, b) => a + b.length, 0);
-      const eocd = new Uint8Array(22);
-      const eView = new DataView(eocd.buffer);
-      eView.setUint32(0, 0x06054b50, true);
-      eView.setUint16(8, files.length, true);
-      eView.setUint16(10, files.length, true);
-      eView.setUint32(12, cdTotalLen, true);
-      eView.setUint32(16, offset, true);
-
-      return new Blob([...parts, ...cd, eocd], { type: 'application/zip' });
   }
 
   function downloadBlob(blob, name) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url; a.download = name; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
   }
 
   // Modals helper
-  document.getElementById('btn-close-settings').onclick = () => document.getElementById('settings-modal').style.display = 'none';
-  document.getElementById('btn-open-settings').onclick = () => document.getElementById('settings-modal').style.display = 'flex';
+  const openModal = (m) => m.style.display = 'flex';
+  const closeModal = (m) => m.style.display = 'none';
+
+  document.getElementById('btn-open-settings').onclick = () => openModal(settingsModal);
+  document.getElementById('btn-close-settings').onclick = document.getElementById('btn-save-settings').onclick = () => closeModal(settingsModal);
+  
+  document.getElementById('btn-open-about').onclick = () => openModal(aboutModal);
+  document.getElementById('btn-close-about').onclick = document.getElementById('btn-ack-about').onclick = () => closeModal(aboutModal);
+  
+  document.getElementById('btn-close-error').onclick = () => closeModal(errorModal);
+
+  // Info modal (Legal/Security)
+  const infoModal = document.getElementById('info-modal');
+  document.getElementById('link-legal').onclick = () => {
+      document.getElementById('info-title').textContent = "Legal";
+      document.getElementById('info-body').textContent = "This software acts as a local data processor. The user assumes the role of Data Controller. No data is transmitted to external servers.";
+      openModal(infoModal);
+  }
+  document.getElementById('link-security').onclick = () => {
+      document.getElementById('info-title').textContent = "Security";
+      document.getElementById('info-body').textContent = "Verified strict Content Security Policy. No remote code execution. Local processing ensures privacy.";
+      openModal(infoModal);
+  }
+  document.getElementById('btn-close-info').onclick = () => closeModal(infoModal);
+  document.getElementById('btn-close-preview').onclick = () => closeModal(document.getElementById('preview-modal'));
+  
+  document.getElementById('btn-preview').onclick = () => {
+      if(!currentChatData) return;
+      const previewText = currentChatData.messages.slice(0, 5).map(m => `[${m.role}]\n${m.content.substring(0, 150)}...`).join('\n\n');
+      const preEl = document.getElementById('preview-content');
+      preEl.textContent = "--- PREVIEW (First 5 Msgs) ---\n" + previewText;
+      openModal(document.getElementById('preview-modal'));
+  };
 });

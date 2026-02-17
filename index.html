@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Chat Exporter Dev</title>
+  <title>AI Chat Exporter Ultimate</title>
   <style>
     :root {
       --bg-color: #ffffff;
@@ -13,8 +13,9 @@
       --primary: #2563eb;
       --primary-hover: #1d4ed8;
       --surface: #f9fafb;
-      --code-bg: #0d1117;
       --danger: #ef4444;
+      --warning: #f59e0b;
+      --success: #10b981;
     }
 
     body.dark {
@@ -34,20 +35,21 @@
       overflow-x: hidden;
     }
 
-    .container { display: flex; flex-direction: column; min-height: 540px; }
+    .container { display: flex; flex-direction: column; min-height: 580px; }
 
     header {
       padding: 12px 16px;
       border-bottom: 1px solid var(--border);
       display: flex;
       justify-content: space-between;
+      align-items: center;
       background-color: var(--bg-color);
       position: sticky; top: 0; z-index: 10;
     }
     
     .logo-area h1 { margin: 0; font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
     .dev-badge { background: #3b82f6; color: white; font-size: 9px; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; }
-    .icon-btn { background: none; border: 1px solid var(--border); border-radius: 8px; width: 32px; height: 32px; cursor: pointer; color: var(--text-main); transition: all 0.2s; }
+    .icon-btn { background: none; border: 1px solid var(--border); border-radius: 8px; width: 32px; height: 32px; cursor: pointer; color: var(--text-main); transition: all 0.2s; display: flex; align-items: center; justify-content: center; }
     .icon-btn:hover { background: var(--surface); border-color: var(--primary); }
 
     main { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
@@ -70,14 +72,10 @@
         background: var(--bg-color); transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     }
     .format-item:hover { transform: translateY(-2px); border-color: var(--primary); }
-    /* Animation for Selection */
     .format-item.selected {
         border-color: var(--primary); background: rgba(37, 99, 235, 0.08);
         box-shadow: 0 0 0 1px var(--primary);
-        animation: pulse 0.3s ease-in-out;
     }
-    @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.02); } 100% { transform: scale(1); } }
-    
     .format-item label { font-size: 12px; font-weight: 700; display: block; pointer-events: none; }
     .format-item .tooltip { font-size: 9px; color: var(--text-sub); display: block; margin-top: 3px; pointer-events: none; }
     .format-item.selected label { color: var(--primary); }
@@ -92,15 +90,31 @@
 
     /* Modal Styles */
     .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 100; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
-    .modal-content { background: var(--bg-color); width: 330px; padding: 24px; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); max-height: 80vh; overflow-y: auto; }
+    .modal-content { background: var(--bg-color); width: 330px; padding: 24px; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); max-height: 85vh; overflow-y: auto; }
     .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-    .modal-header h2 { margin: 0; font-size: 18px; }
+    .modal-header h2 { margin: 0; font-size: 18px; font-weight: 700; }
     .close-btn { width: 100%; padding: 12px; margin-top: 24px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; font-weight: 700; }
+
+    /* Error Modal Specifics */
+    .error-header { display: flex; align-items: center; gap: 10px; color: var(--danger); margin-bottom: 15px; }
+    .error-title { font-weight: 800; font-size: 16px; }
+    .error-detail-box { background: var(--surface); padding: 12px; border-radius: 8px; border: 1px solid var(--border); font-family: monospace; font-size: 11px; margin-bottom: 12px; color: var(--text-main); word-break: break-all; }
+    .error-suggestion { font-size: 12px; color: var(--text-sub); line-height: 1.5; }
+    
+    /* About Modal Specifics */
+    .about-row { margin-bottom: 12px; font-size: 12px; color: var(--text-main); line-height: 1.5; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    .about-label { font-weight: 700; display: block; margin-bottom: 2px; color: var(--text-sub); }
+    .about-link { color: var(--primary); text-decoration: none; }
 
     .settings-list { display: flex; flex-direction: column; gap: 14px; }
     .setting-row { display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
     .setting-label { font-size: 13px; font-weight: 600; }
     .setting-info { font-size: 10px; color: var(--text-sub); }
+    
+    .input-field {
+        width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px;
+        background: var(--surface); color: var(--text-main); font-size: 12px; box-sizing: border-box;
+    }
 
     footer { padding: 12px; text-align: center; border-top: 1px solid var(--border); background: var(--surface); margin-top: auto; }
     .copyright { font-size: 10px; font-weight: 700; }
@@ -112,9 +126,10 @@
 <body class="light">
   <div class="container">
     <header>
-      <div class="logo-area"><h1>AI Exporter <span class="dev-badge">DEV</span></h1></div>
+      <div class="logo-area"><h1>AI Exporter <span class="dev-badge">ULTIMATE</span></h1></div>
       <div style="display:flex; gap:8px;">
         <button id="btn-open-settings" class="icon-btn" title="Settings">⚙️</button>
+        <button id="btn-open-about" class="icon-btn" title="About">ℹ️</button>
         <button id="theme-btn" class="icon-btn" title="Theme">🌓</button>
       </div>
     </header>
@@ -143,22 +158,24 @@
         <div class="format-item" data-ext="json"><label>JSON Data</label><span class="tooltip">Raw data</span></div>
         <div class="format-item" data-ext="doc"><label>Word Doc</label><span class="tooltip">Embedded images</span></div>
         <div class="format-item" data-ext="csv"><label>Excel CSV</label><span class="tooltip">Spreadsheet</span></div>
+        <div class="format-item" data-ext="sql"><label>SQL DB</label><span class="tooltip">Database Dump</span></div>
         <div class="format-item" data-ext="txt"><label>Plain Text</label><span class="tooltip">Simple text</span></div>
+        <div class="format-item" data-ext="pdf"><label>PDF</label><span class="tooltip">Print View</span></div>
       </div>
 
       <button id="btn-export-main" class="export-action" disabled>Generate Package</button>
     </main>
 
     <footer>
-      <div class="copyright">Copyright Dr. Babak Sorkhpour © 2026</div>
+      <div class="copyright">Dr. Babak Sorkhpour © 2026</div>
       <div class="footer-links">
         <span id="link-legal">Legal</span>
         <span id="link-security">Security</span>
-        <span class="version">v0.9.9</span>
+        <span class="version">v0.9.23</span>
       </div>
     </footer>
 
-    <!-- Settings -->
+    <!-- Settings Modal -->
     <div id="settings-modal" class="modal-overlay">
         <div class="modal-content">
             <div class="modal-header"><h2>Settings</h2><button id="btn-close-settings" style="border:none;background:none;cursor:pointer;">✕</button></div>
@@ -168,7 +185,20 @@
                     <span class="setting-info">Embeds Base64 images for Word/HTML</span>
                 </div>
                 <div class="setting-item">
+                    <label class="setting-row"><span class="setting-label">Syntax Highlighting</span><input type="checkbox" id="check-code" checked></label>
+                    <span class="setting-info">Preserve code block colors/formatting</span>
+                </div>
+                <div class="setting-item">
+                    <label class="setting-row"><span class="setting-label">Raw HTML (Risky)</span><input type="checkbox" id="check-raw-html"></label>
+                    <span class="setting-info">Captures exact DOM</span>
+                </div>
+                <div class="setting-item">
                     <label class="setting-row"><span class="setting-label">ZIP Compression</span><input type="checkbox" id="check-zip"></label>
+                </div>
+                <hr style="border:0; border-top:1px solid var(--border);">
+                <div class="setting-item">
+                    <label class="setting-row"><span class="setting-label">AES-256 Encryption</span><input type="checkbox" id="check-encrypt"></label>
+                    <input type="password" id="export-pass" class="input-field" placeholder="Encryption Key" style="display:none; margin-top:5px;">
                 </div>
                 <button id="btn-download-logs" style="width:100%; padding:8px; border:1px solid var(--border); background:var(--surface); border-radius:6px; cursor:pointer; font-size:11px;">Download Error Logs</button>
             </div>
@@ -176,10 +206,34 @@
         </div>
     </div>
     
-    <!-- Modals for Error/Preview omitted for brevity but logic exists in script.js -->
-    <div id="error-modal" class="modal-overlay"><div class="modal-content"><h2>Error</h2><p id="error-msg"></p><button class="close-btn" id="btn-close-error">OK</button></div></div>
-    <div id="preview-modal" class="modal-overlay"><div class="modal-content"><h2>Preview</h2><pre id="preview-content" style="height:200px;overflow:auto;font-size:10px;"></pre><button class="close-btn" id="btn-close-preview">Close</button></div></div>
-    <div id="info-modal" class="modal-overlay"><div class="modal-content"><h2 id="info-title"></h2><p id="info-body"></p><button class="close-btn" id="btn-close-info">OK</button></div></div>
+    <!-- Error Modal -->
+    <div id="error-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="error-header">
+                <span style="font-size: 24px;">⚠️</span>
+                <span class="error-title">Export Failed</span>
+            </div>
+            <div class="error-detail-box" id="error-msg">Unknown error occurred.</div>
+            <p class="error-suggestion" id="error-fix">Please try refreshing the page.</p>
+            <button class="close-btn" id="btn-close-error">Dismiss</button>
+        </div>
+    </div>
+
+    <!-- About Modal -->
+    <div id="about-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header"><h2>About</h2><button id="btn-close-about" style="border:none;background:none;cursor:pointer;">✕</button></div>
+            <div class="about-row"><span class="about-label">Owner & Management</span>Dr. Babak Sorkhpour <a href="https://x.com/Drbabakskr" target="_blank" class="about-link">(@Drbabakskr)</a></div>
+            <div class="about-row"><span class="about-label">Author & Engineering</span>Dr. Babak Sorkhpour with support from ChatGPT</div>
+            <div class="about-row"><span class="about-label">License</span>MIT License (Ultimate Edition)</div>
+            <div class="about-row"><span class="about-label">Technology</span>Generated via CODEX CLI</div>
+            <div class="about-row"><span class="about-label">Version</span>0.9.23</div>
+            <button class="close-btn" id="btn-ack-about">Close</button>
+        </div>
+    </div>
+
+    <div id="preview-modal" class="modal-overlay"><div class="modal-content"><h2>Preview</h2><pre id="preview-content" style="height:200px;overflow:auto;font-size:10px;border:1px solid var(--border);padding:10px;border-radius:6px;"></pre><button class="close-btn" id="btn-close-preview">Close</button></div></div>
+    <div id="info-modal" class="modal-overlay"><div class="modal-content"><h2 id="info-title"></h2><p id="info-body" style="font-size:12px;color:var(--text-sub);"></p><button class="close-btn" id="btn-close-info">OK</button></div></div>
   </div>
   <script src="script.js"></script>
 <script type="module" src="/index.tsx"></script>

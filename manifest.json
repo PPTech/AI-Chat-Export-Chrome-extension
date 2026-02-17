@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "AI Chat Exporter (Developer Edition)",
-  "version": "0.9.9",
-  "description": "Industrial-grade multi-platform chat extraction. Isolated tab processing, advanced formatting, and secure local-first architecture.",
+  "name": "AI Chat Exporter (Ultimate)",
+  "version": "0.9.23",
+  "description": "Industrial-grade multi-platform chat extraction. Isolated tab processing, advanced formatting, encryption support, and secure local-first architecture.",
   "action": {
     "default_popup": "index.html",
     "default_title": "AI Chat Exporter"
