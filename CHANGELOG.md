@@ -4,10 +4,10 @@
 
 # Changelog
 
-## 0.9.32 - 2026-02-17
+## 0.9.33 - 2026-02-17
 - Improved photo extraction by resolving `src`, lazy `data-src`, and `srcset` image candidates in content parsing.
 - Fixed HTML/DOC image rendering to support both `[[IMG:...]]` tokens and markdown image syntax fallback.
-- Reworked PDF generation to rasterized page rendering (canvas -> JPEG -> PDF pages) for better multilingual output and reliable image inclusion.
+- Reworked PDF generation back to text-first standalone PDF output (selectable text with UTF-16 encoding path).
 
 ## 0.9.31 - 2026-02-17
 - Improved extractor selectors for ChatGPT (including Codex-like layouts), Claude, Gemini, and AI Studio.
