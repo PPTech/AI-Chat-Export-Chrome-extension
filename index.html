@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Chat Exporter Dev</title>
+  <style>
+    :root {
+      --bg-color: #ffffff;
+      --text-main: #111827;
+      --text-sub: #6b7280;
+      --border: #e5e7eb;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --surface: #f9fafb;
+      --code-bg: #0d1117;
+      --danger: #ef4444;
+    }
+
+    body.dark {
+      --bg-color: #0f172a;
+      --text-main: #f1f5f9;
+      --text-sub: #94a3b8;
+      --border: #1e293b;
+      --surface: #1e293b;
+    }
+
+    body {
+      width: 400px;
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      overflow-x: hidden;
+    }
+
+    .container { display: flex; flex-direction: column; min-height: 540px; }
+
+    header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      background-color: var(--bg-color);
+      position: sticky; top: 0; z-index: 10;
+    }
+    
+    .logo-area h1 { margin: 0; font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+    .dev-badge { background: #3b82f6; color: white; font-size: 9px; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; }
+    .icon-btn { background: none; border: 1px solid var(--border); border-radius: 8px; width: 32px; height: 32px; cursor: pointer; color: var(--text-main); transition: all 0.2s; }
+    .icon-btn:hover { background: var(--surface); border-color: var(--primary); }
+
+    main { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+
+    .status-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; text-align: center; position: relative; }
+    .btn-clear-abs { position: absolute; top: 8px; right: 8px; font-size: 10px; color: var(--danger); background: none; border: none; cursor: pointer; text-decoration: underline; }
+    .platform-badge { font-size: 10px; font-weight: 700; color: var(--primary); text-transform: uppercase; display: block; }
+    .message-count { font-size: 32px; font-weight: 800; margin: 4px 0; }
+    .message-label { font-size: 11px; color: var(--text-sub); }
+
+    .action-row { display: flex; gap: 8px; margin-top: 12px; }
+    .action-btn { flex: 1; padding: 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-color); color: var(--text-main); font-size: 11px; font-weight: 600; cursor: pointer; }
+    .action-btn:hover { border-color: var(--primary); color: var(--primary); }
+
+    .section-title { font-size: 11px; font-weight: 700; color: var(--text-sub); text-transform: uppercase; margin-bottom: 6px; }
+    
+    .format-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .format-item {
+        border: 1px solid var(--border); border-radius: 10px; padding: 10px 8px; cursor: pointer;
+        background: var(--bg-color); transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .format-item:hover { transform: translateY(-2px); border-color: var(--primary); }
+    /* Animation for Selection */
+    .format-item.selected {
+        border-color: var(--primary); background: rgba(37, 99, 235, 0.08);
+        box-shadow: 0 0 0 1px var(--primary);
+        animation: pulse 0.3s ease-in-out;
+    }
+    @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.02); } 100% { transform: scale(1); } }
+    
+    .format-item label { font-size: 12px; font-weight: 700; display: block; pointer-events: none; }
+    .format-item .tooltip { font-size: 9px; color: var(--text-sub); display: block; margin-top: 3px; pointer-events: none; }
+    .format-item.selected label { color: var(--primary); }
+
+    .export-action {
+        background: var(--primary); color: white; border: none; padding: 14px; border-radius: 12px;
+        font-weight: 700; font-size: 14px; cursor: pointer; width: 100%; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+        transition: all 0.2s; margin-top: 4px;
+    }
+    .export-action:hover { background: var(--primary-hover); }
+    .export-action:disabled { background: var(--text-sub); opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+
+    /* Modal Styles */
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 100; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
+    .modal-content { background: var(--bg-color); width: 330px; padding: 24px; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); max-height: 80vh; overflow-y: auto; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .modal-header h2 { margin: 0; font-size: 18px; }
+    .close-btn { width: 100%; padding: 12px; margin-top: 24px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; font-weight: 700; }
+
+    .settings-list { display: flex; flex-direction: column; gap: 14px; }
+    .setting-row { display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
+    .setting-label { font-size: 13px; font-weight: 600; }
+    .setting-info { font-size: 10px; color: var(--text-sub); }
+
+    footer { padding: 12px; text-align: center; border-top: 1px solid var(--border); background: var(--surface); margin-top: auto; }
+    .copyright { font-size: 10px; font-weight: 700; }
+    .footer-links { font-size: 9px; color: var(--text-sub); display: flex; justify-content: center; gap: 12px; margin-top: 4px; }
+    .footer-links span { cursor: pointer; text-decoration: underline; }
+  </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body class="light">
+  <div class="container">
+    <header>
+      <div class="logo-area"><h1>AI Exporter <span class="dev-badge">DEV</span></h1></div>
+      <div style="display:flex; gap:8px;">
+        <button id="btn-open-settings" class="icon-btn" title="Settings">⚙️</button>
+        <button id="theme-btn" class="icon-btn" title="Theme">🌓</button>
+      </div>
+    </header>
+
+    <main>
+      <div id="status-area" class="status-card">
+        <button id="btn-clear-all" class="btn-clear-abs">Clear</button>
+        <span id="platform-badge" class="platform-badge">System Ready</span>
+        <div id="stats-view" style="display: none;">
+          <div class="message-count" id="msg-count">0</div>
+          <div class="message-label">Messages Ready</div>
+          <div class="action-row">
+            <button id="btn-preview" class="action-btn">Preview</button>
+            <button id="btn-load-full" class="action-btn">Fetch Full</button>
+          </div>
+        </div>
+        <div id="empty-view">
+            <p style="font-size: 13px; color: var(--text-sub);">Analyzing active tab...</p>
+        </div>
+      </div>
+
+      <div class="section-title">Output Formats</div>
+      <div class="format-grid">
+        <div class="format-item" data-ext="md"><label>Markdown</label><span class="tooltip">Clean notes</span></div>
+        <div class="format-item" data-ext="html"><label>HTML Web</label><span class="tooltip">Full layout</span></div>
+        <div class="format-item" data-ext="json"><label>JSON Data</label><span class="tooltip">Raw data</span></div>
+        <div class="format-item" data-ext="doc"><label>Word Doc</label><span class="tooltip">Embedded images</span></div>
+        <div class="format-item" data-ext="csv"><label>Excel CSV</label><span class="tooltip">Spreadsheet</span></div>
+        <div class="format-item" data-ext="txt"><label>Plain Text</label><span class="tooltip">Simple text</span></div>
+      </div>
+
+      <button id="btn-export-main" class="export-action" disabled>Generate Package</button>
+    </main>
+
+    <footer>
+      <div class="copyright">Copyright Dr. Babak Sorkhpour © 2026</div>
+      <div class="footer-links">
+        <span id="link-legal">Legal</span>
+        <span id="link-security">Security</span>
+        <span class="version">v0.9.9</span>
+      </div>
+    </footer>
+
+    <!-- Settings -->
+    <div id="settings-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header"><h2>Settings</h2><button id="btn-close-settings" style="border:none;background:none;cursor:pointer;">✕</button></div>
+            <div class="settings-list">
+                <div class="setting-item">
+                    <label class="setting-row"><span class="setting-label">Include Images</span><input type="checkbox" id="check-images" checked></label>
+                    <span class="setting-info">Embeds Base64 images for Word/HTML</span>
+                </div>
+                <div class="setting-item">
+                    <label class="setting-row"><span class="setting-label">ZIP Compression</span><input type="checkbox" id="check-zip"></label>
+                </div>
+                <button id="btn-download-logs" style="width:100%; padding:8px; border:1px solid var(--border); background:var(--surface); border-radius:6px; cursor:pointer; font-size:11px;">Download Error Logs</button>
+            </div>
+            <button class="close-btn" id="btn-save-settings">Save</button>
+        </div>
+    </div>
+    
+    <!-- Modals for Error/Preview omitted for brevity but logic exists in script.js -->
+    <div id="error-modal" class="modal-overlay"><div class="modal-content"><h2>Error</h2><p id="error-msg"></p><button class="close-btn" id="btn-close-error">OK</button></div></div>
+    <div id="preview-modal" class="modal-overlay"><div class="modal-content"><h2>Preview</h2><pre id="preview-content" style="height:200px;overflow:auto;font-size:10px;"></pre><button class="close-btn" id="btn-close-preview">Close</button></div></div>
+    <div id="info-modal" class="modal-overlay"><div class="modal-content"><h2 id="info-title"></h2><p id="info-body"></p><button class="close-btn" id="btn-close-info">OK</button></div></div>
+  </div>
+  <script src="script.js"></script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>
