@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// content.js - Industrial Extraction Engine v0.9.35
+// content.js - Industrial Extraction Engine v0.9.36
 
 (() => {
   if (window.hasRunContent) return;
@@ -194,12 +194,14 @@
     const scroller = findScrollContainer();
     let stable = 0;
     let prev = scroller.scrollHeight;
+    let rounds = 0;
     const timer = setInterval(() => {
+      rounds += 1;
       scroller.scrollTop = 0;
       if (Math.abs(scroller.scrollHeight - prev) < 24) stable += 1;
       else stable = 0;
       prev = scroller.scrollHeight;
-      if (stable >= 7) {
+      if (stable >= 10 || rounds >= 45) {
         clearInterval(timer);
         sendResponse({ status: 'done' });
       }
