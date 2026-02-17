@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// content.js - Industrial Extraction Engine v0.9.31
+// content.js - Industrial Extraction Engine v0.9.32
 
 (() => {
   if (window.hasRunContent) return;
@@ -57,6 +57,19 @@
     }
   }
 
+  function pickBestImageSource(img) {
+    const src = img.getAttribute('src') || img.currentSrc || '';
+    if (src) return src;
+    const dataSrc = img.getAttribute('data-src') || img.getAttribute('data-original') || '';
+    if (dataSrc) return dataSrc;
+    const srcset = img.getAttribute('srcset') || img.getAttribute('data-srcset') || '';
+    if (srcset) {
+      const last = srcset.split(',').map((s) => s.trim().split(' ')[0]).filter(Boolean).pop();
+      if (last) return last;
+    }
+    return '';
+  }
+
   async function processNodeContent(element, options, isUser) {
     if (!element) return '';
     if (options.rawHtml) return element.innerHTML;
@@ -74,7 +87,7 @@
 
     const images = clone.querySelectorAll('img');
     for (const img of images) {
-      const src = img.getAttribute('src') || img.currentSrc || '';
+      const src = pickBestImageSource(img);
       const width = Number(img.getAttribute('width')) || img.clientWidth || img.naturalWidth || 0;
       if (isUser) {
         img.remove();

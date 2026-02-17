@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// script.js - Main Controller v0.9.31
+// script.js - Main Controller v0.9.32
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
@@ -139,7 +139,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function replaceImageTokensForHtml(content) {
     const tokenRegex = /\[\[IMG:([\s\S]*?)\]\]/g;
-    return content.replace(tokenRegex, (_, rawSrc) => {
+    const markdownRegex = /!\[[^\]]*\]\((data:image\/[^)]+|https?:\/\/[^)]+)\)/g;
+    const withTokenImages = content.replace(tokenRegex, (_, rawSrc) => {
+      const src = normalizeImageSrc(rawSrc.trim());
+      if (!src) return '';
+      return `<img src="${src}" alt="Image" style="max-width:100%;height:auto;display:block;margin:12px 0;border-radius:6px;">`;
+    });
+    return withTokenImages.replace(markdownRegex, (_, rawSrc) => {
       const src = normalizeImageSrc(rawSrc.trim());
       if (!src) return '';
       return `<img src="${src}" alt="Image" style="max-width:100%;height:auto;display:block;margin:12px 0;border-radius:6px;">`;
@@ -158,7 +164,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const title = data.title || 'Export';
 
     if (fmt === 'pdf') {
-      const pdfBytes = buildTextPdf(title, msgs);
+      const pdfBytes = await buildRichPdf(title, msgs);
       return { content: pdfBytes, mime: 'application/pdf' };
     }
 
@@ -203,59 +209,187 @@ document.addEventListener('DOMContentLoaded', () => {
     return { content: md, mime: 'text/markdown' };
   }
 
-  function utf16beHex(text) {
-    let hex = 'FEFF';
-    for (const char of text) {
-      const code = char.codePointAt(0);
-      if (code <= 0xffff) hex += code.toString(16).padStart(4, '0');
+  async function buildRichPdf(title, messages) {
+    const pageWidth = 1240;
+    const pageHeight = 1754;
+    const margin = 56;
+
+    const pages = [];
+    let ctx;
+    let canvas;
+
+    const newPage = () => {
+      canvas = document.createElement('canvas');
+      canvas.width = pageWidth;
+      canvas.height = pageHeight;
+      ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, pageWidth, pageHeight);
+      ctx.fillStyle = '#111111';
+      ctx.textBaseline = 'top';
+      return { canvas, y: margin };
+    };
+
+    let current = newPage();
+    const ensureSpace = (needed) => {
+      if (current.y + needed <= pageHeight - margin) return;
+      pages.push(current.canvas.toDataURL('image/jpeg', 0.92));
+      current = newPage();
+    };
+
+    const drawTextBlock = (text, font, color = '#111111') => {
+      ctx.font = font;
+      ctx.fillStyle = color;
+      const lines = wrapLine(text, 90);
+      for (const line of lines) {
+        ensureSpace(30);
+        ctx.fillText(line, margin, current.y);
+        current.y += 28;
+      }
+    };
+
+    drawTextBlock(title, 'bold 36px Arial', '#111827');
+    current.y += 10;
+
+    for (const message of messages) {
+      drawTextBlock(`[${message.role}]`, 'bold 28px Arial', '#1D4ED8');
+      const parts = splitContentAndImages(message.content);
+      for (const part of parts) {
+        if (part.type === 'text') {
+          drawTextBlock(replaceImageTokensForText(part.value), '24px Arial', '#111111');
+          continue;
+        }
+        const src = normalizeImageSrc(part.value.trim());
+        if (!src) continue;
+        const img = await loadImage(src);
+        if (!img) continue;
+        const maxW = pageWidth - margin * 2;
+        const drawW = Math.min(maxW, img.width || maxW);
+        const drawH = Math.max(40, Math.round((img.height / Math.max(img.width, 1)) * drawW));
+        ensureSpace(drawH + 20);
+        ctx.drawImage(img, margin, current.y, drawW, drawH);
+        current.y += drawH + 14;
+      }
+      current.y += 14;
     }
-    return `<${hex}>`;
+
+    pages.push(current.canvas.toDataURL('image/jpeg', 0.92));
+    return buildPdfFromJpegPages(pages, pageWidth, pageHeight);
   }
 
-  function buildTextPdf(title, messages) {
-    const lines = [title, ''];
-    messages.forEach((m) => {
-      lines.push(`[${m.role}]`);
-      lines.push(replaceImageTokensForText(m.content));
-      lines.push('');
+  function splitContentAndImages(content) {
+    const parts = [];
+    const regex = /\[\[IMG:([\s\S]*?)\]\]|!\[[^\]]*\]\((data:image\/[^)]+|https?:\/\/[^)]+)\)/g;
+    let lastIndex = 0;
+    let match;
+    while ((match = regex.exec(content || '')) !== null) {
+      const start = match.index;
+      if (start > lastIndex) parts.push({ type: 'text', value: (content || '').slice(lastIndex, start) });
+      parts.push({ type: 'image', value: match[1] || match[2] || '' });
+      lastIndex = regex.lastIndex;
+    }
+    if (lastIndex < (content || '').length) parts.push({ type: 'text', value: (content || '').slice(lastIndex) });
+    if (!parts.length) parts.push({ type: 'text', value: content || '' });
+    return parts;
+  }
+
+  function loadImage(src) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      if (!src.startsWith('data:')) img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = src;
     });
+  }
 
-    const contentOps = [];
-    let y = 800;
-    for (const line of lines) {
-      const chunks = wrapLine(line, 90);
-      for (const chunk of chunks) {
-        contentOps.push(`BT /F1 11 Tf 40 ${y} Td ${utf16beHex(chunk)} Tj ET`);
-        y -= 14;
-        if (y < 40) break;
-      }
-      if (y < 40) break;
+  function buildPdfFromJpegPages(pageDataUrls, widthPx, heightPx) {
+    const pointsPerPx = 0.75;
+    const w = Math.round(widthPx * pointsPerPx);
+    const h = Math.round(heightPx * pointsPerPx);
+    const objects = [];
+
+    objects[1] = toBytes('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n');
+
+    const kids = [];
+    let objNum = 3;
+    const pageDefs = [];
+    for (let i = 0; i < pageDataUrls.length; i += 1) {
+      const pageObj = objNum;
+      const contentObj = objNum + 1;
+      const imageObj = objNum + 2;
+      kids.push(`${pageObj} 0 R`);
+      pageDefs.push({ pageObj, contentObj, imageObj, dataUrl: pageDataUrls[i] });
+      objNum += 3;
+    }
+    objects[2] = toBytes(`2 0 obj\n<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${pageDefs.length} >>\nendobj\n`);
+
+    for (let i = 0; i < pageDefs.length; i += 1) {
+      const def = pageDefs[i];
+      const stream = `q\n${w} 0 0 ${h} 0 0 cm\n/Im${i + 1} Do\nQ`;
+      const jpgBytes = dataUrlToBytes(def.dataUrl);
+
+      objects[def.pageObj] = toBytes(
+        `${def.pageObj} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${w} ${h}] /Resources << /XObject << /Im${i + 1} ${def.imageObj} 0 R >> >> /Contents ${def.contentObj} 0 R >>\nendobj\n`
+      );
+      objects[def.contentObj] = toBytes(
+        `${def.contentObj} 0 obj\n<< /Length ${stream.length} >>\nstream\n${stream}\nendstream\nendobj\n`
+      );
+      objects[def.imageObj] = concatBytes(
+        toBytes(`${def.imageObj} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${widthPx} /Height ${heightPx} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpgBytes.length} >>\nstream\n`),
+        jpgBytes,
+        toBytes('\nendstream\nendobj\n')
+      );
     }
 
-    const stream = contentOps.join('\n');
-    const objects = [
-      '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n',
-      '2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n',
-      '3 0 obj\n<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 4 0 R >> >> /MediaBox [0 0 595 842] /Contents 5 0 R >>\nendobj\n',
-      '4 0 obj\n<< /Type /Font /Subtype /Type0 /BaseFont /Helvetica /Encoding /Identity-H /DescendantFonts [6 0 R] >>\nendobj\n',
-      `5 0 obj\n<< /Length ${stream.length} >>\nstream\n${stream}\nendstream\nendobj\n`,
-      '6 0 obj\n<< /Type /Font /Subtype /CIDFontType0 /BaseFont /Helvetica /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> >>\nendobj\n'
-    ];
+    const validObjects = [];
+    for (let i = 1; i < objects.length; i += 1) {
+      if (objects[i]) validObjects.push({ index: i, bytes: objects[i] });
+    }
 
-    let pdf = '%PDF-1.4\n';
+    const chunks = [toBytes('%PDF-1.4\n')];
     const offsets = [0];
-    for (const obj of objects) {
-      offsets.push(pdf.length);
-      pdf += obj;
+    let offset = chunks[0].length;
+    for (const obj of validObjects) {
+      offsets[obj.index] = offset;
+      chunks.push(obj.bytes);
+      offset += obj.bytes.length;
     }
-    const xrefStart = pdf.length;
-    pdf += `xref\n0 ${objects.length + 1}\n`;
-    pdf += '0000000000 65535 f \n';
-    for (let i = 1; i <= objects.length; i += 1) {
-      pdf += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
+
+    const xrefStart = offset;
+    const maxObj = validObjects[validObjects.length - 1].index;
+    let xref = `xref\n0 ${maxObj + 1}\n0000000000 65535 f \n`;
+    for (let i = 1; i <= maxObj; i += 1) {
+      const entryOffset = offsets[i] || 0;
+      xref += `${String(entryOffset).padStart(10, '0')} 00000 n \n`;
     }
-    pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
-    return new TextEncoder().encode(pdf);
+    const trailer = `trailer\n<< /Size ${maxObj + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
+    chunks.push(toBytes(xref));
+    chunks.push(toBytes(trailer));
+    return concatBytes(...chunks);
+  }
+
+  function toBytes(text) {
+    return new TextEncoder().encode(text);
+  }
+
+  function dataUrlToBytes(dataUrl) {
+    const b64 = (dataUrl.split(',')[1] || '');
+    const raw = atob(b64);
+    const bytes = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i += 1) bytes[i] = raw.charCodeAt(i);
+    return bytes;
+  }
+
+  function concatBytes(...arrays) {
+    const total = arrays.reduce((sum, arr) => sum + arr.length, 0);
+    const out = new Uint8Array(total);
+    let cursor = 0;
+    for (const arr of arrays) {
+      out.set(arr, cursor);
+      cursor += arr.length;
+    }
+    return out;
   }
 
   function wrapLine(text, maxLen) {
