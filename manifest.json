@@ -1,11 +1,11 @@
 {
   "manifest_version": 3,
   "name": "AI Chat Exporter (Ultimate)",
-  "version": "0.9.31",
-  "description": "Industrial-grade multi-platform chat extraction. Supports ChatGPT Canvas, Claude 3.5, Gemini, and AI Studio. Secure local-first.",
+  "version": "0.9.36",
+  "description": "Industrial-grade multi-platform chat extraction. Secure local-first architecture. Powered by Gemini 2.0 Flash.",
   "action": {
     "default_popup": "index.html",
-    "default_title": "AI Chat Exporter v0.9.31"
+    "default_title": "AI Chat Exporter"
   },
   "background": {
     "service_worker": "background.js"
@@ -22,8 +22,7 @@
         "*://claude.ai/*",
         "*://aistudio.google.com/*"
       ],
-      "js": ["content.js"],
-      "run_at": "document_idle"
+      "js": ["content.js"]
     }
   ]
 }

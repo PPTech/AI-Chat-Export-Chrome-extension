@@ -137,6 +137,7 @@
           <div class="action-row">
             <button id="btn-preview" class="action-btn">Preview</button>
             <button id="btn-load-full" class="action-btn">Fetch Full</button>
+            <button id="btn-export-images" class="action-btn">Export Photos</button>
           </div>
         </div>
         <div id="empty-view">
@@ -164,7 +165,7 @@
       <div class="footer-links">
         <span id="link-legal">Legal</span>
         <span id="link-security">Security</span>
-        <span class="version">v0.9.31</span>
+        <span class="version">v0.9.36</span>
       </div>
     </footer>
 
@@ -188,6 +189,7 @@
                 <div class="setting-item">
                     <label class="setting-row"><span class="setting-label">ZIP Compression</span><input type="checkbox" id="check-zip"></label>
                 </div>
+                <!-- Encryption Removed per Security Audit -->
                 <button id="btn-download-logs" style="width:100%; padding:8px; border:1px solid var(--border); background:var(--surface); border-radius:6px; cursor:pointer; font-size:11px;">Download Error Logs</button>
             </div>
             <button class="close-btn" id="btn-save-settings">Save</button>
@@ -215,7 +217,7 @@
             <div class="about-row"><span class="about-label">Author & Engineering</span>Dr. Babak Sorkhpour with support from Gemini 2.0 Flash (Google)</div>
             <div class="about-row"><span class="about-label">License</span>MIT License (Ultimate Edition)</div>
             <div class="about-row"><span class="about-label">Technology</span>Generated via CODEX CLI</div>
-            <div class="about-row"><span class="about-label">Version</span>0.9.31</div>
+            <div class="about-row"><span class="about-label">Version</span>0.9.36</div>
             <button class="close-btn" id="btn-ack-about">Close</button>
         </div>
     </div>
@@ -224,6 +226,5 @@
     <div id="info-modal" class="modal-overlay"><div class="modal-content"><h2 id="info-title"></h2><p id="info-body" style="font-size:12px;color:var(--text-sub);"></p><button class="close-btn" id="btn-close-info">OK</button></div></div>
   </div>
   <script src="script.js"></script>
-<script type="module" src="/index.tsx"></script>
 </body>
 </html>
