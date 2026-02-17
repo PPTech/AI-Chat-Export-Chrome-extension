@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// script.js - Main Controller v0.10.3
+// script.js - Main Controller v0.10.5
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
@@ -78,28 +78,40 @@ document.addEventListener('DOMContentLoaded', () => {
     btnExport.textContent = count > 1 ? `Generate Bundle (${count})` : 'Generate File';
   }
 
+  function setProcessingProgress(percent, label = 'Processing') {
+    const bounded = Math.max(0, Math.min(100, Math.round(percent)));
+    btnExport.textContent = `${label} ${bounded}%`;
+  }
+
   btnExport.onclick = async () => {
     const formats = Array.from(document.querySelectorAll('.format-item.selected')).map((i) => i.dataset.ext);
     if (!formats.length || !currentChatData) return;
     btnExport.disabled = true;
-    btnExport.textContent = 'Processing...';
+    setProcessingProgress(2);
 
     try {
       const date = new Date().toISOString().slice(0, 10);
       const baseName = `${(currentChatData.platform || 'Export').replace(/[^a-zA-Z0-9]/g, '')}_${date}`;
       const files = [];
 
-      for (const fmt of formats) {
+      for (let i = 0; i < formats.length; i += 1) {
+        const fmt = formats[i];
         const generated = await generateContent(fmt, currentChatData);
         files.push({ name: `${baseName}.${fmt}`, content: generated.content, mime: generated.mime });
+        const percent = 10 + ((i + 1) / Math.max(1, formats.length)) * 75;
+        setProcessingProgress(percent, `Processing ${fmt.toUpperCase()}`);
       }
 
       if (files.length === 1 && !checkZip.checked) {
+        setProcessingProgress(95, 'Finalizing');
         downloadBlob(new Blob([files[0].content], { type: files[0].mime }), files[0].name);
       } else {
+        setProcessingProgress(90, 'Packaging');
         const zip = await createRobustZip(files);
+        setProcessingProgress(98, 'Downloading');
         downloadBlob(zip, `${baseName}.zip`);
       }
+      setProcessingProgress(100, 'Done');
     } catch (error) {
       showError(error);
     } finally {
@@ -144,15 +156,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const imageList = extractAllImageSources(currentChatData.messages);
     if (!imageList.length) return showError(new Error('No images found in extracted chat data.'));
 
+    const packMode = window.confirm('Pack all photos into one ZIP?\nOK = Pack ZIP, Cancel = Export as batch files');
+    const date = new Date().toISOString().slice(0, 10);
+    const platformPrefix = (currentChatData.platform || 'Export').replace(/[^a-zA-Z0-9]/g, '');
+
+    if (!packMode) {
+      let idx = 1;
+      for (const src of imageList) {
+        const extGuess = src.includes('png') ? 'png' : (src.includes('webp') ? 'webp' : 'jpg');
+        chrome.downloads.download({ url: src, filename: `ai_chat_exporter/${platformPrefix}_${date}_photo_${String(idx).padStart(3, '0')}.${extGuess}`, saveAs: false });
+        idx += 1;
+      }
+      return;
+    }
+
     const files = [];
     let idx = 1;
     for (const src of imageList) {
-      if (/^https?:\/\//i.test(src)) {
-        const extGuess = src.includes('png') ? 'png' : (src.includes('webp') ? 'webp' : 'jpg');
-        chrome.downloads.download({ url: src, filename: `ai_chat_exporter/photo_${String(idx).padStart(3, '0')}.${extGuess}`, saveAs: false });
-        idx += 1;
-        continue;
-      }
       try {
         const b = await fetch(src).then((r) => r.blob());
         const ext = (b.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
@@ -160,14 +180,13 @@ document.addEventListener('DOMContentLoaded', () => {
         files.push({ name: `photo_${String(idx).padStart(3, '0')}.${ext}`, content: data, mime: b.type || 'application/octet-stream' });
         idx += 1;
       } catch {
-        // skip failed inline image
+        // skip failed image
       }
     }
 
     if (files.length) {
       const zip = await createRobustZip(files);
-      const date = new Date().toISOString().slice(0, 10);
-      downloadBlob(zip, `${(currentChatData.platform || 'Export').replace(/[^a-zA-Z0-9]/g, '')}_${date}_photos.zip`);
+      downloadBlob(zip, `${platformPrefix}_${date}_photos.zip`);
     }
   };
 
@@ -224,6 +243,14 @@ document.addEventListener('DOMContentLoaded', () => {
     return `<img src="${src}" alt="Image" style="max-width:100%;height:auto;display:block;margin:12px 0;border-radius:6px;">`;
   }
 
+  function renderRichMessageHtml(content) {
+    const parts = splitContentAndImages(content || '');
+    return parts.map((part) => {
+      if (part.type === 'image') return renderImgTag(part.value);
+      return escapeHtml(part.value || '').replace(/\n/g, '<br>');
+    }).join('');
+  }
+
   function extractAllImageSources(messages) {
     const set = new Set();
     const tokenRegex = /\[\[IMG:([\s\S]*?)\]\]/g;
@@ -254,10 +281,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (fmt === 'doc' || fmt === 'html') {
       const style = 'body{font-family:Arial,sans-serif;max-width:900px;margin:auto;padding:20px;line-height:1.6}img{max-width:100%;height:auto}.msg{margin-bottom:20px;padding:12px;border:1px solid #e5e7eb;border-radius:8px}.role{font-weight:700;margin-bottom:8px}';
       const body = msgs.map((m) => {
-        const escaped = escapeHtml(m.content).replace(/\n/g, '<br>');
-        return `<div class="msg"><div class="role">${escapeHtml(m.role)}</div><div>${replaceImageTokensForHtml(escaped)}</div></div>`;
+        return `<div class="msg"><div class="role">${escapeHtml(m.role)}</div><div>${renderRichMessageHtml(m.content)}</div></div>`;
       }).join('');
-      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>${style}</style></head><body><h1>${escapeHtml(title)}</h1>${body}</body></html>`;
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><style>${style}</style></head><body><h1>${escapeHtml(title)}</h1>${body}</body></html>`;
       return { content: html, mime: fmt === 'doc' ? 'application/msword' : 'text/html' };
     }
 

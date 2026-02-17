@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// content.js - Platform Engine Orchestrator v0.10.4
+// content.js - Platform Engine Orchestrator v0.10.5
 
 (() => {
   if (window.hasRunContent) return;
@@ -250,7 +250,9 @@
           }
         }));
 
-        return { platform: this.name, title: document.title, messages };
+        const isCodex = /chatgpt\.com\/codex/i.test(location.href);
+        const platformName = isCodex ? 'ChatGPT Codex' : this.name;
+        return { platform: platformName, title: document.title, messages };
       }
     },
 
@@ -819,6 +821,73 @@
     }, 1200);
   }
 
+  function discoverClaudeStructure() {
+    const findings = {
+      timestamp: new Date().toISOString(),
+      url: location.href,
+      hostname: location.hostname,
+      rootCandidates: [],
+      messageCandidates: [],
+      rolePatterns: [],
+      contentSignals: {}
+    };
+
+    const roots = Array.from(document.querySelectorAll('main,[role="main"],section,article,div'));
+    roots.forEach((el) => {
+      const cs = getComputedStyle(el);
+      const score = (['auto', 'scroll', 'overlay'].includes(cs.overflowY) ? 2 : 0)
+        + Math.min(3, (el.scrollHeight / Math.max(1, el.clientHeight)))
+        + Math.min(3, ((el.innerText || '').trim().length / 2000));
+      if (score >= 2.5) {
+        findings.rootCandidates.push({
+          signature: domSignature(el),
+          score: Number(score.toFixed(2)),
+          childCount: el.childElementCount,
+          scrollHeight: el.scrollHeight,
+          clientHeight: el.clientHeight
+        });
+      }
+    });
+
+    const selectors = ['[data-testid*="message"]', '[role="article"]', 'main article', 'main section', 'main div'];
+    selectors.forEach((selector) => {
+      const nodes = Array.from(document.querySelectorAll(selector)).filter((n) => (n.innerText || '').trim().length > 0 || n.querySelector('img,pre,code'));
+      if (nodes.length > 1) {
+        findings.messageCandidates.push({ selector, count: nodes.length, sample: domSignature(nodes[0]) });
+      }
+    });
+
+    const sampleNodes = Array.from(document.querySelectorAll('[data-testid*="message"],main article,main section')).slice(0, 30);
+    sampleNodes.forEach((node, index) => {
+      const marker = `${node.getAttribute('data-testid') || ''} ${node.getAttribute('aria-label') || ''} ${node.className || ''}`.toLowerCase();
+      let role = 'unknown';
+      const evidence = [];
+      if (/user|human/.test(marker)) {
+        role = 'user';
+        evidence.push('user-marker');
+      }
+      if (/assistant|claude|model/.test(marker)) {
+        role = 'assistant';
+        evidence.push('assistant-marker');
+      }
+      if (node.querySelector('img[alt*="avatar" i], img[alt*="profile" i]')) {
+        evidence.push('avatar-image');
+      }
+      findings.rolePatterns.push({ index, role, evidence, signature: domSignature(node) });
+    });
+
+    const container = document.querySelector('main,[role="main"]') || document.body;
+    findings.contentSignals = {
+      paragraphs: container.querySelectorAll('p').length,
+      codeBlocks: container.querySelectorAll('pre,code').length,
+      images: container.querySelectorAll('img').length,
+      links: container.querySelectorAll('a[href]').length
+    };
+
+    window.CLAUDE_DOM_DISCOVERY = findings;
+    return findings;
+  }
+
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'extract_chat') {
       extractChatData(request.options || {}).then(sendResponse);
@@ -832,6 +901,11 @@
       runChatGptDomAnalysis(request.mode === 'full' ? 'full' : 'visible', request.options || {}, utils).then((analysis) => {
         sendResponse({ success: true, messageCount: analysis.messageCount, mode: analysis.mode, key: CHATGPT_ANALYSIS_KEY });
       });
+      return true;
+    }
+    if (request.action === 'discover_claude_structure') {
+      const findings = discoverClaudeStructure();
+      sendResponse({ success: true, findings });
       return true;
     }
     return false;

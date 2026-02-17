@@ -1,6 +1,6 @@
 # 🚀 AI Chat Exporter Ultimate
 
-**Version**: 0.10.4  
+**Version**: 0.10.5  
 **License**: MIT (Ultimate Edition)  
 **Code Source**: Generated with support from CODEX and CODEX CLI.  
 **Owner / Management**: Dr. Babak Sorkhpour ([@Drbabakskr](https://x.com/Drbabakskr))  
@@ -154,3 +154,22 @@ For deep ChatGPT DOM diagnostics (local only):
 3. Inspect `window.CHATGPT_DOM_ANALYSIS` for root candidates, message evidence, and parsed blocks.
 
 Console ends with `[PASS]`, `[WARN]`, or `[FAIL]` diagnostics.
+
+
+## 🔎 Claude DOM Discovery (Manual)
+
+For claude.ai reverse-engineering in a logged-in session, the extension now exposes a local discovery action:
+
+- In DevTools console on a Claude chat page:
+  - `chrome.runtime.sendMessage({ action: "discover_claude_structure" }, console.log)`
+- Output is also stored on-page in:
+  - `window.CLAUDE_DOM_DISCOVERY`
+
+This discovery reports root candidates, message selector candidates, role hints, and content signal counts from the *actual live DOM*.
+
+## 📈 Progress & Photo Export Modes
+
+- During **Generate Package**, the export button now shows live progress percentages.
+- **Export Photos** asks whether to:
+  - pack all photos into one ZIP, or
+  - export photos as batch files directly.

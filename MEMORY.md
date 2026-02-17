@@ -13,7 +13,7 @@
   3. Stable multi-tab isolation with clear logs.
 
 
-## Platform Engine Orchestrator (v0.10.4)
+## Platform Engine Orchestrator (v0.10.5)
 - Dedicated engine per platform for selectors and role mapping.
 - Standardized message contract for export compatibility.
 - Image tokens captured before node cleanup to preserve media in rich exports.
