@@ -1,0 +1,19 @@
+name: Release Validation
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  validate-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: node -c content.js
+      - run: node -c script.js
+      - run: node scripts/generate_gherkin_from_code.cjs
+      - run: npm run build
