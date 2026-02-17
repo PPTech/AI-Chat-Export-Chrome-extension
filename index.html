@@ -129,14 +129,15 @@
 
     <main>
       <div id="status-area" class="status-card">
-        <button id="btn-clear-all" class="btn-clear-abs">Clear</button>
+        <button id="btn-clear-all" class="btn-clear-abs" title="Reset extracted data for current tab">Clear</button>
         <span id="platform-badge" class="platform-badge">System Ready</span>
         <div id="stats-view" style="display: none;">
           <div class="message-count" id="msg-count">0</div>
           <div class="message-label">Messages Ready</div>
           <div class="action-row">
-            <button id="btn-preview" class="action-btn">Preview</button>
-            <button id="btn-load-full" class="action-btn">Fetch Full</button>
+            <button id="btn-preview" class="action-btn" title="Preview extracted messages before export">Preview</button>
+            <button id="btn-load-full" class="action-btn" title="Load full chat history from beginning">Fetch Full</button>
+            <button id="btn-export-images" class="action-btn" title="Export all detected chat images separately">Export Photos</button>
           </div>
         </div>
         <div id="empty-view">
@@ -146,25 +147,25 @@
 
       <div class="section-title">Output Formats</div>
       <div class="format-grid">
-        <div class="format-item" data-ext="md"><label>Markdown</label><span class="tooltip">Clean notes</span></div>
-        <div class="format-item" data-ext="html"><label>HTML Web</label><span class="tooltip">Full layout</span></div>
-        <div class="format-item" data-ext="json"><label>JSON Data</label><span class="tooltip">Raw data</span></div>
-        <div class="format-item" data-ext="doc"><label>Word Doc</label><span class="tooltip">Embedded images</span></div>
-        <div class="format-item" data-ext="csv"><label>Excel CSV</label><span class="tooltip">Spreadsheet</span></div>
-        <div class="format-item" data-ext="sql"><label>SQL DB</label><span class="tooltip">Database Dump</span></div>
-        <div class="format-item" data-ext="txt"><label>Plain Text</label><span class="tooltip">Simple text</span></div>
-        <div class="format-item" data-ext="pdf"><label>PDF</label><span class="tooltip">Standalone File</span></div>
+        <div class="format-item" data-ext="md" title="Export Markdown format"><label>Markdown</label><span class="tooltip">Clean notes</span></div>
+        <div class="format-item" data-ext="html" title="Export HTML with embedded images"><label>HTML Web</label><span class="tooltip">Full layout</span></div>
+        <div class="format-item" data-ext="json" title="Export structured JSON data"><label>JSON Data</label><span class="tooltip">Raw data</span></div>
+        <div class="format-item" data-ext="doc" title="Export Word-compatible HTML document"><label>Word Doc</label><span class="tooltip">Embedded images</span></div>
+        <div class="format-item" data-ext="csv" title="Export CSV for Excel"><label>Excel CSV</label><span class="tooltip">Spreadsheet</span></div>
+        <div class="format-item" data-ext="sql" title="Export SQL insert statements"><label>SQL DB</label><span class="tooltip">Database Dump</span></div>
+        <div class="format-item" data-ext="txt" title="Export plain text"><label>Plain Text</label><span class="tooltip">Simple text</span></div>
+        <div class="format-item" data-ext="pdf" title="Export standalone PDF"><label>PDF</label><span class="tooltip">Standalone File</span></div>
       </div>
 
-      <button id="btn-export-main" class="export-action" disabled>Generate Package</button>
+      <button id="btn-export-main" class="export-action" disabled title="Generate selected export files">Generate Package</button>
     </main>
 
     <footer>
       <div class="copyright">Dr. Babak Sorkhpour © 2026</div>
       <div class="footer-links">
-        <span id="link-legal">Legal</span>
-        <span id="link-security">Security</span>
-        <span class="version">v0.9.24</span>
+        <span id="link-legal" title="Open legal usage information">Legal</span>
+        <span id="link-security" title="Open security model information">Security</span>
+        <span class="version">v0.10.3</span>
       </div>
     </footer>
 
@@ -174,22 +175,22 @@
             <div class="modal-header"><h2>Settings</h2><button id="btn-close-settings" style="border:none;background:none;cursor:pointer;">✕</button></div>
             <div class="settings-list">
                 <div class="setting-item">
-                    <label class="setting-row"><span class="setting-label">Include Images</span><input type="checkbox" id="check-images" checked></label>
+                    <label class="setting-row"><span class="setting-label">Include Images</span><input type="checkbox" id="check-images" checked title="Enable image extraction and embedding for rich formats"></label>
                     <span class="setting-info">Embeds Base64 images for Word/HTML</span>
                 </div>
                 <div class="setting-item">
-                    <label class="setting-row"><span class="setting-label">Syntax Highlighting</span><input type="checkbox" id="check-code" checked></label>
+                    <label class="setting-row"><span class="setting-label">Syntax Highlighting</span><input type="checkbox" id="check-code" checked title="Preserve code blocks during extraction"></label>
                     <span class="setting-info">Preserve code block colors/formatting</span>
                 </div>
                 <div class="setting-item">
-                    <label class="setting-row"><span class="setting-label">Raw HTML (Risky)</span><input type="checkbox" id="check-raw-html"></label>
+                    <label class="setting-row"><span class="setting-label">Raw HTML (Risky)</span><input type="checkbox" id="check-raw-html" title="Capture raw HTML (advanced/risky)"></label>
                     <span class="setting-info">Captures exact DOM</span>
                 </div>
                 <div class="setting-item">
-                    <label class="setting-row"><span class="setting-label">ZIP Compression</span><input type="checkbox" id="check-zip"></label>
+                    <label class="setting-row"><span class="setting-label">ZIP Compression</span><input type="checkbox" id="check-zip" title="Bundle outputs into ZIP archive"></label>
                 </div>
                 <!-- Encryption Removed per Security Audit -->
-                <button id="btn-download-logs" style="width:100%; padding:8px; border:1px solid var(--border); background:var(--surface); border-radius:6px; cursor:pointer; font-size:11px;">Download Error Logs</button>
+                <button id="btn-download-logs" title="Download activity/error logs" style="width:100%; padding:8px; border:1px solid var(--border); background:var(--surface); border-radius:6px; cursor:pointer; font-size:11px;">Download Error Logs</button>
             </div>
             <button class="close-btn" id="btn-save-settings">Save</button>
         </div>
@@ -216,7 +217,7 @@
             <div class="about-row"><span class="about-label">Author & Engineering</span>Dr. Babak Sorkhpour with support from Gemini 2.0 Flash (Google)</div>
             <div class="about-row"><span class="about-label">License</span>MIT License (Ultimate Edition)</div>
             <div class="about-row"><span class="about-label">Technology</span>Generated via CODEX CLI</div>
-            <div class="about-row"><span class="about-label">Version</span>0.9.24</div>
+            <div class="about-row"><span class="about-label">Version</span>0.10.3</div>
             <button class="close-btn" id="btn-ack-about">Close</button>
         </div>
     </div>
@@ -225,6 +226,5 @@
     <div id="info-modal" class="modal-overlay"><div class="modal-content"><h2 id="info-title"></h2><p id="info-body" style="font-size:12px;color:var(--text-sub);"></p><button class="close-btn" id="btn-close-info">OK</button></div></div>
   </div>
   <script src="script.js"></script>
-<script type="module" src="/index.tsx"></script>
 </body>
 </html>
