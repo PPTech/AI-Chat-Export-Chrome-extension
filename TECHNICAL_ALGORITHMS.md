@@ -32,3 +32,9 @@
 - HTML export uses output escaping before rich rendering steps.
 - Script/style tags are removed from extraction content clones.
 - No dynamic `eval` / no external runtime injection.
+
+
+## Platform Engine Orchestrator (v0.10.0)
+- Dedicated engine per platform for selectors and role mapping.
+- Standardized message contract for export compatibility.
+- Image tokens captured before node cleanup to preserve media in rich exports.
