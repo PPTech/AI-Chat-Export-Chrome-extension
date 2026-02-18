@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// content.js - Platform Engine Orchestrator v0.10.24
+// content.js - Platform Engine Orchestrator v0.10.25
 
 (() => {
   if (window.hasRunContent) return;
@@ -1135,7 +1135,23 @@
     if (!engine) return { success: false, platform: 'Unsupported', messages: [] };
 
     const extracted = await engine.extract(options, utils);
-    const messages = utils.dedupe(extracted.messages || []);
+    let messages = utils.dedupe(extracted.messages || []);
+
+    if (!messages.length && window.VisualDOMWalker) {
+      try {
+        const walker = new window.VisualDOMWalker();
+        const visual = walker.walk(document);
+        messages = visual
+          .filter((v) => v.tag === 'USER' || v.tag === 'MODEL' || v.tag === 'CODE')
+          .map((v) => ({
+            role: v.tag === 'USER' ? 'User' : (v.tag === 'MODEL' ? engine.name : `${engine.name} Code`),
+            content: v.text,
+            meta: { platform: engine.name, sourceSelector: 'visual-dom-walker', evidence: v.evidence }
+          }));
+      } catch {
+        // keep empty if visual fallback fails
+      }
+    }
 
     chrome.runtime.sendMessage({ action: 'LOG_ERROR', message: 'Extraction Result', details: `${engine.name} found ${messages.length} messages.` });
     chrome.runtime.sendMessage({ action: 'LOG_ERROR', message: 'Adaptive Analyzer', details: `Engine=${engine.name}; normalized=${messages.length}` });

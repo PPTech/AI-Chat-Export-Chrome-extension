@@ -1,6 +1,6 @@
 # 🚀 AI Chat Exporter Ultimate
 
-**Version**: 0.10.24  
+**Version**: 0.10.25  
 **License**: MIT (Ultimate Edition)  
 **Code Source**: Generated with support from CODEX and CODEX CLI.  
 **Owner / Management**: Dr. Babak Sorkhpour ([@Drbabakskr](https://x.com/Drbabakskr))  
@@ -81,6 +81,9 @@ console.log(result.system_instruction, result.turns.length);
 
 ## 🧩 Local Agent Runtime (Offline)
 
+- `visual_walker.js`: strict heuristic `VisualDOMWalker` for selector-agnostic viewport extraction (USER/MODEL/CODE).
+- `asset_processor.js`: `DataProcessor` for robust Base64 embedding and file metadata extraction.
+- `export_manager.js`: single-file HTML/Word export generator with inline styles and offline images.
 - `smart_miner.js`: DOM-agnostic visual mining (TreeWalker traversal + geometry/style/alignment heuristics) and `extractVisualSnapshot()` diagnostics.
 - `smart_agent.js`: visual candidate mining + semantic scoring + clustering.
 - `ai_engine.js` + `offscreen.js`: hidden local planner bridge.

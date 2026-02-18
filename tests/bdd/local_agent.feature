@@ -34,3 +34,13 @@ Feature: Local smart agent extraction, verification and self-healing
     Given a fallback selector set succeeds
     When recipe is saved by domain fingerprint
     Then next run can load recipe before full scan
+
+  Scenario: VisualDOMWalker selector-agnostic extraction
+    Given a page has visible text divs
+    When VisualDOMWalker scans the viewport
+    Then USER MODEL and CODE heuristics are produced without class selectors
+
+  Scenario: Offline exporter embeds images
+    Given extracted messages include image references
+    When DataProcessor and ExportManager run
+    Then output html and doc include offline-safe embedded images or fallback placeholders

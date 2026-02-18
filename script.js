@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// script.js - Main Controller v0.10.24
+// script.js - Main Controller v0.10.25
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
@@ -120,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function exportSettingsCfg(settings) {
     const lines = Object.entries(settings).map(([k, v]) => `${k}=${String(v)}`);
-    const cfg = `# AI Chat Exporter Settings\n# version=0.10.24\n${lines.join('\n')}\n`;
+    const cfg = `# AI Chat Exporter Settings\n# version=0.10.25\n${lines.join('\n')}\n`;
     const date = new Date().toISOString().slice(0, 10);
     downloadBlob(new Blob([cfg], { type: 'text/plain' }), `ai_chat_exporter_settings_${date}.cfg`);
   }
@@ -732,20 +732,28 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (fmt === 'doc' || fmt === 'html') {
-      if ((data.platform || '').toLowerCase().includes('gemini')) {
-        const generator = new GeminiArtifactGenerator({ messages: msgs });
-        await generator.processImages();
-        if (fmt === 'doc') return { content: generator.generateWord(), mime: 'application/msword' };
-        return { content: generator.generateHTML(), mime: 'text/html' };
+      let richMsgs = msgs;
+      if (window.DataProcessor) {
+        const processor = new window.DataProcessor();
+        richMsgs = await processor.embedImages(msgs, fetchFileBlob);
+      } else {
+        richMsgs = await embedImagesAsDataUris(msgs);
       }
-      const richMsgs = await embedImagesAsDataUris(msgs);
+
+      if (window.ExportManager) {
+        const manager = new window.ExportManager();
+        const htmlOut = manager.buildSelfContainedHtml(title, richMsgs);
+        if (fmt === 'doc') {
+          return { content: manager.buildWordDocument(title, richMsgs), mime: 'application/msword' };
+        }
+        return { content: htmlOut, mime: 'text/html' };
+      }
+
       const style = 'body{font-family:Arial,sans-serif;max-width:900px;margin:auto;padding:20px;line-height:1.6}img{max-width:100%;height:auto}.msg{margin-bottom:20px;padding:12px;border:1px solid #e5e7eb;border-radius:8px}.role{font-weight:700;margin-bottom:8px}';
-      const body = richMsgs.map((m) => {
-        return `<div class="msg"><div class="role">${escapeHtml(m.role)}</div><div>${renderRichMessageHtml(m.content)}</div></div>`;
-      }).join('');
+      const body = richMsgs.map((m) => `<div class="msg"><div class="role">${escapeHtml(m.role)}</div><div>${renderRichMessageHtml(m.content)}</div></div>`).join('');
       const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><style>${style}</style></head><body><h1>${escapeHtml(title)}</h1>${body}</body></html>`;
       if (fmt === 'doc') {
-        const docHtml = `<!DOCTYPE html><html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><style>${style}</style></head><body><h1>${escapeHtml(title)}</h1>${body}</body></html>`;
+        const docHtml = `<!DOCTYPE html><html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'><head><meta charset='utf-8'><style>${style}</style></head><body><h1>${escapeHtml(title)}</h1>${body}</body></html>`;
         return { content: docHtml, mime: 'application/msword' };
       }
       return { content: html, mime: 'text/html' };

@@ -4,6 +4,14 @@
 
 # Changelog
 
+## 0.10.25 - 2026-02-18
+- Added `visual_walker.js` with DOM-agnostic `VisualDOMWalker` (viewport-visible div scan + alignment/mono heuristics for USER/MODEL/CODE tagging).
+- Added `asset_processor.js` (`DataProcessor`) for Base64 embedding with resilient fallback (`[Image Load Failed]`) and download metadata extraction.
+- Added `export_manager.js` single-file HTML/Word generator with inline CSS and offline Base64 image rendering support.
+- Updated `script.js` export flow to use `DataProcessor` + `ExportManager` where available and preserve page-context blob resolver usage.
+- Updated `content.js` extraction flow to apply `VisualDOMWalker` fallback when platform engine yields zero messages.
+- Synced runtime/docs metadata to `0.10.25`.
+
 ## 0.10.24 - 2026-02-18
 - Fixed Claude extraction quality by prioritizing real content containers (`prose/markdown/message-content`) and filtering UI noise blocks (status/grid/transition/button wrappers).
 - Improved Claude text cleaning pipeline to skip UI-only lines and preserve meaningful paragraphs/code/file links.
