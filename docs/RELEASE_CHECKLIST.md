@@ -2,13 +2,14 @@
 # Code generated with support from CODEX and CODEX CLI.
 # Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 
-# Release Checklist (v0.11.5)
+# Release Checklist (v0.12.1)
 
 - [ ] `npm run sync:version`
 
 - [ ] `npm run verify:local-assets`
 - [ ] `npm run verify:model`
 - [ ] `npm run verify:release`
+- [ ] `npm run verify:claims`
 - [ ] `npm test`
 - [ ] `npm run gherkin:generate`
 - [ ] `npm run build`

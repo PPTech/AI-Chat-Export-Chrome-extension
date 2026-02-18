@@ -391,3 +391,9 @@ This prevents image token corruption and ensures valid `<img>` tags are emitted 
 - See `docs/INTELLIGENCE_SCORECARD.md` for quantified intelligence readiness and brutal self-critique.
 
 - Added threat model and premium local-agent console design docs for roadmap alignment.
+
+
+## Evidence-Gated Version Governance (v0.12.1)
+- `version.js` is SSOT for release version; run `npm run sync:version` to align manifest metadata.
+- `npm run verify:claims` enforces release-script presence, version consistency, and forensic export hooks.
+- For each change window, `FORENSICS/HEAD.txt` captures branch/head/toolchain evidence.

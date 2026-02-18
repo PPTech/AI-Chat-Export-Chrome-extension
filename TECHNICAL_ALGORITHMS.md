@@ -258,3 +258,7 @@
 
 ### J4. Export Forensics Manifest
 - Export ZIP now appends diagnostics JSON and bundle manifest JSON for reproducible artifact auditing.
+
+
+### J5. Evidence Gate Verification
+- `verify:claims` validates script availability, version synchronization, and forensic export artifact hooks before release claims are accepted.

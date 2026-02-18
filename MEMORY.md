@@ -53,3 +53,5 @@
 - v0.12.0: Added measurable agent payload context (redacted DOM snapshot + goals), media proxy safeguards, and intelligence scorecard governance.
 
 - v0.12.0: Threat model and premium local agent console design documented for security and product continuation.
+
+- v0.12.1: Added evidence-gated claim verification (`verify:claims`) and FORensics head snapshot ledger.

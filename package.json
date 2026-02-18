@@ -12,7 +12,8 @@
     "verify:local-assets": "node scripts/verify_local_assets.cjs",
     "verify:release": "node scripts/verify_release_consistency.cjs",
     "sync:version": "node scripts/sync_version.cjs",
-    "verify:model": "node scripts/verify_model_checksum.cjs"
+    "verify:model": "node scripts/verify_model_checksum.cjs",
+    "verify:claims": "node scripts/verify_claims.cjs"
   },
   "dependencies": {},
   "devDependencies": {

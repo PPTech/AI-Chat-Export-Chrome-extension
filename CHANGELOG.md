@@ -4,6 +4,12 @@
 
 # Changelog
 
+
+## 0.12.1 - Evidence-Gated Version Governance
+- Added `FORENSICS/HEAD.txt` capture workflow and `FORENSICS/CLAIMS.md` claim ledger for anti-hallucination release evidence.
+- Added `scripts/verify_claims.cjs` and `npm run verify:claims` to enforce script presence, version sync, and forensic export hook checks.
+- Updated CI to run claim verification gate and synchronized version markers to `0.12.1`.
+
 ## 0.10.26 - 2026-02-18
 - Implemented comprehensive image extraction in `DataProcessor.extractAllImages()` including regular `<img>`, background images, and Shadow DOM traversal.
 - Implemented comprehensive file detection in `DataProcessor.detectAllFileReferences()` covering download attributes, blob links, sandbox paths, extension patterns, and present-file markers.
