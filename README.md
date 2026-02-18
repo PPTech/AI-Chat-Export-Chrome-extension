@@ -363,3 +363,8 @@ This prevents image token corruption and ensures valid `<img>` tags are emitted 
 ## Continuity & Non-sensitive Commercial Handover
 - See `docs/PROJECT_CONTINUITY_BRIEF.md` for non-confidential revenue stream summary and safe sample snippets.
 - See `docs/AGENTIC_ARCHITECTURE.md` + `docs/SECURITY.md` + `docs/RELEASE_CHECKLIST.md` for engineer handover runbook.
+
+## Licensing Strategy (v0.11.3)
+- Community usage is governed by AGPLv3 (`LICENSE`).
+- Commercial/proprietary deployment requires separate commercial licensing as documented in `LEGAL_NOTICE.md`.
+- Reusable legal source header template is provided in `COPYRIGHT_HEADER.js`.

@@ -38,3 +38,5 @@
 - v0.11.2: Agentic extraction promoted to default runtime path with legacy fallback retained for resilience.
 - v0.11.2: SmartAgent now emits selector data, unlocking better recipe reuse and online learning convergence.
 - v0.11.2: Continuity docs and PTS mapping added for faster onboarding and safer release governance.
+
+- v0.11.3: Legal compliance layer added (AGPLv3 license file, copyright header template, legal notice, and header injection on key runtime files).

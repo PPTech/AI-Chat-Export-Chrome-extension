@@ -198,3 +198,12 @@
 ### E3. Local Asset Gate (`scripts/verify_local_assets.cjs`)
 - CI pre-test gate verifies required on-device model runtime artifacts exist.
 - Prevents silent downgrade due to missing local assets.
+
+
+## v0.11.3 Legal/Compliance Implementation
+### F1. License Governance
+- Root AGPLv3 license file added to establish copyleft network-use obligations.
+- Commercial exception notice externalized in legal notice and reusable header template.
+
+### F2. Header Enforcement on Critical Runtime Files
+- Legal header prepended to content/background/vision/export modules to ensure runtime-distributed sources carry licensing terms.

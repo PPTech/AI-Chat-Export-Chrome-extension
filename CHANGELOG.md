@@ -114,3 +114,9 @@
 - Expanded asset allowlists for modern ChatGPT/CDN host patterns including `*.oaiusercontent.com`.
 - Added continuity/security docs: `AGENTIC_ARCHITECTURE.md`, `SECURITY.md`, `RELEASE_CHECKLIST.md`, `PROJECT_CONTINUITY_BRIEF.md`, `diagnostics_schema.json`, and `pts_map.json`.
 - Added A/B and diagnostics contract integration tests.
+
+## 0.11.3 - Legal Shielding (AGPLv3 + Commercial Exception Notices)
+- Added root `LICENSE` with GNU AGPLv3 full text.
+- Added `COPYRIGHT_HEADER.js` template for AGPLv3 + commercial-license exception notice.
+- Added `LEGAL_NOTICE.md` with dual-license and IP warning language.
+- Applied legal header block to `content.js`, `background.js`, `smart_vision.js`, and `export_core.js` while preserving project ownership headers.
