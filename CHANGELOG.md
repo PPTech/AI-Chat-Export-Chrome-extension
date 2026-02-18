@@ -4,6 +4,12 @@
 
 # Changelog
 
+## 0.12.14 - ChatGPT DOM Discovery Analyzer + Snapshot Harness
+- Added `content_script.js` with robust detect/collect/infer/parse pipeline for ChatGPT DOM analysis and explainable role evidence.
+- Added full-load analyzer mode with scroll stabilization report and PASS/WARN/FAIL self-test summary.
+- Added debug popup assets (`popup.html`, `styles.css`) and `service_worker.js` message bridge for visible/full analysis commands.
+- Added `dev_snapshot.js`, fixture snapshot path, and jsdom-ready harness runner (`test/dom_harness_runner.mjs`) with graceful skip when jsdom is unavailable.
+
 ## 0.12.13 - Claude Content Noise Guard + Selector Crash Hardening
 - Hardened Claude content node filtering to avoid invalid `closest()` selector usage at runtime.
 - Added safe selector probing (`safeClosestAny`) and dedicated UI chrome filtering (`isClaudeUiChromeNode`) to keep extraction focused on real message content.

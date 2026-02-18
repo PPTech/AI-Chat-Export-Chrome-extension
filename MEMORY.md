@@ -65,3 +65,5 @@
 - v0.12.5: Removed redundant optional/required host permission overlap and added architecture-level file relationship mapping.
 
 - v0.12.6: Added Neural-Eye evidence-gated extraction contracts, local-only resolver module, and PTS/self-heal testable loop scaffolding.
+
+- v0.12.14: Added ChatGPT DOM discovery analyzer (debug-only) with explainable role inference and snapshot harness workflow.

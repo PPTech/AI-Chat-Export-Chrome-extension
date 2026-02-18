@@ -1,6 +1,6 @@
 # 🚀 AI Chat Exporter Ultimate
 
-**Version**: 0.12.13  
+**Version**: 0.12.14  
 **License**: MIT (Ultimate Edition)  
 **Code Source**: Generated with support from CODEX and CODEX CLI.  
 **Owner / Management**: Dr. Babak Sorkhpour ([@Drbabakskr](https://x.com/Drbabakskr))  
@@ -473,3 +473,12 @@ This prevents image token corruption and ensures valid `<img>` tags are emitted 
 ## Neural-Eye Evidence Contracts (v0.12.6)
 - Added local-only canonical extractor/normalizer/resolver/packager modules with diagnostics and reason-code output contracts.
 - Added fixture-driven export contract tests and PTS module mapping to ensure evidence-gated improvements and predictable fallback behavior.
+
+
+## ChatGPT DOM Analyzer (Debug-Only)
+
+- Load extension unpacked in Chrome.
+- Open `chatgpt.com` or `chat.openai.com` chat page.
+- Use popup buttons **Analyze (Visible)** then **Analyze (Full Load)**.
+- Inspect `window.__CHATGPT_DOM_ANALYSIS__` in DevTools Console.
+- Optional snapshot helper: run `dev_snapshot.js` in console to download DOM HTML fixture.

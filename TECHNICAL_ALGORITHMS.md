@@ -306,3 +306,12 @@
 
 ### J13. Predictive Test Selection Mapping
 - `tools/pts.mjs` maps changed module domains to targeted unit/integration suites to reduce test scope while preserving correctness evidence.
+
+
+## ChatGPT DOM Discovery Analyzer (v0.12.14)
+
+1. **detectConversationRoot**: ranks container candidates using scrollability, text density, media/code descendants, and repeated message-like child ratio.
+2. **collectMessageNodes**: scans structural nodes and scores message candidates based on text/code/image/link signals, then removes nested duplicates by best score.
+3. **inferRole**: assigns `user|assistant|unknown` using explainable evidence (alignment, ARIA labels, regenerate/copy controls, avatar hints) with confidence thresholds.
+4. **parseMessageContent**: TreeWalker traversal preserving DOM order and yielding typed blocks (`text`,`code`,`list`,`quote`,`image`,`link`).
+5. **ensureChatFullyLoaded**: iterative scroll-top stabilization rounds and final scroll-bottom settle pass with growth/stability reporting.
