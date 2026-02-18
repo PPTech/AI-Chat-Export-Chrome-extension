@@ -1,9 +1,66 @@
+/**
+ * AI Chat Export & Local Agent (Project Aegis)
+ * Copyright (C) 2026 [YOUR_COMPANY_NAME_HERE]
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program. If not, see https://www.gnu.org/licenses/.
+ *
+ * -------------------------------------------------------------------------
+ * COMMERCIAL LICENSE / PROPRIETARY USE:
+ * If you wish to use this code in a proprietary software product,
+ * enterprise environment, or commercial project where you do not wish to
+ * open-source your own code, you MUST purchase a Commercial License from:
+ * [INSERT_CONTACT_EMAIL_OR_WEBSITE]
+ * -------------------------------------------------------------------------
+ */
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// background.js - State & Log Manager v0.10.26
+// نویسنده دکتر بابک سرخپور با کمک ابزار چت جی پی تی.
+// background.js - State & Log Manager v0.12.4
 
 console.log('[LOCAL-ONLY] AI engine network disabled; offline models only.');
+const nativeBackgroundFetch = globalThis.fetch?.bind(globalThis);
+
+
+function isAllowedMediaHost(url) {
+  try {
+    const host = new URL(url).hostname;
+    const allow = ['chatgpt.com','chat.openai.com','oaiusercontent.com','oaistatic.com','openai.com','claude.ai','anthropic.com','googleusercontent.com','gstatic.com','google.com'];
+    return allow.some((h) => host === h || host.endsWith(`.${h}`));
+  } catch {
+    return false;
+  }
+}
+
+async function mediaFetchProxy(payload = {}) {
+  const url = String(payload.url || '');
+  const userInitiated = !!payload.userInitiated;
+  if (!userInitiated) return { success: false, error: 'user_initiation_required' };
+  if (!/^https?:\/\//i.test(url)) return { success: false, error: 'unsupported_scheme' };
+  if (!isAllowedMediaHost(url)) return { success: false, error: 'host_not_allowlisted' };
+  if (!nativeBackgroundFetch) return { success: false, error: 'fetch_unavailable' };
+  try {
+    const res = await nativeBackgroundFetch(url, { credentials: 'include' });
+    if (!res.ok) return { success: false, error: `HTTP_${res.status}` };
+    const buf = await res.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    const b64 = Buffer.from(bytes).toString('base64');
+    return { success: true, mime: res.headers.get('content-type') || 'application/octet-stream', dataUrl: `data:${res.headers.get('content-type') || 'application/octet-stream'};base64,${b64}`, byteLength: bytes.length };
+  } catch (e) {
+    return { success: false, error: e.message || 'media_fetch_failed' };
+  }
+}
 
 function patchLocalOnlyNetworkGuards() {
   const allow = ['chrome-extension://', 'data:', 'blob:'];
@@ -25,7 +82,24 @@ function patchLocalOnlyNetworkGuards() {
 patchLocalOnlyNetworkGuards();
 
 const tabStates = {};
+
+async function downloadMhtmlArtifact(payload = {}) {
+  const fileName = payload.fileName || `aegis_export_${new Date().toISOString().slice(0, 10)}.mhtml`;
+  const content = String(payload.content || '');
+  if (!content) return { success: false, error: 'empty_mhtml' };
+  const blob = new Blob([content], { type: 'multipart/related' });
+  const url = URL.createObjectURL(blob);
+  return new Promise((resolve) => {
+    chrome.downloads.download({ url, filename: fileName, saveAs: false }, (downloadId) => {
+      setTimeout(() => URL.revokeObjectURL(url), 12_000);
+      if (chrome.runtime.lastError) resolve({ success: false, error: chrome.runtime.lastError.message });
+      else resolve({ success: true, downloadId });
+    });
+  });
+}
+
 const appLogs = [];
+const runtimeJsonlLogs = [];
 const pendingCaptures = new Map();
 let captureSeq = 0;
 
@@ -41,6 +115,17 @@ async function ensureOffscreenDocument() {
   return true;
 }
 
+
+function routeToTabAction(tabId, action, payload, sendResponse) {
+  if (!tabId) { sendResponse({ success: false, error: 'missing_tab_id' }); return; }
+  chrome.tabs.sendMessage(tabId, { action, ...(payload || {}) }, (response) => {
+    if (chrome.runtime.lastError) {
+      sendResponse({ success: false, error: chrome.runtime.lastError.message || 'tab_route_failed' });
+      return;
+    }
+    sendResponse(response || { success: false, error: 'empty_tab_response' });
+  });
+}
 
 function routeToOffscreen(action, payload, sendResponse) {
   ensureOffscreenDocument().then((ok) => {
@@ -118,7 +203,7 @@ chrome.webRequest.onBeforeRequest.addListener((details) => {
       downloadId: null
     });
   }
-}, { urls: ['https://chatgpt.com/*', 'https://chat.openai.com/*'] });
+}, { urls: ['https://chatgpt.com/*', 'https://chat.openai.com/*', 'https://*.oaistatic.com/*', 'https://*.openai.com/*', 'https://*.oaiusercontent.com/*', 'https://claude.ai/*', 'https://*.anthropic.com/*', 'https://gemini.google.com/*', 'https://aistudio.google.com/*', 'https://*.googleusercontent.com/*'] });
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (!changeInfo?.url) return;
@@ -134,15 +219,26 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   }
 });
 
+function redactDetails(details) {
+  if (details == null) return '';
+  const txt = typeof details === 'string' ? details : JSON.stringify(details);
+  return String(txt)
+    .replace(/https?:\/\/[^\s"']+/g, '[REDACTED_URL]')
+    .replace(/[A-Za-z0-9_\-]{24,}/g, '[REDACTED_TOKEN]')
+    .slice(0, 1200);
+}
+
 function log(level, message, details = null) {
   const entry = {
     timestamp: new Date().toISOString(),
     level,
     message,
-    details: details ? JSON.stringify(details) : ''
+    details: redactDetails(details)
   };
   appLogs.push(entry);
+  runtimeJsonlLogs.push(JSON.stringify({ ts: entry.timestamp, level: entry.level, message: entry.message, details: entry.details }));
   if (appLogs.length > 1000) appLogs.shift();
+  if (runtimeJsonlLogs.length > 2000) runtimeJsonlLogs.shift();
   console.log(`[${level}] ${message}`, details || '');
 }
 
@@ -186,6 +282,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse(appLogs);
         break;
 
+      case 'GET_DIAGNOSTICS_JSONL':
+        sendResponse({ success: true, lines: runtimeJsonlLogs.slice(-1000) });
+        break;
+
       case 'START_DOWNLOAD_CAPTURE': {
         const capture = createCapture(tabId, message.expectedFilename, Number(message.timeoutMs) || 9000);
         sendResponse({ success: true, captureId: capture.captureId });
@@ -221,6 +321,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
       }
 
+
+
+      case 'EXTRACT_VISUAL_CORTEX': {
+        routeToTabAction(tabId, 'extract_visual_cortex', message.payload || {}, sendResponse);
+        return true;
+      }
+
+      case 'BUILD_ARTIFACTS_PREVIEW': {
+        routeToTabAction(tabId, 'build_artifacts_preview', message.payload || {}, sendResponse);
+        return true;
+      }
+
+      case 'MEDIA_FETCH_PROXY': {
+        mediaFetchProxy(message.payload || {}).then(sendResponse);
+        return true;
+      }
+
+      case 'DOWNLOAD_MHTML_ARTIFACT': {
+        downloadMhtmlArtifact(message.payload || {}).then(sendResponse);
+        return true;
+      }
+
       case 'RUN_LOCAL_AGENT_ENGINE': {
         routeToOffscreen('OFFSCREEN_RUN_AGENT', message.payload || {}, sendResponse);
         return true;
@@ -233,6 +355,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       case 'LOCAL_DETECT_ARTIFACTS': {
         routeToOffscreen('OFFSCREEN_DETECT_ARTIFACTS', message.payload || {}, sendResponse);
+        return true;
+      }
+
+      case 'LOCAL_VERIFY_MODEL': {
+        routeToOffscreen('OFFSCREEN_VERIFY_MODEL', message.payload || {}, sendResponse);
         return true;
       }
 
@@ -261,6 +388,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
       }
 
+
+      case 'LOCAL_PURGE_LEARNING': {
+        routeToOffscreen('OFFSCREEN_PURGE_LEARNING', message.payload || {}, sendResponse);
+        return true;
+      }
       default:
         sendResponse({ success: false, error: 'Unknown action' });
         break;

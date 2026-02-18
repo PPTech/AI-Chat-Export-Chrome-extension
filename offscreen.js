@@ -1,7 +1,8 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// offscreen.js - Hidden Local Agent Bridge v0.10.26
+// نویسنده دکتر بابک سرخپور با کمک ابزار چت جی پی تی.
+// offscreen.js - Hidden Local Agent Bridge v0.12.4
 
 (() => {
   const allowPrefixes = ['chrome-extension://', 'blob:', 'data:'];
@@ -131,6 +132,20 @@
       } catch (e) {
         sendResponse({ ok: false, error: e.message });
       }
+      return true;
+    }
+
+    if (msg?.action === 'OFFSCREEN_VERIFY_MODEL') {
+      self.LocalEmbeddingEngine.verifyIntegrity().then(sendResponse).catch((e) => sendResponse({ ok: false, error: e.message }));
+      return true;
+    }
+
+    if (msg?.action === 'OFFSCREEN_EMBED_TEXTS') {
+      self.LocalEmbeddingEngine.embed(msg?.payload?.texts || []).then((res) => sendResponse({ ok: true, vectors: (res.vectors || []).map((v) => Array.from(v)), model: res.modelInfo })).catch((e) => sendResponse({ ok: false, error: e.message }));
+      return true;
+    }
+    if (msg?.action === 'OFFSCREEN_PURGE_LEARNING') {
+      RecipeManager.purgeLearning().then(() => sendResponse({ ok: true })).catch((e) => sendResponse({ ok: false, error: e.message }));
       return true;
     }
 

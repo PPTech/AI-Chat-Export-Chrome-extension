@@ -4,6 +4,27 @@
 
 # Changelog
 
+## 0.12.4 - AEGIS Visual Cortex + Universal Artifact Builder
+- Added `visual_engine.js` with TreeWalker + ShadowRoot traversal and geometry-based role/code heuristics (no class-selector dependency in cortex path).
+- Added `artifact_builder.js` with script-stripping single-file HTML and standards-aligned multipart MHTML primitives.
+- Added orchestrator routes for `EXTRACT_VISUAL_CORTEX` and `BUILD_ARTIFACTS_PREVIEW`, plus new contract tests for visual-cortex/artifact modules.
+
+## 0.12.3 - Real Integration & Version Discipline
+- Added real image embedding helper (`embedImageAsBase64`) in DataProcessor and routed embedding pipeline through it.
+- Integrated security guard/network kill-switch and structured session logging usage into content extraction flow.
+- Added release contract tests for real integration markers and synchronized all versions to 0.12.3.
+
+## 0.12.2 - Unified Version Governance Hardening
+- Extended sync/verify gates to include `package.json` and runtime file version headers.
+- Upgraded release consistency rules so `verify:release` fails on header mismatches in core runtime modules.
+- Kept all release metadata synchronized from `version.js` SSOT and documented stricter verification expectations.
+
+
+## 0.12.1 - Evidence-Gated Version Governance
+- Added `FORENSICS/HEAD.txt` capture workflow and `FORENSICS/CLAIMS.md` claim ledger for anti-hallucination release evidence.
+- Added `scripts/verify_claims.cjs` and `npm run verify:claims` to enforce script presence, version sync, and forensic export hook checks.
+- Updated CI to run claim verification gate and synchronized version markers to `0.12.1`.
+
 ## 0.10.26 - 2026-02-18
 - Implemented comprehensive image extraction in `DataProcessor.extractAllImages()` including regular `<img>`, background images, and Shadow DOM traversal.
 - Implemented comprehensive file detection in `DataProcessor.detectAllFileReferences()` covering download attributes, blob links, sandbox paths, extension patterns, and present-file markers.
@@ -94,3 +115,63 @@
 - Updated About section text with requested Author & Engineering wording, supported platforms list, and AI-generated-code disclosure.
 - Improved Claude file/artifact detection heuristics for downloadable files and artifact-like nodes.
 - Synced runtime/docs metadata to `0.10.10`.
+
+## 0.11.0 - True Local AI Agent
+- Added agent loop modules (`/agent`) with local embeddings, multi-plan search, verifier scoring, and online learner persistence.
+- Wired `OFFSCREEN_RUN_AGENT` into extraction critical path and persisted learning artifacts in IndexedDB.
+- Added AssetBroker allowlist controls, gesture proof token flow, and docs/test scaffolding for proof-of-intelligence.
+
+## 0.11.1 - AEGIS-2026 Documentation + Security/Export Hardening
+- Added production modules: `smart_vision.js`, `security_guard.js`, `offline_brain.js`, `export_core.js`, and `logger.js` with explicit local-only and anti-tamper controls.
+- Updated `manifest.json` to include AEGIS modules in content-script pipeline, strict extension CSP, and web-accessible resource declarations.
+- Extended `background.js` with `DOWNLOAD_MHTML_ARTIFACT` action for service-worker download management of generated MHTML artifacts.
+- Added unit tests validating AEGIS security allowlist and local offline classifier code-wrapping behavior.
+- Expanded project documentation and memory baselines for version-control traceability, module responsibilities, and release-readiness handoff.
+
+## 0.11.2 - Agentic Default Path + Continuity Governance
+- Set extraction default flow to `self_test_local_agent` + `extract_local_agent` first, with legacy `extract_chat` fallback only on failure.
+- Added selector emission in `smart_agent.js` candidates/items to improve recipe persistence and iterative learning quality.
+- Added local asset verification gate (`scripts/verify_local_assets.cjs`) and bundled local runtime fallback asset (`lib/transformers.min.js`) with model metadata.
+- Expanded asset allowlists for modern ChatGPT/CDN host patterns including `*.oaiusercontent.com`.
+- Added continuity/security docs: `AGENTIC_ARCHITECTURE.md`, `SECURITY.md`, `RELEASE_CHECKLIST.md`, `PROJECT_CONTINUITY_BRIEF.md`, `diagnostics_schema.json`, and `pts_map.json`.
+- Added A/B and diagnostics contract integration tests.
+
+## 0.11.3 - Legal Shielding (AGPLv3 + Commercial Exception Notices)
+- Added root `LICENSE` with GNU AGPLv3 full text.
+- Added `COPYRIGHT_HEADER.js` template for AGPLv3 + commercial-license exception notice.
+- Added `LEGAL_NOTICE.md` with dual-license and IP warning language.
+- Applied legal header block to `content.js`, `background.js`, `smart_vision.js`, and `export_core.js` while preserving project ownership headers.
+
+## 0.11.4 - Audit-Driven Hardening & Release Consistency
+- Added CDN host permissions/optional permissions for modern chat asset domains and updated extension CSP for local WASM-capable runtime (`wasm-unsafe-eval`) while keeping `connect-src 'self'`.
+- Added popup-side optional permission request flow before extraction/export asset resolution.
+- Added release consistency gate (`scripts/verify_release_consistency.cjs`) and CI enforcement.
+- Synchronized versions across `manifest.json`, `VERSION.json`, and `metadata.json`.
+- Added redaction in background logs to reduce sensitive URL/token leakage in diagnostic entries.
+- Added regression tests for release consistency and host-permission coverage.
+- Incorporated lessons-learned documentation from deep review feedback.
+
+## 0.11.5 - Agentic Contract + Governance Gates
+- Added canonical version source (`version.js`) with sync script and CI enforcement.
+- Added model checksum validation gate and release consistency gate in CI.
+- Strengthened agent loop to fixed 6-attempt contract and richer plan score trace.
+- Added canonical ChatExportDataset builder in popup pipeline and derived legacy tokens for compatibility.
+- Added AssetResolutionGraph scaffold and zip-safe filename sanitization.
+- Added diagnostics JSONL redacted ring buffer route from service worker.
+- Added BDD/PTS updates and fixture scaffolding for e2e agentic testing.
+
+## 0.11.6 - Local Intelligence Signal Integrity
+- Improved embedding engine telemetry to explicitly report `loaded`, `fallbackReason`, and embedding dimension for trace reliability.
+- Extended recipe memory load path to include prior verifier score and compute per-run score delta in agent learning trace.
+- Added canonical diagnostics bundle generation in popup pipeline with required top-level fields.
+- Added verifier metrics read API in IndexedDB layer for measurable run-over-run comparisons.
+
+## 0.12.0 - AEGIS 2026 Agentic Upgrade
+- Added user-initiated background Media Fetch Proxy with strict host allowlist and denial for non-user-initiated requests.
+- Enriched agent payload with redacted DOM snapshot (<=40k chars) and explicit extraction goals.
+- Extended plan metadata (`confidence`, `why`) and trace fields (`goalHints`, `domSnapshotChars`).
+- Exposed purge-learning action in options UI.
+- Added 2026 validation tests and BDD scenarios plus an explicit Intelligence Scorecard document.
+- Synchronized release version to 0.12.0 across manifest/version metadata.
+
+- Added `docs/THREAT_MODEL.md` and `docs/PREMIUM_AGENT_CONSOLE_DESIGN.md` plus export bundle manifest emission (`*.diagnostics.json`, `*.export_bundle_manifest.json`).

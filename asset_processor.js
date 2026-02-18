@@ -1,7 +1,8 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// asset_processor.js - DataProcessor v0.10.26
+// نویسنده دکتر بابک سرخپور با کمک ابزار چت جی پی تی.
+// asset_processor.js - DataProcessor v0.12.4
 
 (() => {
   if (window.DataProcessor) return;
@@ -191,6 +192,25 @@
       return null;
     }
 
+
+
+    async embedImageAsBase64(imageUrl, resolver) {
+      const clean = this.sanitizeUrl(imageUrl);
+      if (!clean) return { success: false, originalUrl: imageUrl, error: 'missing_image_url' };
+      if (/^data:image\//i.test(clean)) {
+        return { success: true, originalUrl: imageUrl, base64: clean, size: clean.length, type: clean.match(/^data:([^;]+)/i)?.[1] || 'image/*' };
+      }
+      try {
+        const blob = await this.fetchWithRetry(clean, resolver);
+        if (!blob) throw new Error('fetch_failed');
+        const base64 = await this.blobToDataUri(blob, '');
+        if (!/^data:/i.test(base64)) throw new Error('invalid_base64_result');
+        return { success: true, originalUrl: imageUrl, base64, size: blob.size || 0, type: blob.type || 'application/octet-stream' };
+      } catch (error) {
+        return { success: false, originalUrl: imageUrl, error: error.message || 'embed_failed' };
+      }
+    }
+
     async embedImages(messages = [], resolver, onProgress) {
       const out = [];
       let processed = 0;
@@ -202,12 +222,11 @@
         while ((match = imgRegex.exec(content)) !== null) {
           const src = this.sanitizeUrl(match[1] || match[2] || '');
           if (!src || /^data:image\//i.test(src)) continue;
-          const blob = await this.fetchWithRetry(src, resolver);
-          if (!blob) {
+          const embedded = await this.embedImageAsBase64(src, resolver);
+          if (!embedded.success) {
             updated = updated.split(src).join('[Image Load Failed]');
           } else {
-            const dataUri = await this.blobToDataUri(blob);
-            updated = updated.split(src).join(dataUri);
+            updated = updated.split(src).join(embedded.base64);
           }
           processed += 1;
           if (onProgress) onProgress({ processed, src });

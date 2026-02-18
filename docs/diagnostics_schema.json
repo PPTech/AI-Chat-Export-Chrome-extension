@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["runId", "version", "host", "pageUrl", "timestamp", "ai", "extraction", "assets", "security", "learning", "perf"],
+  "properties": {
+    "runId": { "type": "string" },
+    "version": { "type": "string" },
+    "host": { "type": "string" },
+    "pageUrl": { "type": "string" },
+    "timestamp": { "type": "string" },
+    "ai": { "type": "object" },
+    "extraction": { "type": "object" },
+    "assets": { "type": "object" },
+    "security": { "type": "object" },
+    "learning": { "type": "object" },
+    "perf": { "type": "object" }
+  }
+}

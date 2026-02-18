@@ -321,3 +321,94 @@ This prevents image token corruption and ensures valid `<img>` tags are emitted 
 - Enable **Extract and ZIP Chat Files** in Settings.
 - Extraction records file references as `[[FILE:url|name]]` tokens.
 - Click **Export Files** to download all detected files as a single ZIP package.
+
+## Local AI Proof (v0.11.0)
+- Runs a local-only agent loop: observe -> plan -> act -> verify -> learn.
+- Embeddings and learner weights are persisted locally per `{host, domainFingerprint}`.
+- No chat text is sent to external AI APIs; network for assets is allowlisted and user-gesture gated.
+
+## AEGIS-2026 Architecture (Detailed)
+### 1) Visual Cortex (`smart_vision.js`)
+- Geometry-first chat bubble detection (visibility, width, alignment, role signals).
+- Zero-dependency fallback to Shadow DOM DeepScan for resilience against SPA rendering changes.
+- Selector-agnostic extraction by design (no fragile class-name dependency).
+
+### 2) Iron Dome (`security_guard.js`)
+- Runtime network kill-switch for content-context fetch/XHR.
+- Strict allowlist (`blob:`, `data:`, `chrome-extension://`) with block metrics.
+- Anti-tamper freeze utility for extracted payloads before export.
+
+### 3) Local AI Engine (`offline_brain.js`)
+- Local text labeling (`Code`, `Table`, `Prose`, `SystemInstruction`) without external APIs.
+- Auto markdown code wrapping when code-like text appears outside `<pre>`.
+
+### 4) Artifact Factory (`export_core.js`)
+- In-place image base64 embedding for offline portability.
+- Word-compatible MHTML generation with required Office namespaces.
+
+### 5) Black Box Logger (`logger.js`)
+- Session JSON log contract with integrity hash (SHA-256).
+- Data-loss warning heuristic: mismatch between node-detection and visual-element counts.
+
+## Version-Control & Documentation Standard
+- Every release must update: `CHANGELOG.md`, `README.md`, `TECHNICAL_ALGORITHMS.md`, and `MEMORY.md`.
+- Every algorithmic module must document version + rationale + test path.
+- BDD artifacts are maintained in `features/` and regenerated via `npm run gherkin:generate`.
+
+## Agentic Default Execution (v0.11.2)
+- Default analysis now runs `self_test_local_agent` and then `extract_local_agent`.
+- Classic `extract_chat` path is retained only as a controlled fallback for resiliency.
+- Candidate selectors are now persisted to improve cross-run recipe quality.
+
+## Continuity & Non-sensitive Commercial Handover
+- See `docs/PROJECT_CONTINUITY_BRIEF.md` for non-confidential revenue stream summary and safe sample snippets.
+- See `docs/AGENTIC_ARCHITECTURE.md` + `docs/SECURITY.md` + `docs/RELEASE_CHECKLIST.md` for engineer handover runbook.
+
+## Licensing Strategy (v0.11.3)
+- Community usage is governed by AGPLv3 (`LICENSE`).
+- Commercial/proprietary deployment requires separate commercial licensing as documented in `LEGAL_NOTICE.md`.
+- Reusable legal source header template is provided in `COPYRIGHT_HEADER.js`.
+
+## Audit-Driven Improvements (v0.11.4)
+- Version synchronization enforced across runtime metadata files.
+- CI now validates release consistency and required CDN host permissions.
+- Diagnostic logs redact long tokens and URLs to reduce accidental sensitive retention.
+- Optional host permission request is triggered before heavy asset extraction flows.
+
+## Agentic Contract & Governance Gates (v0.11.5)
+- Version source-of-truth is now `version.js`, synchronized by `npm run sync:version`.
+- CI gates enforce local assets, model checksums, release consistency, and tests.
+- Dataset contract includes attachments as canonical export source (token output remains backward-compatible).
+
+## Local Intelligence Signal Integrity (v0.11.6)
+- Trace now distinguishes real local model load from fallback mode with explicit reason fields.
+- Agent diagnostics include prior score and score delta to verify whether extraction quality improved between runs.
+- Export diagnostics bundle now conforms to the required top-level diagnostics contract.
+
+## AEGIS 2026 Validation & Intelligence Score (v0.12.0)
+- Agent payload now includes redacted DOM context + explicit extraction goals for measurable planning.
+- Background now supports user-initiated media proxy fetch with strict allowlist enforcement.
+- See `docs/INTELLIGENCE_SCORECARD.md` for quantified intelligence readiness and brutal self-critique.
+
+- Added threat model and premium local-agent console design docs for roadmap alignment.
+
+
+## Evidence-Gated Version Governance (v0.12.1)
+- `version.js` is SSOT for release version; run `npm run sync:version` to align manifest metadata.
+- `npm run verify:claims` enforces release-script presence, version consistency, and forensic export hooks.
+- For each change window, `FORENSICS/HEAD.txt` captures branch/head/toolchain evidence.
+
+
+## Unified Version Governance (v0.12.2)
+- `sync:version` now aligns `package.json` and selected runtime version-header markers in addition to manifest metadata.
+- `verify:release` now fails when core runtime headers drift from the SSOT version.
+
+
+## Real Integration Checks (v0.12.3)
+- Content script now invokes SecurityGuard kill-switch at runtime and emits AEGIS session logs via logger integration.
+- Image embedding pipeline now uses `embedImageAsBase64` in DataProcessor before HTML/Word export transformations.
+
+
+## Visual Cortex Protocol (v0.12.4)
+- Added `visual_engine.js` with geometry-first, TreeWalker-based extraction and Shadow DOM traversal for selector-agnostic robustness.
+- Added `artifact_builder.js` to produce script-free single-file HTML and multipart MHTML containers for offline Word-compatible artifacts.
