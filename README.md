@@ -321,3 +321,8 @@ This prevents image token corruption and ensures valid `<img>` tags are emitted 
 - Enable **Extract and ZIP Chat Files** in Settings.
 - Extraction records file references as `[[FILE:url|name]]` tokens.
 - Click **Export Files** to download all detected files as a single ZIP package.
+
+## Local AI Proof (v0.11.0)
+- Runs a local-only agent loop: observe -> plan -> act -> verify -> learn.
+- Embeddings and learner weights are persisted locally per `{host, domainFingerprint}`.
+- No chat text is sent to external AI APIs; network for assets is allowlisted and user-gesture gated.

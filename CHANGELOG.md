@@ -94,3 +94,8 @@
 - Updated About section text with requested Author & Engineering wording, supported platforms list, and AI-generated-code disclosure.
 - Improved Claude file/artifact detection heuristics for downloadable files and artifact-like nodes.
 - Synced runtime/docs metadata to `0.10.10`.
+
+## 0.11.0 - True Local AI Agent
+- Added agent loop modules (`/agent`) with local embeddings, multi-plan search, verifier scoring, and online learner persistence.
+- Wired `OFFSCREEN_RUN_AGENT` into extraction critical path and persisted learning artifacts in IndexedDB.
+- Added AssetBroker allowlist controls, gesture proof token flow, and docs/test scaffolding for proof-of-intelligence.

@@ -1,0 +1,81 @@
+// License: MIT
+// Code generated with support from CODEX and CODEX CLI.
+// Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
+// agent/local_embedding_engine.js - Local embedding wrapper v0.11.0
+
+(function () {
+  class LocalEmbeddingEngine {
+    constructor() {
+      this.model = null;
+      this.modelInfo = { name: 'keyword-fallback', hash: 'fallback-v1' };
+      this.cache = new Map();
+      this.cacheOrder = [];
+      this.maxCache = 128;
+    }
+
+    async init() {
+      if (this.model || !self.transformers?.pipeline) return this.modelInfo;
+      self.transformers.env.allowRemoteModels = false;
+      self.transformers.env.allowLocalModels = true;
+      self.transformers.env.localModelPath = chrome.runtime.getURL('models/');
+      this.model = await self.transformers.pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', {
+        quantized: true,
+        local_files_only: true
+      });
+      this.modelInfo = { name: 'MiniLM-local', hash: 'Xenova/all-MiniLM-L6-v2@local' };
+      return this.modelInfo;
+    }
+
+    getCached(text) {
+      const key = String(text || '').slice(0, 1024);
+      return this.cache.get(key) || null;
+    }
+
+    setCached(text, vector) {
+      const key = String(text || '').slice(0, 1024);
+      if (this.cache.has(key)) return;
+      this.cache.set(key, vector);
+      this.cacheOrder.push(key);
+      if (this.cacheOrder.length > this.maxCache) {
+        const old = this.cacheOrder.shift();
+        this.cache.delete(old);
+      }
+    }
+
+    async embed(texts = []) {
+      await this.init().catch(() => null);
+      const vectors = [];
+      for (const text of texts) {
+        const norm = String(text || '').trim();
+        if (!norm) {
+          vectors.push(new Float32Array(16));
+          continue;
+        }
+        const cached = this.getCached(norm);
+        if (cached) {
+          vectors.push(cached);
+          continue;
+        }
+        let vector;
+        if (this.model) {
+          const out = await this.model(norm.slice(0, 1500), { pooling: 'mean', normalize: true });
+          vector = Float32Array.from(out?.data || out || []);
+        } else {
+          const fallback = new Float32Array(16);
+          const lower = norm.toLowerCase();
+          fallback[0] = /\?/.test(lower) ? 1 : 0;
+          fallback[1] = /```|function|const|import|class/.test(lower) ? 1 : 0;
+          fallback[2] = /https?:\/\//.test(lower) ? 1 : 0;
+          fallback[3] = /file|download|attachment|sandbox:\//.test(lower) ? 1 : 0;
+          fallback[4] = Math.min(1, norm.length / 500);
+          vector = fallback;
+        }
+        this.setCached(norm, vector);
+        vectors.push(vector);
+      }
+      return { vectors, modelInfo: this.modelInfo };
+    }
+  }
+
+  self.LocalEmbeddingEngine = new LocalEmbeddingEngine();
+})();

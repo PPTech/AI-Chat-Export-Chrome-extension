@@ -6,6 +6,7 @@
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
   let activeTabId = null;
+let gestureProofToken = "";
 
   const btnExport = document.getElementById('btn-export-main');
   const btnLoadFull = document.getElementById('btn-load-full');
@@ -393,7 +394,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const result = processor
       ? await processor.downloadAllFiles(filesFound, fetchFileBlob, async (path) => {
-        const resolved = await sendToActiveTab({ action: 'fetch_blob_page', url: path });
+        const resolved = await resolveAssetViaBroker(path);
         return resolved?.sourceUrl || resolved?.download_url || null;
       }, (progress) => {
         if (progress.status === 'ok') console.log(`[FILES][${progress.index}/${progress.total}] ✓ ${progress.fileName}`);
@@ -1112,17 +1113,27 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  function ensureGestureProofToken() {
+    if (!gestureProofToken) gestureProofToken = `gesture_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
+    return gestureProofToken;
+  }
+
+  async function resolveAssetViaBroker(url) {
+    const token = ensureGestureProofToken();
+    return sendToActiveTab({ action: "fetch_blob_page", url, gestureToken: token });
+  }
+
   async function fetchFileBlob(url) {
     if (!url) return null;
     if (!activeTabId) return null;
     const clean = sanitizeTokenUrl(url);
     if (/^data:/i.test(clean)) return dataUrlToBlob(clean);
     if (/^blob:/i.test(clean)) {
-      const pageBlob = await sendToActiveTab({ action: 'fetch_blob_page', url: clean });
+      const pageBlob = await resolveAssetViaBroker(clean);
       if (!pageBlob?.success) return null;
       return dataUrlToBlob(pageBlob.dataUrl);
     }
-    const pageBlob = await sendToActiveTab({ action: 'fetch_blob_page', url: clean });
+    const pageBlob = await resolveAssetViaBroker(clean);
     if (!pageBlob?.success) return null;
     return dataUrlToBlob(pageBlob.dataUrl);
   }

@@ -118,7 +118,7 @@ chrome.webRequest.onBeforeRequest.addListener((details) => {
       downloadId: null
     });
   }
-}, { urls: ['https://chatgpt.com/*', 'https://chat.openai.com/*'] });
+}, { urls: ['https://chatgpt.com/*', 'https://chat.openai.com/*', 'https://*.oaistatic.com/*', 'https://*.openai.com/*', 'https://claude.ai/*', 'https://*.anthropic.com/*', 'https://gemini.google.com/*', 'https://aistudio.google.com/*', 'https://*.googleusercontent.com/*'] });
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (!changeInfo?.url) return;
@@ -261,6 +261,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
       }
 
+
+      case 'LOCAL_PURGE_LEARNING': {
+        routeToOffscreen('OFFSCREEN_PURGE_LEARNING', message.payload || {}, sendResponse);
+        return true;
+      }
       default:
         sendResponse({ success: false, error: 'Unknown action' });
         break;

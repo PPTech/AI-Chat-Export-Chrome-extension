@@ -1872,6 +1872,27 @@
     }
 
     const verify = ExtractionVerifier.verify(items);
+
+    try {
+      const agentRun = await sendRuntime({
+        action: 'RUN_LOCAL_AGENT_ENGINE',
+        payload: {
+          task: 'extract_messages',
+          hostname: location.hostname,
+          domainFingerprint,
+          pageUrl: location.href,
+          candidatesFeatures: items
+        }
+      });
+      const learnedItems = agentRun?.bestExtraction?.items || [];
+      if (learnedItems.length) {
+        items = learnedItems;
+        root = { method: 'agent_loop', evidence: [`attempts=${(agentRun?.trace?.attempts || []).length}`, `score=${agentRun?.bestExtraction?.metrics?.score || 0}`] };
+      }
+      window.__LOCAL_AGENT_TRACE__ = agentRun?.trace || null;
+    } catch (error) {
+      console.warn('[LOCAL_AGENT] agent loop unavailable', error?.message || error);
+    }
     if (verify.shouldHeal) {
       const fallbackItems = runTextDensityFallback();
       const fallbackVerify = ExtractionVerifier.verify(fallbackItems);
@@ -1968,7 +1989,18 @@
     return { success: true, status: 'FAIL', details: `No viable candidates found. localOnly=${localOnly}, classifier=${classifierModel}` };
   }
 
-  async function fetchBlobFromPage(url) {
+  const ASSET_ALLOWLIST = ['chatgpt.com', 'chat.openai.com', 'oaistatic.com', 'openai.com', 'claude.ai', 'anthropic.com', 'google.com', 'gstatic.com', 'googleusercontent.com'];
+
+  function isAllowlistedAssetUrl(url) {
+    try {
+      const u = new URL(url);
+      return ASSET_ALLOWLIST.some((h) => u.hostname === h || u.hostname.endsWith(`.${h}`));
+    } catch {
+      return false;
+    }
+  }
+
+  async function fetchBlobFromPage(url, gestureToken = "") {
     const clean = String(url || '').trim().replace(/[\]\)>'"\s]+$/g, '');
     let effectiveUrl = clean;
 
@@ -1991,6 +2023,10 @@
       }
     }
 
+    if (!gestureToken) return { success: false, error: "missing_gesture_token" };
+    if (/^https?:\/\//i.test(effectiveUrl) && !isAllowlistedAssetUrl(effectiveUrl)) {
+      return { success: false, error: `host_not_allowlisted:${effectiveUrl}` };
+    }
     if (!/^https?:\/\//i.test(effectiveUrl) && !/^blob:|^data:/i.test(effectiveUrl)) {
       return { success: false, error: `Unsupported URL scheme for page fetch: ${effectiveUrl.slice(0, 60)}` };
     }
@@ -2024,6 +2060,10 @@
     const processor = new window.DataProcessor();
     const files = processor.detectAllFileReferences(document.body);
     return { success: true, count: files.length, files };
+  }
+
+  async function extract_chat_agentic(options = {}) {
+    return runLocalAgentExtract({ ...options, mode: 'agentic' });
   }
 
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -2068,6 +2108,10 @@
       runLocalAgentExtract(request.options || {}).then(sendResponse);
       return true;
     }
+    if (request.action === 'extract_chat_agentic') {
+      extract_chat_agentic(request.options || {}).then(sendResponse);
+      return true;
+    }
     if (request.action === 'self_test_local_agent') {
       runLocalAgentSelfTest(request.options || {}).then(sendResponse);
       return true;
@@ -2082,7 +2126,7 @@
       return true;
     }
     if (request.action === 'fetch_blob_page') {
-      fetchBlobFromPage(request.url).then(sendResponse);
+      fetchBlobFromPage(request.url, request.gestureToken || '').then(sendResponse);
       return true;
     }
     if (request.action === 'test_image_extraction') {

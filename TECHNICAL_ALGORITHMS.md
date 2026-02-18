@@ -154,3 +154,10 @@
 - Extract file links from message nodes (`a[href]`, `download`, `data-file-url`).
 - Normalize to `[[FILE:url|name]]` tokens.
 - On Export Files action, fetch each file in current session and pack with ZIP writer.
+
+## Agent Loop v0.11.0
+1. Observe: collect candidate blocks from SmartAgent/SmartMiner.
+2. Plan: generate up to 8 plan hypotheses ranked by online learner logits.
+3. Act: apply selectors + predicted labels to construct extraction sets.
+4. Verify: compute score from message count, role sanity, monotonic order, duplication, attachment coverage.
+5. Learn: update linear classifier weights and persist recipe/failure diagnostics in IndexedDB.
