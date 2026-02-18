@@ -4,6 +4,11 @@
 
 # Changelog
 
+## 0.12.13 - Claude Content Noise Guard + Selector Crash Hardening
+- Hardened Claude content node filtering to avoid invalid `closest()` selector usage at runtime.
+- Added safe selector probing (`safeClosestAny`) and dedicated UI chrome filtering (`isClaudeUiChromeNode`) to keep extraction focused on real message content.
+- Added integration contract coverage for the selector crash regression.
+
 ## 0.12.12 - Claude Selector Hotfix + Version Surface Alignment
 - Fixed invalid selector crash in Claude extraction path by properly escaping class name selector `.group\/status` in `content.js`.
 - Synchronized in-app visible version labels in popup (`index.html`) with release metadata.

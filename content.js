@@ -27,7 +27,7 @@
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
-// content.js - Platform Engine Orchestrator v0.12.12
+// content.js - Platform Engine Orchestrator v0.12.13
 
 (() => {
   if (window.hasRunContent) return;
@@ -608,6 +608,26 @@
         .trim();
     },
 
+    safeClosestAny(el, selectors = []) {
+      if (!el || !Array.isArray(selectors)) return null;
+      for (const selector of selectors) {
+        try {
+          const hit = el.closest(selector);
+          if (hit) return hit;
+        } catch {
+          continue;
+        }
+      }
+      return null;
+    },
+
+    isClaudeUiChromeNode(el) {
+      if (!el) return false;
+      if (this.safeClosestAny(el, ['button', '[role="button"]', 'nav', 'aside', 'header'])) return true;
+      const classBlob = `${el.className || ''} ${el.getAttribute('class') || ''}`;
+      return /(group\/status|\btransition[\w-]*\b|grid-rows|sidebar|topbar)/i.test(classBlob);
+    },
+
     findClaudeContentNodes(seedNodes = []) {
       const hits = [];
       const seen = new Set();
@@ -628,7 +648,7 @@
             if (seen.has(el)) return;
             const textLen = (el.textContent || '').trim().length;
             if (textLen < 20 && !el.querySelector('pre,code,a[href],img')) return;
-            if (el.closest('button,[role="button"],nav,aside,header,.group\\/status,[class*="transition"], [class*="grid-rows"]')) return;
+            if (this.isClaudeUiChromeNode(el)) return;
             seen.add(el);
             hits.push(el);
           });

@@ -24,3 +24,10 @@ test('Self-test reconciles media counts using item and DOM evidence', () => {
   assert.match(contentSource, /const derivedFiles = Math\.max\(/);
   assert.match(contentSource, /evidence: \{ summary: s, itemEvidence, domEvidence \}/);
 });
+
+
+test('Claude extractor avoids invalid closest selector usage and uses safe UI chrome detection', () => {
+  assert.match(contentSource, /safeClosestAny\(/);
+  assert.match(contentSource, /isClaudeUiChromeNode\(/);
+  assert.doesNotMatch(contentSource, /\.group\/status/);
+});
