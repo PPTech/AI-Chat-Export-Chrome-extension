@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// background.js - State & Log Manager v0.10.18
+// background.js - State & Log Manager v0.10.20
 
 console.log('[LOCAL-ONLY] AI engine network disabled; offline models only.');
 
@@ -39,6 +39,21 @@ async function ensureOffscreenDocument() {
     justification: 'Run local-only AI planning and recipe memory in hidden context.'
   });
   return true;
+}
+
+
+function routeToOffscreen(action, payload, sendResponse) {
+  ensureOffscreenDocument().then((ok) => {
+    if (!ok) {
+      sendResponse({ ok: false, error: 'offscreen_unavailable' });
+      return;
+    }
+    chrome.runtime.sendMessage({ action, payload: payload || {} }, (res) => {
+      sendResponse(res || { ok: false, error: chrome.runtime.lastError?.message || 'offscreen_no_response' });
+    });
+  }).catch((error) => {
+    sendResponse({ ok: false, error: error.message || 'offscreen_route_error' });
+  });
 }
 
 function createCapture(tabId, expectedFilename, timeoutMs = 9000) {
@@ -207,15 +222,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
 
       case 'RUN_LOCAL_AGENT_ENGINE': {
-        ensureOffscreenDocument().then((ok) => {
-          if (!ok) {
-            sendResponse({ ok: false, error: 'offscreen_unavailable' });
-            return;
-          }
-          chrome.runtime.sendMessage({ action: 'OFFSCREEN_RUN_AGENT', payload: message.payload || {} }, (res) => {
-            sendResponse(res || { ok: false, error: chrome.runtime.lastError?.message || 'offscreen_no_response' });
-          });
-        });
+        routeToOffscreen('OFFSCREEN_RUN_AGENT', message.payload || {}, sendResponse);
+        return true;
+      }
+
+      case 'LOCAL_CLASSIFY_TEXT': {
+        routeToOffscreen('OFFSCREEN_CLASSIFY_TEXT', message.payload || {}, sendResponse);
+        return true;
+      }
+
+      case 'LOCAL_DETECT_ARTIFACTS': {
+        routeToOffscreen('OFFSCREEN_DETECT_ARTIFACTS', message.payload || {}, sendResponse);
+        return true;
+      }
+
+      case 'LOCAL_INIT_CLASSIFIER': {
+        routeToOffscreen('OFFSCREEN_INIT_CLASSIFIER', message.payload || {}, sendResponse);
         return true;
       }
 

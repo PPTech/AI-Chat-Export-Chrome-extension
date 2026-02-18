@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// content.js - Platform Engine Orchestrator v0.10.19
+// content.js - Platform Engine Orchestrator v0.10.20
 
 (() => {
   if (window.hasRunContent) return;
@@ -1704,8 +1704,20 @@
       images: images.length,
       files: files.length
     };
-    console.log('[LOCAL_AGENT][EXTRACT]', diag);
+
+    const aiTags = [];
+    for (const sample of items.slice(0, 8)) {
+      try {
+        const cls = await sendRuntime({ action: 'LOCAL_CLASSIFY_TEXT', payload: { text: String(sample.text || '') } });
+        aiTags.push({ type: sample.type, text: String(sample.text || '').slice(0, 60), tags: cls?.tags || [], artifacts: cls?.artifacts || [] });
+      } catch {
+        aiTags.push({ type: sample.type, text: String(sample.text || '').slice(0, 60), tags: ['classifier_unavailable'], artifacts: [] });
+      }
+    }
+
+    console.log('[LOCAL_AGENT][EXTRACT]', { ...diag, aiTagsCount: aiTags.length });
     console.table(items.slice(0, 80).map((i) => ({ type: i.type, role: i.roleGuess, confidence: i.confidence, text: String(i.text || '').slice(0, 80) })));
+    console.table(aiTags);
 
     setDebugOverlay(items, !!options.debug);
     return {

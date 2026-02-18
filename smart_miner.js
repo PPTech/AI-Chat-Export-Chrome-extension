@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// smart_miner.js - Visual Mining Engine v0.10.19
+// smart_miner.js - Visual Mining Engine v0.10.20
 
 (() => {
   if (window.SmartMiner) return;
@@ -47,6 +47,25 @@
     if (el.getAttribute('aria-hidden') === 'true') return false;
     const r = el.getBoundingClientRect();
     return r.width >= 200 && r.height >= 20;
+  }
+
+  function collectElementsTreeWalker(root = document.body, maxNodes = 9000) {
+    const out = [];
+    const rootQueue = [root];
+    while (rootQueue.length && out.length < maxNodes) {
+      const scanRoot = rootQueue.shift();
+      if (!scanRoot) continue;
+      const walker = document.createTreeWalker(scanRoot, NodeFilter.SHOW_ELEMENT);
+      let current = walker.currentNode;
+      while (current && out.length < maxNodes) {
+        if (current instanceof Element) {
+          out.push(current);
+          if (current.shadowRoot) rootQueue.push(current.shadowRoot);
+        }
+        current = walker.nextNode();
+      }
+    }
+    return out;
   }
 
   function detectMainColumn(candidates) {
@@ -118,10 +137,13 @@
   }
 
   function scanVisiblePage() {
-    const base = Array.from(document.querySelectorAll('main, article, section, div'))
-      .filter(isVisible)
-      .slice(0, 9000)
-      .map((el, i) => new VisualCandidate(el, `node_${i + 1}`));
+    const elements = collectElementsTreeWalker(document.body, 9000);
+    const base = [];
+    for (let i = 0; i < elements.length; i += 1) {
+      const el = elements[i];
+      if (!isVisible(el)) continue;
+      base.push(new VisualCandidate(el, `node_${base.length + 1}`));
+    }
 
     const mainColumn = detectMainColumn(base);
     const filtered = base.filter((c) => c.rect.right >= mainColumn.left && c.rect.left <= mainColumn.right);

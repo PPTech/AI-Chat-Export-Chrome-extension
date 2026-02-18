@@ -4,6 +4,13 @@
 
 # Changelog
 
+## 0.10.20 - 2026-02-18
+- Optimized `smart_miner.js` traversal using `TreeWalker` with ShadowRoot queue to reduce scan overhead and avoid broad `querySelectorAll` sweeps.
+- Added offscreen local classifier service in `offscreen.js` with local-only network kill-switch and regex+AI hybrid artifact detection (`sandbox:/`, `/mnt/data/`, file extensions).
+- Added background routing actions to offscreen (`LOCAL_INIT_CLASSIFIER`, `LOCAL_CLASSIFY_TEXT`, `LOCAL_DETECT_ARTIFACTS`) for content-script/offscreen traffic.
+- Upgraded extraction diagnostics in `content.js` with AI tag samples to improve debug usefulness for photo/file extraction issues.
+- Synced runtime metadata to `0.10.20`.
+
 ## 0.10.19 - 2026-02-18
 - Fixed `SmartAgent not loaded` runtime failure by injecting `smart_miner.js` + `smart_agent.js` together with `content.js` in fallback reinjection path.
 - Added new DOM-agnostic visual mining engine `smart_miner.js` with `VisualCandidate`, geometry scan, main-column filtering, role heuristics, and `window.extractVisualSnapshot()` diagnostics.
