@@ -4,6 +4,13 @@
 
 # Changelog
 
+## 0.10.23 - 2026-02-18
+- Fixed popup-side CORS/CSP media failures by removing remote `fetch(...)` usage from popup cache/image conversion paths and forcing page-context blob retrieval.
+- Updated `GeminiArtifactGenerator.toBase64()` and temp media cache to use `fetchFileBlob()` (content-script proxy) instead of direct extension-page fetch.
+- Extended `fetch_blob_page` in `content.js` to resolve `sandbox:/mnt/data/...` references to real downloadable DOM hrefs when available.
+- Improved data-url handling in page fetch proxy to avoid `connect-src` violations for `data:` resources.
+- Synced runtime/docs metadata to `0.10.23`.
+
 ## 0.10.22 - 2026-02-18
 - Upgraded `smart_agent.js` with incremental candidate mining runtime (`IntersectionObserver`, `MutationObserver`, `requestIdleCallback`) and capped prioritized sweeps for large DOM responsiveness.
 - Strengthened semantic evidence in `NodeScorer.calculateProbability()` with alignment and file-signal ratios for auditable decisions.

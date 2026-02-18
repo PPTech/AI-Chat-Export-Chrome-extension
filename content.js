@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// content.js - Platform Engine Orchestrator v0.10.22
+// content.js - Platform Engine Orchestrator v0.10.23
 
 (() => {
   if (window.hasRunContent) return;
@@ -1882,11 +1882,35 @@
 
   async function fetchBlobFromPage(url) {
     const clean = String(url || '').trim().replace(/[\]\)>'"\s]+$/g, '');
-    if (!/^https?:\/\//i.test(clean) && !/^blob:|^data:/i.test(clean)) {
-      return { success: false, error: 'Unsupported URL scheme for page fetch.' };
+    let effectiveUrl = clean;
+
+    if (/^sandbox:\/\//i.test(effectiveUrl)) effectiveUrl = effectiveUrl.replace(/^sandbox:\/\//i, 'sandbox:/');
+
+    if (/^sandbox:\//i.test(effectiveUrl)) {
+      const refName = (effectiveUrl.split('/').pop() || '').trim();
+      const anchors = Array.from(document.querySelectorAll('a[href], [role="link"], button, [role="button"]'));
+      for (const a of anchors) {
+        const rawHref = a.getAttribute?.('href') || '';
+        const absHref = a.href || '';
+        const txt = (a.textContent || '').trim();
+        if (rawHref.includes(effectiveUrl) || absHref.includes(effectiveUrl) || txt.includes(refName) || rawHref.includes('/mnt/data/') || txt.includes('/mnt/data/')) {
+          const candidate = absHref || rawHref;
+          if (/^https?:\/\//i.test(candidate) || /^blob:|^data:/i.test(candidate)) {
+            effectiveUrl = candidate;
+            break;
+          }
+        }
+      }
+    }
+
+    if (!/^https?:\/\//i.test(effectiveUrl) && !/^blob:|^data:/i.test(effectiveUrl)) {
+      return { success: false, error: `Unsupported URL scheme for page fetch: ${effectiveUrl.slice(0, 60)}` };
     }
     try {
-      const resp = await fetch(clean, { credentials: 'include' });
+      if (/^data:/i.test(effectiveUrl)) {
+        return { success: true, dataUrl: effectiveUrl, mime: effectiveUrl.match(/^data:([^;]+)/i)?.[1] || 'application/octet-stream', size: effectiveUrl.length };
+      }
+      const resp = await fetch(effectiveUrl, { credentials: 'include' });
       if (!resp.ok) return { success: false, error: `HTTP ${resp.status}` };
       const blob = await resp.blob();
       const dataUrl = await new Promise((resolve) => {
@@ -1894,7 +1918,7 @@
         reader.onloadend = () => resolve(String(reader.result || ''));
         reader.readAsDataURL(blob);
       });
-      return { success: true, dataUrl, mime: blob.type || 'application/octet-stream', size: blob.size };
+      return { success: true, dataUrl, mime: blob.type || 'application/octet-stream', size: blob.size, sourceUrl: effectiveUrl };
     } catch (error) {
       return { success: false, error: error.message || 'page_fetch_failed' };
     }

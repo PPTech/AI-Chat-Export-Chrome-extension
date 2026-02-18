@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// script.js - Main Controller v0.10.22
+// script.js - Main Controller v0.10.23
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
@@ -120,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function exportSettingsCfg(settings) {
     const lines = Object.entries(settings).map(([k, v]) => `${k}=${String(v)}`);
-    const cfg = `# AI Chat Exporter Settings\n# version=0.10.22\n${lines.join('\n')}\n`;
+    const cfg = `# AI Chat Exporter Settings\n# version=0.10.23\n${lines.join('\n')}\n`;
     const date = new Date().toISOString().slice(0, 10);
     downloadBlob(new Blob([cfg], { type: 'text/plain' }), `ai_chat_exporter_settings_${date}.cfg`);
   }
@@ -359,7 +359,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let idx = 1;
     for (const src of imageList) {
       try {
-        const b = await fetch(src).then((r) => r.blob());
+        const b = await fetchFileBlob(src);
+        if (!b) continue;
         const ext = sniffImageExtension(b);
         const data = new Uint8Array(await b.arrayBuffer());
         files.push({ name: `photo_${String(idx).padStart(3, '0')}.${ext}`, content: data, mime: b.type || 'application/octet-stream' });
@@ -607,16 +608,17 @@ document.addEventListener('DOMContentLoaded', () => {
     async toBase64(url) {
       try {
         if (!url) return '';
-        if (/^data:/i.test(url)) return url;
-        const response = await fetch(url);
-        const blob = await response.blob();
+        const clean = sanitizeTokenUrl(url);
+        if (/^data:/i.test(clean)) return clean;
+        const blob = await fetchFileBlob(clean);
+        if (!blob) return clean;
         return await new Promise((resolve) => {
           const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result || url);
+          reader.onloadend = () => resolve(String(reader.result || clean));
           reader.readAsDataURL(blob);
         });
       } catch {
-        return url;
+        return sanitizeTokenUrl(url);
       }
     }
 
@@ -1056,10 +1058,11 @@ document.addEventListener('DOMContentLoaded', () => {
     return {
       async fetchBlob(url) {
         if (!url) return null;
-        if (blobCache.has(url)) return blobCache.get(url);
+        const clean = sanitizeTokenUrl(url);
+        if (blobCache.has(clean)) return blobCache.get(clean);
         try {
-          const blob = await fetch(url, { credentials: 'include' }).then((r) => (r.ok ? r.blob() : null));
-          if (blob) blobCache.set(url, blob);
+          const blob = await fetchFileBlob(clean);
+          if (blob) blobCache.set(clean, blob);
           return blob;
         } catch {
           return null;
