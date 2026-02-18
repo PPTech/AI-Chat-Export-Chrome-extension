@@ -2,7 +2,7 @@
 # Code generated with support from CODEX and CODEX CLI.
 # Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 
-# Technical Algorithms (v0.10.15)
+# Technical Algorithms (v0.10.16)
 
 ## A) Extraction Algorithms (`content.js`)
 
@@ -44,6 +44,34 @@
   - role marker evidence,
   - content signal counts.
 - Stores findings in `window.CLAUDE_DOM_DISCOVERY`.
+
+### A6. ChatGPT Sandbox Link Discovery + Download Algorithm
+- Discovery path (`discoverSandboxFileRefs`):
+  1. Detect best conversation root with explainable scoring.
+  2. Scan anchors using both `a.getAttribute('href')` and `a.href`.
+  3. Scan text nodes for `sandbox:/mnt/data/...` regex.
+  4. Scan button/card widgets for file-like text and nested links.
+  5. Traverse open shadow roots to avoid missing encapsulated nodes.
+- Resolution path (`resolveFileRef`):
+  1. Direct HTTP links → `direct_href`.
+  2. Sandbox link → arm background capture window.
+  3. Dispatch synthetic click + native click.
+  4. Resolve through downloads/webRequest/tabs-update evidence.
+- Diagnostics:
+  - `window.__SANDBOX_FILE_REFS__` stores refs + evidence + source counts.
+  - Console table includes `filename`, `sandboxPath`, `source`, `hasClickEl`.
+
+### A7. AI Studio Extractor Algorithm
+- `AIStudioExtractor` uses deep traversal (`queryDeep`) across open shadow roots.
+- Waits for hydration before extraction.
+- Extracts:
+  - `system_instruction` from labeled editor blocks,
+  - turn text via prioritized strategy:
+    - textarea value,
+    - ProseMirror / CodeMirror / contenteditable lines,
+    - static markdown render fallback,
+  - attachments (images/files) with blob-to-base64 conversion for images.
+- Fails gracefully per-turn: logs warning and continues.
 
 ## B) Export Algorithms (`script.js`)
 
@@ -91,9 +119,9 @@
 ## C) Security and Data-Safety Algorithms
 
 ### C1. Runtime Cache Protection (`background.js`)
-- Per-tab extracted data is encrypted in memory with AES-GCM.
-- Runtime key generated via WebCrypto API.
-- Data decrypted only when popup requests per-tab state.
+- Per-tab extracted data is isolated in service-worker memory and cleared on demand.
+- Capture windows for downloads are short-lived and removed after completion/timeout.
+- No remote telemetry endpoint is used for extracted payload transfer.
 
 ### C2. Sanitization
 - HTML text is escaped before rendering.

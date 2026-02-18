@@ -2,7 +2,7 @@
 # Code generated with support from CODEX and CODEX CLI.
 # Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 
-# Security, Privacy & Compliance Model (v0.10.15)
+# Security, Privacy & Compliance Model (v0.10.16)
 
 > Important: This document is a technical implementation guide, not legal advice.
 
@@ -16,8 +16,9 @@
 - **Operational data**: error logs and counts.
 - **Configuration data**: export preferences.
 
-## 3) Storage and Encryption
-- Chat extraction cache (per-tab) is encrypted in extension runtime memory using AES-GCM (`background.js`).
+## 3) Storage and Protection
+- Chat extraction cache (per-tab) is stored in extension runtime memory with per-tab isolation and explicit clear controls.
+- Download-capture state is ephemeral, short-lived, and removed after timeout/completion.
 - Settings are saved in `chrome.storage.local` and can be exported by user as `.cfg`.
 - Exported files are user-triggered and saved locally.
 
@@ -34,7 +35,7 @@
 - Lawfulness/transparency: local processing design documented in README.
 - Data minimization: only active-tab chat data processed.
 - Purpose limitation: extraction/export only.
-- Integrity/confidentiality: encrypted runtime cache and local-only processing.
+- Integrity/confidentiality: local-only processing and in-session isolated runtime state.
 - User rights support: user can clear data, export, and control local files.
 
 ### CCPA/CPRA (US)

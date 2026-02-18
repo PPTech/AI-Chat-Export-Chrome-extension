@@ -1,10 +1,10 @@
 # 🚀 AI Chat Exporter Ultimate
 
-**Version**: 0.10.15  
+**Version**: 0.10.16  
 **License**: MIT (Ultimate Edition)  
 **Code Source**: Generated with support from CODEX and CODEX CLI.  
 **Owner / Management**: Dr. Babak Sorkhpour ([@Drbabakskr](https://x.com/Drbabakskr))  
-**Author**: Dr. Babak Sorkhpour with support from **Gemini 2.0 Flash (Google)**
+**Author**: Dr. Babak Sorkhpour with support from Gemini, Google AI Studio, ChatGPT, OpenAI Codex and Claude.ai.
 
 ---
 
@@ -28,6 +28,53 @@
 *   **Embedded Media**: Automatically converts remote images to Base64 for fully offline Word and HTML documents.
 *   **Temporary Media Cache Hygiene**: Downloads media to temporary in-memory cache during export, embeds output, then clears cache at begin/finish/close.
 *   **Security Hardened**: Input sanitization prevents XSS in exported files.
+
+## 🧠 Prompt & Extraction Strategy by Service (Summary)
+
+This section documents **what prompt strategy/heuristics** are used for each provider and **why**. It avoids exposing proprietary internal scoring constants while giving technical transparency.
+
+### ChatGPT / OpenAI Codex
+- **Goal:** detect robust message turns and downloadable assets (including `sandbox:/mnt/data/...`).
+- **How:** DOM analyzer + sandbox link scanner (anchor/text/button + shadow traversal).
+- **Why:** ChatGPT often renders downloads as UI actions rather than stable direct URLs.
+- **Short code sample:**
+
+```js
+const refs = discoverSandboxFileRefs(rootEl);
+for (const ref of refs) {
+  const resolved = await resolveFileRef(ref, tabId, rootEl);
+  await downloadResolvedFile(resolved);
+}
+```
+
+### Claude.ai
+- **Goal:** discover and extract user/assistant turns plus file/link presentation diagnostics.
+- **How:** adaptive turn selectors + `discover_claude_files` runtime diagnostics.
+- **Why:** Claude UI variants can change quickly and discovery visibility is required before hardening selectors.
+- **Short code sample:**
+
+```js
+chrome.tabs.sendMessage(tabId, { action: 'discover_claude_files' }, (res) => {
+  console.log(res.findings);
+});
+```
+
+### Gemini
+- **Goal:** parse role, blocks, code, images, and artifact links with explainable evidence.
+- **How:** probe-style extractor and block parser with confidence metadata.
+- **Why:** dynamic Gemini layouts use mixed semantics and require scoring + evidence.
+
+### Google AI Studio
+- **Goal:** capture system instruction + user/model turns + attachments from editor-based UI.
+- **How:** `AIStudioExtractor` with deep shadow traversal, textarea/contenteditable/CodeMirror/ProseMirror heuristics, blob-to-base64 for image attachments.
+- **Why:** user prompts are frequently stored in editor layers, not plain paragraph nodes.
+- **Short code sample:**
+
+```js
+const extractor = new AIStudioExtractor(utils, options);
+const result = await extractor.scrape();
+console.log(result.system_instruction, result.turns.length);
+```
 
 ## 🚀 One-Click Installation
 

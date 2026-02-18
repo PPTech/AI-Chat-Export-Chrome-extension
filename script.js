@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// script.js - Main Controller v0.10.15
+// script.js - Main Controller v0.10.16
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
@@ -80,7 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function exportSettingsCfg(settings) {
     const lines = Object.entries(settings).map(([k, v]) => `${k}=${String(v)}`);
-    const cfg = `# AI Chat Exporter Settings\n# version=0.10.15\n${lines.join('\n')}\n`;
+    const cfg = `# AI Chat Exporter Settings\n# version=0.10.16\n${lines.join('\n')}\n`;
     const date = new Date().toISOString().slice(0, 10);
     downloadBlob(new Blob([cfg], { type: 'text/plain' }), `ai_chat_exporter_settings_${date}.cfg`);
   }
@@ -180,22 +180,37 @@ document.addEventListener('DOMContentLoaded', () => {
     let photos = 0;
     let files = 0;
     let others = 0;
+    let otherCodeBlocks = 0;
+    let otherLinks = 0;
+    let otherQuotes = 0;
     const imgRegex = /\[\[IMG:[\s\S]*?\]\]|!\[[^\]]*\]\((data:image\/[^)]+|https?:\/\/[^)]+)\)/g;
     const fileRegex = /\[\[FILE:([^|\]]+)\|([^\]]+)\]\]/g;
+    const linkRegex = /https?:\/\/[^\s)]+/g;
     for (const m of messages) {
       const content = m.content || '';
       photos += (content.match(imgRegex) || []).length;
       files += (content.match(fileRegex) || []).length;
-      others += (content.match(/```/g) || []).length / 2;
+      otherCodeBlocks += (content.match(/```/g) || []).length / 2;
+      otherLinks += Math.max(0, (content.match(linkRegex) || []).length - (content.match(fileRegex) || []).length);
+      otherQuotes += (content.match(/^>\s+/gm) || []).length;
     }
-    return { messages: messages.length, photos: Math.round(photos), files: Math.round(files), others: Math.round(others) };
+    others = Math.round(otherCodeBlocks + otherLinks + otherQuotes);
+    return {
+      messages: messages.length,
+      photos: Math.round(photos),
+      files: Math.round(files),
+      others,
+      otherCodeBlocks: Math.round(otherCodeBlocks),
+      otherLinks: Math.round(otherLinks),
+      otherQuotes: Math.round(otherQuotes)
+    };
   }
 
   function updateDetectedSummary(messages = []) {
     const el = document.getElementById('detected-summary');
     if (!el) return;
     const c = computeDetectedCounts(messages);
-    el.textContent = `Detected: ${c.messages} messages • ${c.photos} photos • ${c.files} files • ${c.others} others`;
+    el.textContent = `Detected: ${c.messages} messages • ${c.photos} photos • ${c.files} files • ${c.others} others (code:${c.otherCodeBlocks}, links:${c.otherLinks}, quotes:${c.otherQuotes})`;
   }
 
   btnExport.onclick = async () => {

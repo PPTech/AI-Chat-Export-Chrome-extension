@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// content.js - Platform Engine Orchestrator v0.10.15
+// content.js - Platform Engine Orchestrator v0.10.16
 
 (() => {
   if (window.hasRunContent) return;
@@ -234,29 +234,88 @@
     }
   }
 
-  class AIStudioScraper {
+  class AIStudioExtractor {
     constructor(utilsRef, options = {}) {
       this.utils = utilsRef;
       this.options = options;
+      this.turnSelectors = [
+        'ms-chat-turn',
+        'user-query-item',
+        'model-response-item',
+        '[data-turn-id]',
+        '[class*="turn" i]',
+        '[class*="chat" i] > article'
+      ];
+    }
+
+    deepTraverse(root = document) {
+      const nodes = [];
+      const stack = [root];
+      while (stack.length) {
+        const cur = stack.pop();
+        if (!cur || !cur.querySelectorAll) continue;
+        nodes.push(cur);
+        const children = Array.from(cur.querySelectorAll('*'));
+        children.forEach((el) => {
+          if (el.shadowRoot) stack.push(el.shadowRoot);
+        });
+      }
+      return nodes;
+    }
+
+    queryDeep(selector, root = document) {
+      const out = [];
+      this.deepTraverse(root).forEach((r) => {
+        if (r.querySelectorAll) out.push(...Array.from(r.querySelectorAll(selector)));
+      });
+      return out;
     }
 
     async waitForDom(timeoutMs = 7000) {
       const started = Date.now();
       while (Date.now() - started < timeoutMs) {
-        const hasTurnLike = document.querySelector('[class*="turn" i], [class*="chat" i], [data-turn-id], ms-chat-turn, user-query-item, model-response-item');
-        if (hasTurnLike) return true;
+        const hasHydration = this.queryDeep('main, ms-chat-turn, [class*="turn" i], [contenteditable="true"], textarea, img').length > 0;
+        if (hasHydration) return true;
         await new Promise((resolve) => setTimeout(resolve, 250));
       }
       return false;
     }
 
+    detectRootContainer() {
+      const candidates = this.queryDeep('main,section,div,[role="main"]');
+      const scored = candidates.map((el) => {
+        const cs = getComputedStyle(el);
+        const scroll = ['auto', 'scroll', 'overlay'].includes(cs.overflowY) ? 1 : 0;
+        const ratio = el.scrollHeight / Math.max(1, el.clientHeight);
+        const turnHints = el.querySelectorAll(this.turnSelectors.join(',')).length;
+        const text = (el.innerText || '').trim().length;
+        const score = (scroll * 2) + Math.min(2.5, ratio) + Math.min(2.5, turnHints / 6) + Math.min(2, text / 5000);
+        return { el, score };
+      }).sort((a, b) => b.score - a.score);
+      return scored[0]?.el || document.querySelector('main') || document.body;
+    }
+
+    async blobToBase64(url) {
+      try {
+        if (!url || !/^blob:|^https?:\/\//i.test(url)) return '';
+        const blob = await fetch(url, { credentials: 'include' }).then((r) => r.blob());
+        return await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(String(reader.result || ''));
+          reader.readAsDataURL(blob);
+        });
+      } catch {
+        return '';
+      }
+    }
+
     findSystemInstruction() {
-      const labels = Array.from(document.querySelectorAll('h1,h2,h3,label,span,div')).filter((el) => /system instructions?/i.test((el.textContent || '').trim()));
+      const labels = this.queryDeep('h1,h2,h3,label,span,div').filter((el) => /system instructions?/i.test((el.textContent || '').trim()));
       for (const label of labels) {
         const host = label.closest('section,div,article') || label.parentElement;
         if (!host) continue;
-        const editor = host.querySelector('textarea,.ProseMirror,.cm-content,[contenteditable="true"],pre,code,div');
-        const text = (editor?.innerText || editor?.textContent || '').trim();
+        const editor = host.querySelector('textarea,.ProseMirror,.cm-content,[contenteditable="true"],div[role="textbox"],pre,code,div');
+        const text = (editor?.tagName === 'TEXTAREA' ? editor.value : (editor?.innerText || editor?.textContent || '')).trim();
         if (text && !/system instructions?/i.test(text)) return text;
       }
       return '';
@@ -264,7 +323,7 @@
 
     extractParameters() {
       const params = {};
-      const aside = document.querySelector('aside,[role="complementary"],section[aria-label*="settings" i]') || document.body;
+      const aside = this.queryDeep('aside,[role="complementary"],section[aria-label*="settings" i]')[0] || document.body;
       const labels = Array.from(aside.querySelectorAll('label,span,div')).map((el) => (el.textContent || '').trim()).filter(Boolean);
       const pickValue = (key) => {
         const row = Array.from(aside.querySelectorAll('label,div,li')).find((el) => new RegExp(`^${key}`, 'i').test((el.textContent || '').trim()));
@@ -281,9 +340,20 @@
     }
 
     extractTurnText(turnNode) {
-      const editor = turnNode.querySelector('.ProseMirror,.cm-content,[contenteditable="true"],textarea,pre,code') || turnNode;
-      const text = (editor.innerText || editor.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
-      return text;
+      const textarea = turnNode.querySelector('textarea');
+      if (textarea?.value?.trim()) return textarea.value.trim();
+
+      const editor = turnNode.querySelector('.ProseMirror,.cm-content,div[role="textbox"],[contenteditable="true"]');
+      if (editor) {
+        const lines = Array.from(editor.querySelectorAll('p,div')).map((n) => (n.textContent || '').trim()).filter(Boolean);
+        const joined = lines.join('\n').trim();
+        if (joined) return joined;
+        const raw = (editor.textContent || '').trim();
+        if (raw) return raw;
+      }
+
+      const staticRender = turnNode.querySelector('[class*="markdown" i],article,section') || turnNode;
+      return (staticRender.innerText || staticRender.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
     }
 
     inferTurnRole(turnNode) {
@@ -293,33 +363,61 @@
       const marker = `${turnNode.className || ''} ${turnNode.tagName}`.toLowerCase();
       if (/user|query/.test(marker)) return 'user';
       if (/model|response|assistant/.test(marker)) return 'model';
+      if (turnNode.querySelector('svg[aria-label*="sparkle" i], [aria-label*="model" i]')) return 'model';
       return 'model';
+    }
+
+    async extractTurnAttachments(turnNode, role) {
+      const attachments = [];
+      const images = Array.from(turnNode.querySelectorAll('img')).filter((img) => (img.naturalWidth || img.width || 0) >= 50 || (img.naturalHeight || img.height || 0) >= 50);
+      for (const img of images) {
+        const src = img.currentSrc || img.getAttribute('src') || '';
+        if (!src) continue;
+        const data = await this.blobToBase64(src);
+        attachments.push({ type: 'image', mime: data.startsWith('data:') ? data.slice(5, data.indexOf(';')) : 'image/*', data: data || src, role });
+      }
+      const fileChips = Array.from(turnNode.querySelectorAll('a[download], [data-file-name], [class*="chip" i], [class*="attachment" i]'));
+      fileChips.forEach((chip) => {
+        const name = chip.getAttribute('download') || chip.getAttribute('data-file-name') || (chip.textContent || '').trim();
+        if (!name || attachments.some((a) => a.type === 'file' && a.name === name)) return;
+        attachments.push({ type: 'file', name });
+      });
+      return attachments;
     }
 
     async scrape() {
       await this.waitForDom();
-      const selectors = [
-        'ms-chat-turn',
-        'user-query-item, model-response-item',
-        '[data-turn-id]',
-        '[class*="turn" i]',
-        '[class*="chat" i] > article'
-      ];
+      const root = this.detectRootContainer();
       let turnNodes = [];
-      for (const selector of selectors) {
-        const nodes = Array.from(document.querySelectorAll(selector)).filter((n) => this.utils.hasMeaningfulContent(n));
+      for (const selector of this.turnSelectors) {
+        const nodes = this.queryDeep(selector, root).filter((n) => this.utils.hasMeaningfulContent(n));
         if (nodes.length > 1) {
           turnNodes = nodes;
           break;
         }
       }
+      if (!turnNodes.length) {
+        turnNodes = Array.from(root.children || []).filter((n) => this.utils.hasMeaningfulContent(n));
+      }
 
-      const turns = turnNodes.map((node) => ({
-        role: this.inferTurnRole(node),
-        text: this.extractTurnText(node)
-      })).filter((t) => t.text.length > 0);
+      const turns = [];
+      for (const node of turnNodes) {
+        try {
+          const role = this.inferTurnRole(node);
+          const text = this.extractTurnText(node);
+          const attachments = await this.extractTurnAttachments(node, role);
+          if (text || attachments.length) turns.push({ role, text, attachments });
+        } catch (error) {
+          console.warn('[AIStudioExtractor] turn parse failed, skipping node', error);
+        }
+      }
 
       return {
+        metadata: {
+          title: document.title || 'AI Studio',
+          url: location.href,
+          timestamp: new Date().toISOString()
+        },
         system_instruction: this.findSystemInstruction(),
         parameters: this.extractParameters(),
         turns
@@ -404,12 +502,12 @@
       name: 'AI Studio',
       matches: () => location.hostname.includes('aistudio.google.com'),
       async extract(options, utils) {
-        const scraper = new AIStudioScraper(utils, options);
+        const scraper = new AIStudioExtractor(utils, options);
         const scraped = await scraper.scrape();
         const messages = scraped.turns.map((turn, idx) => ({
           role: turn.role === 'user' ? 'User' : 'Model',
-          content: turn.text,
-          meta: { platform: this.name, sourceSelector: 'aistudio-scraper', turnIndex: idx }
+          content: [turn.text, ...(turn.attachments || []).map((a) => (a.type === 'image' ? `[[IMG:${a.data}]]` : `[[FILE:${a.name}|${a.name}]]`))].filter(Boolean).join('\n'),
+          meta: { platform: this.name, sourceSelector: 'aistudio-extractor', turnIndex: idx, attachmentCount: (turn.attachments || []).length }
         }));
         if (scraped.system_instruction) {
           messages.unshift({
@@ -1471,8 +1569,9 @@
   }
 
   async function scanChatGptFileLinks() {
-    if (!/(chatgpt\.com|chat\.openai\.com)$/i.test(location.hostname)) {
-      return { success: false, error: 'This scanner supports ChatGPT domains only.' };
+    const supported = /(chatgpt\.com|chat\.openai\.com|claude\.ai|gemini\.google\.com|aistudio\.google\.com)$/i.test(location.hostname);
+    if (!supported) {
+      return { success: false, error: 'Link scanner supports ChatGPT, Claude, Gemini and AI Studio domains only.' };
     }
     const root = detectConversationRootForFiles();
     const scanned = discoverSandboxFileRefs(root.rootEl);

@@ -13,12 +13,13 @@
   3. Stable multi-tab isolation with clear logs.
 
 
-## Platform Engine Orchestrator (v0.10.15)
+## Platform Engine Orchestrator (v0.10.16)
 - Dedicated engine per platform for selectors and role mapping.
 - Standardized message contract for export compatibility.
 - Image tokens captured before node cleanup to preserve media in rich exports.
 
-- Runtime cache encryption enabled in `background.js` (AES-GCM, in-memory per-tab state).
+- Runtime state is isolated per-tab in service-worker memory with explicit clear paths and short-lived capture windows.
 - Settings persist locally and are exportable as `.cfg` backup.
 - Popup now includes draft menu entries for Login/Contact and analysis progress percentage.
 - Added file token export flow for chat-generated artifacts with ZIP packaging.
+- Added cross-service link scan actions and ChatGPT sandbox download diagnostics (`Ping`, scan table, PASS/WARN/FAIL logs).

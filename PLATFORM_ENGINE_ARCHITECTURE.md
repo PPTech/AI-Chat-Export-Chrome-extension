@@ -2,7 +2,7 @@
 # Code generated with support from CODEX and CODEX CLI.
 # Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 
-# Platform Engine Architecture (v0.10.15)
+# Platform Engine Architecture (v0.10.16)
 
 ## Objective
 Build one dedicated extraction engine per chat platform, then normalize all outputs to a secure shared model for export.
@@ -38,7 +38,22 @@ Build one dedicated extraction engine per chat platform, then normalize all outp
 
 ### 4) AI Studio Engine
 - Trigger: `aistudio.google.com`.
-- Uses multi-selector adaptive fallback strategy with role hints from attributes and structure.
+- Uses `AIStudioExtractor`:
+  - deep shadow-root traversal,
+  - hydration wait,
+  - system-instruction extraction,
+  - turn parsing from textarea/contenteditable/editor layers,
+  - attachment extraction (images/files).
+
+### 5) Cross-Service Link Discovery Engine
+- Shared scanner action for ChatGPT, Claude, Gemini, AI Studio.
+- Detects file links from:
+  - anchors (raw + absolute href),
+  - text-node sandbox patterns,
+  - button/card widgets.
+- Exposes explainable diagnostics:
+  - `window.__SANDBOX_FILE_REFS__` for scan evidence,
+  - `window.__CHATGPT_FILE_LINKS__` for download job results.
 
 ## Shared Message Contract
 ```json
