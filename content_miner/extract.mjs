@@ -1,10 +1,11 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// نویسنده دکتر بابک سرخپور با کمک ابزار چت جی پی تی.
-// content_miner/extract.mjs - Selector fallback extractor v0.12.6
+// Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
+// content_miner/extract.mjs - Selector fallback extractor v0.12.7
 
 export const SELECTORS = [
+  { v: 'v4', q: 'main [data-testid*="conversation-turn"], main [data-message-id], main [data-turn-id]' },
   { v: 'v3', q: 'main [data-message-id]' },
   { v: 'v2', q: 'main article' },
   { v: 'v1', q: 'main .group, main .text-base' }
@@ -15,7 +16,9 @@ export function extractRawMessages(doc) {
     const nodes = Array.from(doc.querySelectorAll(s.q));
     if (!nodes.length) continue;
 
-    const messages = nodes.map((n) => parseNode(n, s.v)).filter((m) => m.text.trim().length > 0);
+    const messages = nodes
+      .map((n) => parseNode(n, s.v))
+      .filter((m) => m.text.trim().length > 0 || (m.attachments || []).length > 0);
     if (messages.length) return { messages, used_selector: s.v };
   }
   return { messages: [], used_selector: 'none' };
@@ -24,28 +27,47 @@ export function extractRawMessages(doc) {
 function parseNode(node, selectorVersion) {
   return {
     role: inferRole(node),
-    text: node.innerText || '',
+    text: extractText(node),
     html: node.innerHTML || '',
     attachments: discoverAttachments(node),
     selector_version: selectorVersion
   };
 }
 
-function inferRole(node) {
-  const roleAttr = String(node.getAttribute?.('data-message-author-role') || '').toLowerCase();
-  if (roleAttr.includes('assistant')) return 'assistant';
-  if (roleAttr.includes('user')) return 'user';
+function extractText(node) {
+  const byInnerText = typeof node.innerText === 'string' ? node.innerText : '';
+  if (byInnerText.trim().length > 0) return byInnerText;
+  return String(node.textContent || '');
+}
 
-  const aria = String(node.getAttribute?.('aria-label') || '').toLowerCase();
-  if (aria.includes('assistant')) return 'assistant';
-  if (aria.includes('user') || aria.includes('you')) return 'user';
+function inferRole(node) {
+  const roleHints = [
+    node.getAttribute?.('data-message-author-role'),
+    node.getAttribute?.('data-role'),
+    node.getAttribute?.('aria-label'),
+    node.getAttribute?.('data-testid')
+  ].map((v) => String(v || '').toLowerCase());
+
+  const subtreeRole = node.querySelector?.('[data-message-author-role],[data-testid],[aria-label]');
+  if (subtreeRole) {
+    roleHints.push(
+      String(subtreeRole.getAttribute('data-message-author-role') || '').toLowerCase(),
+      String(subtreeRole.getAttribute('data-testid') || '').toLowerCase(),
+      String(subtreeRole.getAttribute('aria-label') || '').toLowerCase()
+    );
+  }
+
+  const joined = roleHints.join(' ');
+  if (/assistant|model|chatgpt/.test(joined)) return 'assistant';
+  if (/user|you|prompt/.test(joined)) return 'user';
+  if (/system/.test(joined)) return 'system';
   return 'unknown';
 }
 
 function discoverAttachments(node) {
   const out = [];
   node.querySelectorAll('img').forEach((img) => {
-    const src = img.src || img.getAttribute('src') || '';
+    const src = img.currentSrc || img.src || img.getAttribute('src') || '';
     if (src) out.push({ source_url: src, kind: 'image' });
   });
   node.querySelectorAll('a').forEach((a) => {

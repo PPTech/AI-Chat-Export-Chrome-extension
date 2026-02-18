@@ -26,8 +26,8 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// نویسنده دکتر بابک سرخپور با کمک ابزار چت جی پی تی.
-// background.js - State & Log Manager v0.12.6
+// Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
+// background.js - State & Log Manager v0.12.7
 
 console.log('[LOCAL-ONLY] AI engine network disabled; offline models only.');
 const nativeBackgroundFetch = globalThis.fetch?.bind(globalThis);

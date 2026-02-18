@@ -26,8 +26,8 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// نویسنده دکتر بابک سرخپور با کمک ابزار چت جی پی تی.
-// content.js - Platform Engine Orchestrator v0.12.6
+// Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
+// content.js - Platform Engine Orchestrator v0.12.7
 
 (() => {
   if (window.hasRunContent) return;

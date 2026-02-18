@@ -1,12 +1,12 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// نویسنده دکتر بابک سرخپور با کمک ابزار چت جی پی تی.
-// packager/build_export_bundle.mjs - Forensic bundle builder v0.12.6
+// Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
+// packager/build_export_bundle.mjs - Forensic bundle builder v0.12.7
 
 import { createHash } from 'node:crypto';
 
-export function buildDiagnostics({ runId, startedAt, endedAt, counts, failures, reasonCodes, scorecard, deterministicMode, version, usedSelector }) {
+export function buildDiagnostics({ runId, startedAt, endedAt, counts, failures, reasonCodes, scorecard, deterministicMode, version, usedSelector, stages = [] }) {
   return {
     schema_version: 'diagnostics.v1',
     run: {
@@ -17,7 +17,7 @@ export function buildDiagnostics({ runId, startedAt, endedAt, counts, failures, 
       tool_version: version,
       environment: { runtime: 'node', node: process.version, browser: null }
     },
-    stages: [],
+    stages,
     counts,
     reason_codes: reasonCodes,
     failures,
@@ -26,13 +26,14 @@ export function buildDiagnostics({ runId, startedAt, endedAt, counts, failures, 
   };
 }
 
-export function buildManifest(files) {
+export function buildManifest(files, options = {}) {
   const sorted = [...files].sort((a, b) => a.path.localeCompare(b.path));
   const inventory = sorted.map((f) => ({ path: f.path, bytes: f.bytes.length, sha256: sha(f.bytes) }));
   const zipHash = sha(Buffer.from(JSON.stringify(inventory)));
+  const createdAt = options.createdAtUtc || new Date().toISOString();
   return {
     schema_version: 'export_bundle_manifest.v1',
-    bundle: { zip_sha256: zipHash, created_at_utc: new Date().toISOString() },
+    bundle: { zip_sha256: zipHash, created_at_utc: createdAt },
     inventory
   };
 }

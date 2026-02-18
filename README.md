@@ -1,6 +1,6 @@
 # 🚀 AI Chat Exporter Ultimate
 
-**Version**: 0.10.26  
+**Version**: 0.12.7  
 **License**: MIT (Ultimate Edition)  
 **Code Source**: Generated with support from CODEX and CODEX CLI.  
 **Owner / Management**: Dr. Babak Sorkhpour ([@Drbabakskr](https://x.com/Drbabakskr))  
@@ -19,6 +19,25 @@
 | **CSV** | 🟢 **Stable** | Excel compatible (UTF-8, single line rows). |
 | **SQL** | 🟢 **Stable** | PostgreSQL compatible dumps. |
 | **PDF** | 🟢 **Stable** | Standalone file generation with embedded page rendering for multilingual reliability and image inclusion. |
+
+
+## Root-Cause Review (2026-02-18)
+
+The repository triage identified five primary bottlenecks that caused near-empty exports in real ChatGPT sessions:
+
+1. **Host coverage gap**: MV3 injection patterns were missing wildcard ChatGPT subdomains (`*.chatgpt.com`) used by newer rollout hosts.
+2. **DOM selector drift**: extraction relied on older selectors and `innerText` only, which can return empty values in some renderers.
+3. **Weak role inference**: role detection did not consistently use `data-testid`/subtree role hints and produced `unknown` too often.
+4. **Diagnostics explainability gap**: stage timings and selector evidence were not consistently carried in diagnostics.
+5. **Documentation drift**: version and audit docs did not reflect the current 0.12.x architecture, creating false confidence and hard-to-debug reports.
+
+### Implemented Remediation in 0.12.7
+
+- Added wildcard ChatGPT host coverage in `manifest.json` for host permissions, content script matching, and web-accessible resources.
+- Upgraded selector fallback to include conversation-turn data-testid/data-turn-id patterns and robust text extraction fallback (`innerText` → `textContent`).
+- Improved role inference using direct and subtree hints (`data-message-author-role`, `data-role`, `aria-label`, `data-testid`).
+- Extended diagnostics builder to support stage-level timing records and deterministic manifest timestamps when supplied.
+- Removed non-English comments from code headers to keep project files consistently English-only.
 
 ## 🛠 Features
 

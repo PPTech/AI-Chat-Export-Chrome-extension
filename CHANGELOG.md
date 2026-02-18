@@ -4,6 +4,12 @@
 
 # Changelog
 
+## 0.12.7 - Injection/Extraction Hardening + English-Only Source Policy
+- Added wildcard ChatGPT host coverage (`*.chatgpt.com`) to manifest host permissions, content script matches, and web-accessible resource matches.
+- Upgraded `content_miner/extract.mjs` with a `v4` selector tier, resilient text extraction fallback (`innerText` -> `textContent`), and stronger role inference using subtree metadata hints.
+- Extended `packager/build_export_bundle.mjs` contracts with stage-aware diagnostics input and deterministic manifest timestamp override.
+- Removed non-English source comments across the repository and refreshed root-cause analysis documentation.
+
 ## 0.12.6 - Evidence-Gated Neural-Eye Export Contracts
 - Added canonical local-only export modules (`content_miner`, `normalizer`, `attachment_resolver`, `packager`, `self_heal`, `tools/pts`) with deterministic diagnostics and reason-code contracts.
 - Added BDD contract feature `features/export.feature` and fixture-based contract tests for extraction, local-only blocking, self-heal persistence, and PTS routing.
