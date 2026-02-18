@@ -4,20 +4,23 @@
 
 # Changelog
 
-## 0.10.17 - 2026-02-18
-- Added explicit injection health check: content script now logs `[INJECT]` on load and supports `ping_content`; popup now exposes a **Ping** button for deterministic verification.
-- Hardened ChatGPT sandbox file discovery (`discoverSandboxFileRefs`) with deep Shadow DOM traversal, raw-vs-absolute href detection, text-node detection, button/card detection, canonical normalization, and stable diagnostics in `window.__SANDBOX_FILE_REFS__`.
-- Improved sandbox download resolution with stronger click dispatch evidence and additional background capture path via `tabs.onUpdated` besides downloads/webRequest capture windows.
-- Added advanced `AIStudioExtractor` with shadow traversal, hydration wait, system instruction parsing, multi-strategy prompt/response extraction, and attachment extraction.
-- Enabled link-scanning action for all supported services (ChatGPT, Claude, Gemini, AI Studio) and expanded detected `others` summary details (code/links/quotes).
-- Fixed malformed media URL handling and CORS-prone token tails by sanitizing token URLs before fetch/embed, reducing `]]`/invalid-suffix fetch failures.
-- Improved photo export naming and format handling by MIME/format inspection fallback and normalized image extension output (default safe JPG fallback).
-- Improved file export fallback path to direct browser download when session fetch packaging fails.
-- Updated AI role labeling so assistant output shows provider/system name (e.g., ChatGPT / ChatGPT Codex) instead of generic `Assistant`.
-- Expanded technical documentation with per-service extraction prompt/heuristic summaries and non-sensitive implementation examples.
-- Added `chat.openai.com` coverage to content script matching and narrowed host permissions to explicit supported domains.
-- Kept temporary media cache lifecycle for export jobs (begin/finish/close cleanup) and cache-backed HTML/Word embedding behavior.
-- Synced runtime/docs metadata to `0.10.17`.
+## 0.10.18 - 2026-02-18
+- Added an offline-first local agent foundation:
+  - `smart_agent.js` (visual candidate miner + semantic scorer + clustering),
+  - `ai_engine.js` (deterministic self-heal planner),
+  - `recipes_store.js` (IndexedDB recipe memory),
+  - `offscreen.html/offscreen.js` (hidden local engine bridge),
+  - `options.html/options.js` (local planner/debug options),
+  - `tests/bdd/local_agent.feature`, `tests/runner.js`, `pts.config.json`.
+- Added LocalOnlyGuard protections in extension contexts and strict extension-page CSP (`connect-src 'self'`) plus startup local-only log.
+- Added popup controls for local agent workflow: `Extract`, `Self-Test`, `Debug Overlay`, and retained deterministic `Ping` validation.
+- Added content-script local agent actions: `extract_local_agent`, `self_test_local_agent`, page-side blob fetch proxy (`fetch_blob_page`), and debug globals (`window.__LOCAL_AGENT_STATE__`, `window.__LOCAL_AGENT_RESULT__`).
+- Fixed CORS/malformed URL issues by sanitizing token tails before any media fetch and moving blob retrieval to page context where required.
+- Improved image naming/format behavior by MIME-based extension sniffing with normalized output.
+- Improved file download fallback path when ZIP packaging fails by direct browser download attempts.
+- Strengthened AI Studio deep extraction (Shadow DOM + CodeMirror/ProseMirror + fallback value/slot paths + delayed hydration handling).
+- Improved detected `others` summary to transparently show code/link/quote counts.
+- Synced runtime/docs metadata to `0.10.18`.
 
 ## 0.10.13 - 2026-02-18
 - Added dedicated ChatGPT sandbox file workflow with popup actions: **Scan File Links** and **Resolve + Download All**.

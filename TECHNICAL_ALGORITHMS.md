@@ -2,7 +2,25 @@
 # Code generated with support from CODEX and CODEX CLI.
 # Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 
-# Technical Algorithms (v0.10.17)
+# Technical Algorithms (v0.10.18)
+
+## 0) Local Agent Core (Air-Gapped)
+
+### 0.1 Visual + Semantic Pipeline (`smart_agent.js`)
+- `detectMainScrollableRoot()` scores likely content roots.
+- `getVisualCandidates()` extracts visible candidate blocks by geometry/style/signals.
+- `NodeScorer.scoreNode()` classifies USER/MODEL/CODE/IMAGE/FILE/NOISE with confidence/evidence.
+- `clusterCandidatesVertically()` groups candidates into message-like stacks.
+
+### 0.2 Self-Healing Planner (`ai_engine.js`)
+- Offline deterministic repair synthesizes fallback extraction plans when no recipe exists.
+- Returns strict structured plan JSON with metrics and evidence.
+
+### 0.3 Recipe Memory (`recipes_store.js`)
+- IndexedDB-based local recipe persistence keyed by host/fingerprint.
+
+### 0.4 Hidden Runtime (`offscreen.js`)
+- Offscreen document keeps local planner and recipe memory reachable without user-facing UI.
 
 ## A) Extraction Algorithms (`content.js`)
 

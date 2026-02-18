@@ -1,12 +1,45 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// background.js - State & Log Manager v0.10.16
+// background.js - State & Log Manager v0.10.18
+
+console.log('[LOCAL-ONLY] AI engine network disabled; offline models only.');
+
+function patchLocalOnlyNetworkGuards() {
+  const allow = ['chrome-extension://', 'data:', 'blob:'];
+  const check = (url) => {
+    const u = String(url || '');
+    if (allow.some((p) => u.startsWith(p))) return;
+    throw new Error(`[LOCAL-ONLY] blocked outbound request: ${u}`);
+  };
+  const originalFetch = globalThis.fetch?.bind(globalThis);
+  if (originalFetch) {
+    globalThis.fetch = (input, init) => {
+      const url = typeof input === 'string' ? input : input?.url;
+      check(url);
+      return originalFetch(input, init);
+    };
+  }
+}
+
+patchLocalOnlyNetworkGuards();
 
 const tabStates = {};
 const appLogs = [];
 const pendingCaptures = new Map();
 let captureSeq = 0;
+
+async function ensureOffscreenDocument() {
+  if (!chrome.offscreen?.createDocument) return false;
+  const hasDoc = await chrome.offscreen.hasDocument();
+  if (hasDoc) return true;
+  await chrome.offscreen.createDocument({
+    url: 'offscreen.html',
+    reasons: ['DOM_PARSER'],
+    justification: 'Run local-only AI planning and recipe memory in hidden context.'
+  });
+  return true;
+}
 
 function createCapture(tabId, expectedFilename, timeoutMs = 9000) {
   const captureId = `cap_${Date.now()}_${captureSeq += 1}`;
@@ -170,6 +203,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           setTimeout(poll, 160);
         };
         poll();
+        return true;
+      }
+
+      case 'RUN_LOCAL_AGENT_ENGINE': {
+        ensureOffscreenDocument().then((ok) => {
+          if (!ok) {
+            sendResponse({ ok: false, error: 'offscreen_unavailable' });
+            return;
+          }
+          chrome.runtime.sendMessage({ action: 'OFFSCREEN_RUN_AGENT', payload: message.payload || {} }, (res) => {
+            sendResponse(res || { ok: false, error: chrome.runtime.lastError?.message || 'offscreen_no_response' });
+          });
+        });
         return true;
       }
 

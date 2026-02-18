@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "mappings": {
+    "content.js": ["tests/bdd/local_agent.feature"],
+    "smart_agent.js": ["tests/bdd/local_agent.feature"],
+    "ai_engine.js": ["tests/bdd/local_agent.feature"],
+    "script.js": ["tests/bdd/local_agent.feature"],
+    "background.js": ["tests/bdd/local_agent.feature"]
+  }
+}

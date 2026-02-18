@@ -2,10 +2,14 @@
 # Code generated with support from CODEX and CODEX CLI.
 # Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 
-# Platform Engine Architecture (v0.10.17)
+# Platform Engine Architecture (v0.10.18)
 
 ## Objective
 Build one dedicated extraction engine per chat platform, then normalize all outputs to a secure shared model for export.
+
+## Local Agent Layer
+- Shared local agent (`smart_agent.js`) runs visual+semantic extraction independent of brittle CSS classes.
+- Offscreen local planner (`ai_engine.js`) provides deterministic repair path and recipe-based reuse.
 
 ## Engine Separation
 

@@ -2,7 +2,7 @@
 # Code generated with support from CODEX and CODEX CLI.
 # Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 
-# Security, Privacy & Compliance Model (v0.10.17)
+# Security, Privacy & Compliance Model (v0.10.18)
 
 > Important: This document is a technical implementation guide, not legal advice.
 
@@ -10,6 +10,7 @@
 - Chat content (text/code/images) is processed locally in-browser.
 - The extension does not use remote AI APIs for extraction.
 - No telemetry endpoint is configured for chat payload transfer.
+- LocalOnlyGuard blocks outbound extension-page network (fetch/XHR/WebSocket) except extension/data/blob schemes.
 
 ## 2) Data Classification
 - **Sensitive user data**: prompts, model responses, uploaded images.

@@ -1,6 +1,6 @@
 # 🚀 AI Chat Exporter Ultimate
 
-**Version**: 0.10.17  
+**Version**: 0.10.18  
 **License**: MIT (Ultimate Edition)  
 **Code Source**: Generated with support from CODEX and CODEX CLI.  
 **Owner / Management**: Dr. Babak Sorkhpour ([@Drbabakskr](https://x.com/Drbabakskr))  
@@ -28,6 +28,7 @@
 *   **Embedded Media**: Automatically converts remote images to Base64 for fully offline Word and HTML documents.
 *   **Temporary Media Cache Hygiene**: Downloads media to temporary in-memory cache during export, embeds output, then clears cache at begin/finish/close.
 *   **Security Hardened**: Input sanitization prevents XSS in exported files.
+*   **Local Agent (Air-Gapped Ready)**: Visual + semantic local extraction with self-test and recipe fallback; no external AI API required.
 
 ## 🧠 Prompt & Extraction Strategy by Service (Summary)
 
@@ -75,6 +76,23 @@ const extractor = new AIStudioExtractor(utils, options);
 const result = await extractor.scrape();
 console.log(result.system_instruction, result.turns.length);
 ```
+
+## 🧩 Local Agent Runtime (Offline)
+
+- `smart_agent.js`: visual candidate mining + semantic scoring + clustering.
+- `ai_engine.js` + `offscreen.js`: hidden local planner bridge.
+- `recipes_store.js`: local IndexedDB recipe memory.
+- `options.html`: local planner/debug toggles.
+
+### Privacy / Network Guard
+- Extension pages enforce strict CSP with local script/connect policy.
+- LocalOnlyGuard blocks outbound network in extension contexts for fetch/XHR/WebSocket except local extension/data/blob schemes.
+- Startup log: `[LOCAL-ONLY] AI engine network disabled; offline models only.`
+
+### How to Verify Local-Only
+1. Open extension popup and run `Self-Test`.
+2. In extension DevTools, verify startup log includes `[LOCAL-ONLY] ...`.
+3. Confirm no external requests are emitted from extension pages.
 
 ## 🚀 One-Click Installation
 

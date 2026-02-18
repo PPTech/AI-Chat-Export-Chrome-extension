@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// content.js - Platform Engine Orchestrator v0.10.17
+// content.js - Platform Engine Orchestrator v0.10.18
 
 (() => {
   if (window.hasRunContent) return;
@@ -1631,6 +1631,94 @@
     return { success: true, refs: out, stats };
   }
 
+  function setDebugOverlay(items = [], enabled = false) {
+    const id = '__local_agent_overlay__';
+    const prev = document.getElementById(id);
+    if (prev) prev.remove();
+    if (!enabled) return;
+    const wrap = document.createElement('div');
+    wrap.id = id;
+    wrap.style.cssText = 'position:fixed;right:8px;bottom:8px;z-index:2147483647;background:#111;color:#fff;padding:8px 10px;border-radius:8px;max-width:320px;font:12px/1.4 monospace;box-shadow:0 6px 20px rgba(0,0,0,.4)';
+    wrap.textContent = `Local Agent Debug\nitems=${items.length}`;
+    document.body.appendChild(wrap);
+  }
+
+  async function runLocalAgentExtract(options = {}) {
+    if (!window.SmartAgent) return { success: false, error: 'SmartAgent not loaded.' };
+    const root = window.SmartAgent.detectMainScrollableRoot();
+    const candidates = window.SmartAgent.getVisualCandidates(root.rootEl, { maxScan: 8000 });
+    const clusters = window.SmartAgent.clusterCandidatesVertically(candidates);
+    const items = window.SmartAgent.extractFromCandidates(candidates);
+
+    const messages = items.filter((i) => i.type === 'USER_TURN' || i.type === 'MODEL_TURN');
+    const images = items.filter((i) => i.type === 'IMAGE_BLOCK');
+    const files = items.filter((i) => i.type === 'FILE_CARD');
+    const result = {
+      ts: Date.now(),
+      task: 'extract',
+      usedMode: 'visual+semantic',
+      plan: { root: root.method, candidateCap: 8000 },
+      metrics: { candidates: candidates.length, clusters: clusters.length },
+      items,
+      evidence: root.evidence
+    };
+
+    window.__LOCAL_AGENT_STATE__ = {
+      ts: Date.now(),
+      pageUrl: location.href,
+      rootSig: root.method,
+      candidatesCount: candidates.length,
+      mode: 'visual+semantic',
+      diagnostics: root.evidence
+    };
+    window.__LOCAL_AGENT_RESULT__ = result;
+
+    setDebugOverlay(items, !!options.debug);
+    return {
+      success: true,
+      summary: { messages: messages.length, images: images.length, files: files.length },
+      result
+    };
+  }
+
+  async function runLocalAgentSelfTest(options = {}) {
+    const ext = await runLocalAgentExtract(options);
+    if (!ext.success) return ext;
+    let healed = false;
+    try {
+      const planner = await sendRuntime({ action: 'RUN_LOCAL_AGENT_ENGINE', payload: { task: 'extract_messages', hostname: location.hostname, pageUrl: location.href, candidatesFeatures: (ext.result?.items || []).slice(0, 30) } });
+      healed = !!planner?.recipe;
+    } catch {
+      healed = false;
+    }
+    const s = ext.summary;
+    const pass = s.messages > 0 && (s.images > 0 || s.files > 0);
+    const warn = s.messages > 0 && s.images === 0 && s.files === 0;
+    if (pass) return { success: true, status: 'PASS', details: `Extracted messages=${s.messages}, images=${s.images}, files=${s.files}, self-heal=${healed ? 'yes' : 'fallback-only'}` };
+    if (warn) return { success: true, status: 'WARN', details: `Messages detected but no media/files. messages=${s.messages}, self-heal=${healed ? 'yes' : 'fallback-only'}` };
+    return { success: true, status: 'FAIL', details: 'No viable candidates found.' };
+  }
+
+  async function fetchBlobFromPage(url) {
+    const clean = String(url || '').trim().replace(/[\]\)>'"\s]+$/g, '');
+    if (!/^https?:\/\//i.test(clean) && !/^blob:|^data:/i.test(clean)) {
+      return { success: false, error: 'Unsupported URL scheme for page fetch.' };
+    }
+    try {
+      const resp = await fetch(clean, { credentials: 'include' });
+      if (!resp.ok) return { success: false, error: `HTTP ${resp.status}` };
+      const blob = await resp.blob();
+      const dataUrl = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(String(reader.result || ''));
+        reader.readAsDataURL(blob);
+      });
+      return { success: true, dataUrl, mime: blob.type || 'application/octet-stream', size: blob.size };
+    } catch (error) {
+      return { success: false, error: error.message || 'page_fetch_failed' };
+    }
+  }
+
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'ping_content') {
       sendResponse({ injected: true, href: location.href, domain: location.hostname });
@@ -1667,6 +1755,18 @@
     if (request.action === 'resolve_download_chatgpt_file_links') {
       const tabId = sender?.tab?.id || null;
       resolveAndDownloadChatGptFileLinks(tabId).then(sendResponse);
+      return true;
+    }
+    if (request.action === 'extract_local_agent') {
+      runLocalAgentExtract(request.options || {}).then(sendResponse);
+      return true;
+    }
+    if (request.action === 'self_test_local_agent') {
+      runLocalAgentSelfTest(request.options || {}).then(sendResponse);
+      return true;
+    }
+    if (request.action === 'fetch_blob_page') {
+      fetchBlobFromPage(request.url).then(sendResponse);
       return true;
     }
     return false;

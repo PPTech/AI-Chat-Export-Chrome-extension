@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// script.js - Main Controller v0.10.17
+// script.js - Main Controller v0.10.18
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
@@ -16,6 +16,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnScanFiles = document.getElementById('btn-scan-files');
   const btnResolveDownload = document.getElementById('btn-resolve-download');
   const btnPingContent = document.getElementById('btn-ping-content');
+  const btnExtractLocal = document.getElementById('btn-extract-local');
+  const btnSelfTest = document.getElementById('btn-self-test');
   const btnLogs = document.getElementById('btn-download-logs');
   const btnExportConfig = document.getElementById('btn-export-config');
   const checkImages = document.getElementById('check-images');
@@ -24,6 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const checkZip = document.getElementById('check-zip');
   const checkPhotoZip = document.getElementById('check-photo-zip');
   const checkExportFiles = document.getElementById('check-export-files');
+  const checkDebugOverlay = document.getElementById('check-debug-overlay');
 
   const settingsModal = document.getElementById('settings-modal');
   const errorModal = document.getElementById('error-modal');
@@ -35,6 +38,40 @@ document.addEventListener('DOMContentLoaded', () => {
   const SETTINGS_KEY = 'ai_exporter_settings_v1';
   const tempMediaCache = createTempMediaCache();
 
+  function installLocalOnlyGuard() {
+    const allow = ['chrome-extension://', 'data:', 'blob:'];
+    const check = (url) => {
+      const u = String(url || '');
+      if (allow.some((p) => u.startsWith(p))) return;
+      throw new Error(`[LOCAL-ONLY] blocked outbound request: ${u}`);
+    };
+    const originalFetch = window.fetch?.bind(window);
+    if (originalFetch) {
+      window.fetch = (input, init) => {
+        const url = typeof input === 'string' ? input : input?.url;
+        check(url);
+        return originalFetch(input, init);
+      };
+    }
+    const XHR = window.XMLHttpRequest;
+    if (XHR) {
+      const open = XHR.prototype.open;
+      XHR.prototype.open = function patchedOpen(method, url, ...rest) {
+        check(url);
+        return open.call(this, method, url, ...rest);
+      };
+    }
+    const WS = window.WebSocket;
+    if (WS) {
+      window.WebSocket = function blockedWS(url, protocols) {
+        check(url);
+        return new WS(url, protocols);
+      };
+    }
+  }
+
+  installLocalOnlyGuard();
+
   function getDefaultSettings() {
     return {
       convertImages: true,
@@ -42,7 +79,8 @@ document.addEventListener('DOMContentLoaded', () => {
       rawHtml: false,
       zip: false,
       photoZip: true,
-      exportFiles: true
+      exportFiles: true,
+      debugOverlay: false
     };
   }
 
@@ -54,6 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
       zip: !!checkZip.checked,
       photoZip: !!checkPhotoZip.checked,
       exportFiles: !!checkExportFiles.checked,
+      debugOverlay: !!checkDebugOverlay?.checked,
       updatedAt: new Date().toISOString()
     };
   }
@@ -66,6 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
     checkZip.checked = !!s.zip;
     checkPhotoZip.checked = !!s.photoZip;
     checkExportFiles.checked = !!s.exportFiles;
+    if (checkDebugOverlay) checkDebugOverlay.checked = !!s.debugOverlay;
   }
 
   function saveSettingsToStorage(settings) {
@@ -80,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function exportSettingsCfg(settings) {
     const lines = Object.entries(settings).map(([k, v]) => `${k}=${String(v)}`);
-    const cfg = `# AI Chat Exporter Settings\n# version=0.10.17\n${lines.join('\n')}\n`;
+    const cfg = `# AI Chat Exporter Settings\n# version=0.10.18\n${lines.join('\n')}\n`;
     const date = new Date().toISOString().slice(0, 10);
     downloadBlob(new Blob([cfg], { type: 'text/plain' }), `ai_chat_exporter_settings_${date}.cfg`);
   }
@@ -420,6 +460,27 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     showInfo('Ping OK', `injected=${response.injected}, domain=${response.domain}, href=${response.href}`);
+  };
+
+  btnExtractLocal.onclick = async () => {
+    if (!activeTabId) return;
+    const response = await sendToActiveTab({ action: 'extract_local_agent', options: { debug: !!checkDebugOverlay?.checked } });
+    if (!response?.success) {
+      showError(new Error(response?.error || 'Local extract failed.'));
+      return;
+    }
+    const summary = response.summary || { messages: 0, images: 0, files: 0 };
+    showInfo('Local Extract', `messages=${summary.messages}, images=${summary.images}, files=${summary.files}`);
+  };
+
+  btnSelfTest.onclick = async () => {
+    if (!activeTabId) return;
+    const response = await sendToActiveTab({ action: 'self_test_local_agent', options: { debug: !!checkDebugOverlay?.checked } });
+    if (!response?.success) {
+      showError(new Error(response?.error || 'Self-test failed.'));
+      return;
+    }
+    showInfo('Self-Test', `${response.status}: ${response.details}`);
   };
 
   document.getElementById('link-legal').onclick = () => showInfo('Legal', 'This is a local-processing developer version. Users remain responsible for lawful and compliant use in their jurisdiction.');
@@ -1045,8 +1106,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function fetchFileBlob(url) {
     if (!url) return null;
+    if (!activeTabId) return null;
+    const clean = sanitizeTokenUrl(url);
+    if (/^data:/i.test(clean)) return dataUrlToBlob(clean);
+    if (/^blob:/i.test(clean)) {
+      const pageBlob = await sendToActiveTab({ action: 'fetch_blob_page', url: clean });
+      if (!pageBlob?.success) return null;
+      return dataUrlToBlob(pageBlob.dataUrl);
+    }
+    const pageBlob = await sendToActiveTab({ action: 'fetch_blob_page', url: clean });
+    if (!pageBlob?.success) return null;
+    return dataUrlToBlob(pageBlob.dataUrl);
+  }
+
+  function dataUrlToBlob(dataUrl) {
     try {
-      return await tempMediaCache.fetchBlob(sanitizeTokenUrl(url));
+      const [meta, b64] = String(dataUrl || '').split(',');
+      if (!meta || !b64) return null;
+      const mime = meta.match(/data:([^;]+)/)?.[1] || 'application/octet-stream';
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+      return new Blob([bytes], { type: mime });
     } catch {
       return null;
     }

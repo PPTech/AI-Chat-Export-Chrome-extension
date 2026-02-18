@@ -13,7 +13,7 @@
   3. Stable multi-tab isolation with clear logs.
 
 
-## Platform Engine Orchestrator (v0.10.17)
+## Platform Engine Orchestrator (v0.10.18)
 - Dedicated engine per platform for selectors and role mapping.
 - Standardized message contract for export compatibility.
 - Image tokens captured before node cleanup to preserve media in rich exports.
@@ -23,3 +23,4 @@
 - Popup now includes draft menu entries for Login/Contact and analysis progress percentage.
 - Added file token export flow for chat-generated artifacts with ZIP packaging.
 - Added cross-service link scan actions and ChatGPT sandbox download diagnostics (`Ping`, scan table, PASS/WARN/FAIL logs).
+- Added local-agent layer (`smart_agent`, `ai_engine`, `offscreen`, `recipes_store`) for offline visual+semantic extraction and self-healing fallback.
