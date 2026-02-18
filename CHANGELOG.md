@@ -4,6 +4,14 @@
 
 # Changelog
 
+## 0.10.21 - 2026-02-18
+- Added `VerifierLoop` (`ExtractionVerifier`) to validate extraction quality (`FAIL` for zero messages, `WARN` for role imbalance) before finalizing output.
+- Added `SelfHealer` text-density fallback flow in `content.js` that auto-recovers when verifier returns FAIL/WARN.
+- Added robust `RecipeManager` IndexedDB wrapper (`recipes_store.js`) for recipes, chat history JSON, and image blobs with `domainFingerprint` keys.
+- Added learned-recipe first pass in extraction flow and auto-save of successful fallback selectors for future runs.
+- Extended offscreen/background message routing for recipe/chat/image storage and retrieval (`LOCAL_GET_RECIPE`, `LOCAL_SAVE_RECIPE`, `LOCAL_SAVE_CHAT`, `LOCAL_SAVE_IMAGE`).
+- Synced runtime/docs metadata to `0.10.21`.
+
 ## 0.10.20 - 2026-02-18
 - Optimized `smart_miner.js` traversal using `TreeWalker` with ShadowRoot queue to reduce scan overhead and avoid broad `querySelectorAll` sweeps.
 - Added offscreen local classifier service in `offscreen.js` with local-only network kill-switch and regex+AI hybrid artifact detection (`sandbox:/`, `/mnt/data/`, file extensions).

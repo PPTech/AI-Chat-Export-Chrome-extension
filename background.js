@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// background.js - State & Log Manager v0.10.20
+// background.js - State & Log Manager v0.10.21
 
 console.log('[LOCAL-ONLY] AI engine network disabled; offline models only.');
 
@@ -238,6 +238,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       case 'LOCAL_INIT_CLASSIFIER': {
         routeToOffscreen('OFFSCREEN_INIT_CLASSIFIER', message.payload || {}, sendResponse);
+        return true;
+      }
+
+      case 'LOCAL_GET_RECIPE': {
+        routeToOffscreen('OFFSCREEN_GET_RECIPE', message.payload || {}, sendResponse);
+        return true;
+      }
+
+      case 'LOCAL_SAVE_RECIPE': {
+        routeToOffscreen('OFFSCREEN_SAVE_RECIPE', message.payload || {}, sendResponse);
+        return true;
+      }
+
+      case 'LOCAL_SAVE_CHAT': {
+        routeToOffscreen('OFFSCREEN_SAVE_CHAT', message.payload || {}, sendResponse);
+        return true;
+      }
+
+      case 'LOCAL_SAVE_IMAGE': {
+        routeToOffscreen('OFFSCREEN_SAVE_IMAGE', message.payload || {}, sendResponse);
         return true;
       }
 

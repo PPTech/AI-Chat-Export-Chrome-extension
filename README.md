@@ -1,6 +1,6 @@
 # 🚀 AI Chat Exporter Ultimate
 
-**Version**: 0.10.20  
+**Version**: 0.10.21  
 **License**: MIT (Ultimate Edition)  
 **Code Source**: Generated with support from CODEX and CODEX CLI.  
 **Owner / Management**: Dr. Babak Sorkhpour ([@Drbabakskr](https://x.com/Drbabakskr))  
@@ -82,8 +82,12 @@ console.log(result.system_instruction, result.turns.length);
 - `smart_miner.js`: DOM-agnostic visual mining (TreeWalker traversal + geometry/style/alignment heuristics) and `extractVisualSnapshot()` diagnostics.
 - `smart_agent.js`: visual candidate mining + semantic scoring + clustering.
 - `ai_engine.js` + `offscreen.js`: hidden local planner bridge.
-- `recipes_store.js`: local IndexedDB recipe memory.
+- `recipes_store.js`: `RecipeManager` IndexedDB wrapper for learned recipes, chat history JSON, and image blobs.
 - `options.html`: local planner/debug toggles.
+
+### VerifierLoop & Self-Healing
+- `ExtractionVerifier` marks extraction as `FAIL` (no messages) or `WARN` (role imbalance), then triggers text-density self-healing.
+- Successful healing stores learned selectors by `domainFingerprint` for faster, more stable future extraction runs.
 
 ### Local classifier service
 - Offscreen local classifier supports `Question`, `Code`, and `File Attachment` tagging with regex+embedding fallback.

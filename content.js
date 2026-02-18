@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// content.js - Platform Engine Orchestrator v0.10.20
+// content.js - Platform Engine Orchestrator v0.10.21
 
 (() => {
   if (window.hasRunContent) return;
@@ -1643,18 +1643,130 @@
     document.body.appendChild(wrap);
   }
 
+
+  function computeDomainFingerprint() {
+    const root = document.body;
+    if (!root) return `${location.hostname}:empty`;
+    const sample = Array.from(root.querySelectorAll('main, article, section, div')).slice(0, 120);
+    const sig = sample.map((el) => `${el.tagName}:${el.childElementCount}`).join('|');
+    let hash = 0;
+    for (let i = 0; i < sig.length; i += 1) hash = ((hash << 5) - hash + sig.charCodeAt(i)) | 0;
+    return `${location.hostname}:${Math.abs(hash)}`;
+  }
+
+  function cssPathFor(el) {
+    if (!el || !(el instanceof Element)) return '';
+    const parts = [];
+    let cur = el;
+    let depth = 0;
+    while (cur && cur.nodeType === 1 && depth < 6) {
+      let part = cur.tagName.toLowerCase();
+      if (cur.id) {
+        part += `#${cur.id}`;
+        parts.unshift(part);
+        break;
+      }
+      const idx = cur.parentElement ? Array.from(cur.parentElement.children).indexOf(cur) + 1 : 1;
+      part += `:nth-child(${idx})`;
+      parts.unshift(part);
+      cur = cur.parentElement;
+      depth += 1;
+    }
+    return parts.join(' > ');
+  }
+
+  function runTextDensityFallback() {
+    const scored = [];
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+    let node = walker.currentNode;
+    while (node) {
+      if (node instanceof Element) {
+        const text = (node.innerText || '').trim();
+        if (text.length > 40) {
+          const rect = node.getBoundingClientRect();
+          const area = Math.max(1, rect.width * rect.height);
+          const density = text.length / area;
+          if (density > 0.003 && rect.width > 200 && rect.height > 20) {
+            scored.push({ node, text, density, rect });
+          }
+        }
+      }
+      node = walker.nextNode();
+    }
+    return scored.sort((a, b) => b.density - a.density).slice(0, 25).map((x) => ({
+      type: x.rect.left > window.innerWidth * 0.45 ? 'USER_TURN' : 'MODEL_TURN',
+      roleGuess: x.rect.left > window.innerWidth * 0.45 ? 'user' : 'model',
+      confidence: 0.58,
+      bbox: { top: Math.round(x.rect.top), left: Math.round(x.rect.left), width: Math.round(x.rect.width), height: Math.round(x.rect.height) },
+      text: x.text.slice(0, 1500),
+      href: null,
+      src: null,
+      evidence: ['text_density_fallback'],
+      selector: cssPathFor(x.node)
+    }));
+  }
+
+  class ExtractionVerifier {
+    static verify(items = []) {
+      const user = items.filter((i) => i.type === 'USER_TURN').length;
+      const model = items.filter((i) => i.type === 'MODEL_TURN').length;
+      if (items.length === 0 || (user + model) === 0) {
+        return { status: 'FAIL', reason: 'zero_messages', shouldHeal: true };
+      }
+      if (user === 0 || model === 0) {
+        return { status: 'WARN', reason: 'unbalanced_roles', shouldHeal: true };
+      }
+      return { status: 'PASS', reason: 'balanced', shouldHeal: false };
+    }
+  }
+
   async function runLocalAgentExtract(options = {}) {
     let items = [];
     let root = { method: 'miner_fallback', evidence: [] };
     let candidates = [];
     let clusters = [];
+    const domainFingerprint = computeDomainFingerprint();
 
-    if (window.SmartAgent) {
+    try {
+      const learned = await sendRuntime({ action: 'LOCAL_GET_RECIPE', payload: { host: location.hostname, domainFingerprint } });
+      const selectors = learned?.recipe?.selectors || [];
+      if (selectors.length) {
+        const recipeItems = [];
+        selectors.forEach((sel) => {
+          try {
+            const nodes = Array.from(document.querySelectorAll(sel)).slice(0, 10);
+            nodes.forEach((node) => {
+              const rect = node.getBoundingClientRect();
+              recipeItems.push({
+                type: rect.left > window.innerWidth * 0.45 ? 'USER_TURN' : 'MODEL_TURN',
+                roleGuess: rect.left > window.innerWidth * 0.45 ? 'user' : 'model',
+                confidence: 0.72,
+                bbox: { top: Math.round(rect.top), left: Math.round(rect.left), width: Math.round(rect.width), height: Math.round(rect.height) },
+                text: (node.innerText || '').trim().slice(0, 1500),
+                href: null,
+                src: null,
+                evidence: ['learned_recipe']
+              });
+            });
+          } catch {
+            // ignore malformed selectors
+          }
+        });
+        if (recipeItems.length) {
+          items = recipeItems;
+          root = { method: 'learned_recipe', evidence: [`selectors=${selectors.length}`] };
+        }
+      }
+    } catch {
+      // continue with standard flow
+    }
+
+    if (!items.length && window.SmartAgent) {
       root = window.SmartAgent.detectMainScrollableRoot();
       candidates = window.SmartAgent.getVisualCandidates(root.rootEl, { maxScan: 8000 });
       clusters = window.SmartAgent.clusterCandidatesVertically(candidates);
       items = window.SmartAgent.extractFromCandidates(candidates);
-    } else if (window.SmartMiner) {
+    } else if (!items.length && window.SmartMiner) {
       const snap = window.SmartMiner.scanVisiblePage();
       items = (snap.snapshot || []).map((entry) => ({
         type: entry.role_guess === 'user' ? 'USER_TURN' : (entry.role_guess === 'model' ? 'MODEL_TURN' : (entry.role_guess === 'code' ? 'CODE_BLOCK' : 'NOISE')),
@@ -1667,8 +1779,25 @@
         evidence: ['smart_miner_fallback']
       })).filter((i) => i.type !== 'NOISE');
       root = { method: 'smart_miner_scan', evidence: [`total=${snap.returned}`] };
-    } else {
+    } else if (!items.length) {
       return { success: false, error: 'SmartAgent not loaded and SmartMiner fallback unavailable.' };
+    }
+
+    const verify = ExtractionVerifier.verify(items);
+    if (verify.shouldHeal) {
+      const fallbackItems = runTextDensityFallback();
+      const fallbackVerify = ExtractionVerifier.verify(fallbackItems);
+      if (fallbackItems.length && fallbackVerify.status !== 'FAIL') {
+        items = fallbackItems;
+        root = { method: 'text_density_healer', evidence: [verify.reason, 'fallback_success'] };
+        const selectors = fallbackItems.map((i) => i.selector).filter(Boolean).slice(0, 10);
+        if (selectors.length) {
+          sendRuntime({
+            action: 'LOCAL_SAVE_RECIPE',
+            payload: { host: location.hostname, domainFingerprint, selectors, quality: fallbackVerify.status, notes: 'auto-healed text density fallback' }
+          }).catch(() => null);
+        }
+      }
     }
 
     const messages = items.filter((i) => i.type === 'USER_TURN' || i.type === 'MODEL_TURN');
@@ -1720,6 +1849,7 @@
     console.table(aiTags);
 
     setDebugOverlay(items, !!options.debug);
+    sendRuntime({ action: 'LOCAL_SAVE_CHAT', payload: { host: location.hostname, title: document.title, payload: { summary: diag, items: items.slice(0, 200) } } }).catch(() => null);
     return {
       success: true,
       summary: { messages: messages.length, images: images.length, files: files.length },

@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// offscreen.js - Hidden Local Agent Bridge v0.10.20
+// offscreen.js - Hidden Local Agent Bridge v0.10.21
 
 (() => {
   const allowPrefixes = ['chrome-extension://', 'blob:', 'data:'];
@@ -118,16 +118,33 @@
       }
       return true;
     }
+
+    if (msg?.action === 'OFFSCREEN_GET_RECIPE') {
+      RecipeManager.getRecipe(msg.payload?.host, msg.payload?.domainFingerprint).then((recipe) => sendResponse({ ok: true, recipe })).catch((e) => sendResponse({ ok: false, error: e.message }));
+      return true;
+    }
+    if (msg?.action === 'OFFSCREEN_SAVE_RECIPE') {
+      RecipeManager.saveRecipe(msg.payload || {}).then(() => sendResponse({ ok: true })).catch((e) => sendResponse({ ok: false, error: e.message }));
+      return true;
+    }
+    if (msg?.action === 'OFFSCREEN_SAVE_CHAT') {
+      RecipeManager.saveChat(msg.payload || {}).then((chatId) => sendResponse({ ok: true, chatId })).catch((e) => sendResponse({ ok: false, error: e.message }));
+      return true;
+    }
+    if (msg?.action === 'OFFSCREEN_SAVE_IMAGE') {
+      RecipeManager.saveImage(msg.payload || {}).then(() => sendResponse({ ok: true })).catch((e) => sendResponse({ ok: false, error: e.message }));
+      return true;
+    }
     if (msg?.action === 'OFFSCREEN_RUN_AGENT') {
       LocalAIEngine.runIntelligentExtraction(msg.payload || {}).then(sendResponse);
       return true;
     }
     if (msg?.action === 'OFFSCREEN_PUT_RECIPE') {
-      RecipesStore.putRecipe(msg.recipe).then(() => sendResponse({ ok: true })).catch((e) => sendResponse({ ok: false, error: e.message }));
+      RecipeManager.saveRecipe(msg.payload || msg.recipe || {}).then(() => sendResponse({ ok: true })).catch((e) => sendResponse({ ok: false, error: e.message }));
       return true;
     }
     if (msg?.action === 'OFFSCREEN_GET_RECIPES') {
-      RecipesStore.getRecipesByHost(msg.host).then((recipes) => sendResponse({ ok: true, recipes })).catch((e) => sendResponse({ ok: false, error: e.message }));
+      RecipeManager.getRecipesByHost(msg.payload?.host || msg.host).then((recipes) => sendResponse({ ok: true, recipes })).catch((e) => sendResponse({ ok: false, error: e.message }));
       return true;
     }
     return false;

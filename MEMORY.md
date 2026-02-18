@@ -15,7 +15,7 @@
 
 ## Platform Engine Orchestrator
 - v0.10.19: Added SmartMiner fallback path to avoid extraction hard-failure when SmartAgent injection is missing.
-- v0.10.20: Optimized SmartMiner with TreeWalker and added offscreen local classifier routing for richer extraction diagnostics.
+- v0.10.21: Optimized SmartMiner with TreeWalker and added offscreen local classifier routing for richer extraction diagnostics.
  (v0.10.18)
 - Dedicated engine per platform for selectors and role mapping.
 - Standardized message contract for export compatibility.
