@@ -6,19 +6,19 @@
 
 const KEY = 'local_agent_options_v1';
 const plannerEnabled = document.getElementById('planner-enabled');
-const debugOverlay = document.getElementById('debug-overlay');
+const debugLogging = document.getElementById('debug-logging');
 
 chrome.storage.local.get([KEY], (res) => {
   const opts = res?.[KEY] || {};
   plannerEnabled.checked = !!opts.plannerEnabled;
-  debugOverlay.checked = !!opts.debugOverlay;
+  debugLogging.checked = !!opts.debugLogging;
 });
 
 document.getElementById('save').addEventListener('click', () => {
   chrome.storage.local.set({
     [KEY]: {
       plannerEnabled: plannerEnabled.checked,
-      debugOverlay: debugOverlay.checked,
+      debugLogging: debugLogging.checked,
       updatedAt: new Date().toISOString()
     }
   });

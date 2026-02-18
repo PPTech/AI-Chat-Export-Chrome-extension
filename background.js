@@ -300,6 +300,7 @@ function log(level, message, details = null) {
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const tabId = message.tabId || (sender.tab ? sender.tab.id : null);
+  log('COMMAND_IN', String(message?.action || 'UNKNOWN'), { tabId, from: sender?.url || sender?.origin || 'extension', payloadKeys: Object.keys(message || {}).slice(0, 20) });
 
   try {
     switch (message.action) {
@@ -331,6 +332,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       case 'LOG_ERROR':
         log('ERROR', message.message, message.details);
+        sendResponse({ success: true });
+        break;
+
+      case 'LOG_EVENT':
+        log(String(message.level || 'INFO').toUpperCase(), message.message || 'event', message.details || null);
         sendResponse({ success: true });
         break;
 

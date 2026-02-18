@@ -1806,17 +1806,7 @@
     return { success: true, refs: out, stats };
   }
 
-  function setDebugOverlay(items = [], enabled = false) {
-    const id = '__local_agent_overlay__';
-    const prev = document.getElementById(id);
-    if (prev) prev.remove();
-    if (!enabled) return;
-    const wrap = document.createElement('div');
-    wrap.id = id;
-    wrap.style.cssText = 'position:fixed;right:8px;bottom:8px;z-index:2147483647;background:#111;color:#fff;padding:8px 10px;border-radius:8px;max-width:320px;font:12px/1.4 monospace;box-shadow:0 6px 20px rgba(0,0,0,.4)';
-    wrap.textContent = `Local Agent Debug\nitems=${items.length}`;
-    document.body.appendChild(wrap);
-  }
+
 
 
   function computeDomainFingerprint() {
@@ -2072,8 +2062,15 @@
     console.log('[LOCAL_AGENT][EXTRACT]', { ...diag, aiTagsCount: aiTags.length });
     console.table(items.slice(0, 80).map((i) => ({ type: i.type, role: i.roleGuess, confidence: i.confidence, text: String(i.text || '').slice(0, 80) })));
     console.table(aiTags);
+    if (options?.debug) {
+      sendRuntime({
+        action: 'LOG_EVENT',
+        level: 'INFO',
+        message: 'content.extract_local_agent.debug',
+        details: { url: location.href, summary: diag, sampleItems: items.slice(0, 10).map((i) => ({ type: i.type, role: i.roleGuess, text: String(i.text || '').slice(0, 160) })) }
+      }).catch(() => null);
+    }
 
-    setDebugOverlay(items, !!options.debug);
     sendRuntime({ action: 'LOCAL_SAVE_CHAT', payload: { host: location.hostname, title: document.title, payload: { summary: diag, items: items.slice(0, 200) } } }).catch(() => null);
     emitSessionDiagnostics(items).catch(() => null);
     return {

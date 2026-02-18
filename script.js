@@ -29,7 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const checkZip = document.getElementById('check-zip');
   const checkPhotoZip = document.getElementById('check-photo-zip');
   const checkExportFiles = document.getElementById('check-export-files');
-  const checkDebugOverlay = document.getElementById('check-debug-overlay');
+  const checkDebugLogging = document.getElementById('check-debug-logging');
 
   const settingsModal = document.getElementById('settings-modal');
   const errorModal = document.getElementById('error-modal');
@@ -40,6 +40,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const SETTINGS_KEY = 'ai_exporter_settings_v1';
   const tempMediaCache = createTempMediaCache();
+
+  function isDebugLoggingEnabled() {
+    return !!checkDebugLogging?.checked;
+  }
+
+  function logActivity(direction, action, payload = null, level = 'INFO') {
+    const entry = {
+      ts: new Date().toISOString(),
+      direction,
+      action,
+      payload: payload == null ? null : JSON.parse(JSON.stringify(payload, (_, v) => typeof v === 'string' && v.length > 600 ? `${v.slice(0, 600)}...` : v))
+    };
+    if (isDebugLoggingEnabled()) {
+      const fn = level === 'ERROR' ? console.error : (level === 'WARN' ? console.warn : console.log);
+      fn(`[ACTIVITY][${direction}] ${action}`, entry.payload || '');
+      chrome.runtime.sendMessage({ action: 'LOG_EVENT', level, message: `${direction}:${action}`, details: entry }, () => void chrome.runtime.lastError);
+    }
+  }
 
   function installLocalOnlyGuard() {
     const allow = ['chrome-extension://', 'data:', 'blob:'];
@@ -83,7 +101,7 @@ document.addEventListener('DOMContentLoaded', () => {
       zip: false,
       photoZip: true,
       exportFiles: true,
-      debugOverlay: false
+      debugLogging: false
     };
   }
 
@@ -95,7 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
       zip: !!checkZip.checked,
       photoZip: !!checkPhotoZip.checked,
       exportFiles: !!checkExportFiles.checked,
-      debugOverlay: !!checkDebugOverlay?.checked,
+      debugLogging: !!checkDebugLogging?.checked,
       updatedAt: new Date().toISOString()
     };
   }
@@ -108,7 +126,7 @@ document.addEventListener('DOMContentLoaded', () => {
     checkZip.checked = !!s.zip;
     checkPhotoZip.checked = !!s.photoZip;
     checkExportFiles.checked = !!s.exportFiles;
-    if (checkDebugOverlay) checkDebugOverlay.checked = !!s.debugOverlay;
+    if (checkDebugLogging) checkDebugLogging.checked = !!(s.debugLogging ?? s.debugOverlay);
   }
 
   function saveSettingsToStorage(settings) {
@@ -123,7 +141,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function exportSettingsCfg(settings) {
     const lines = Object.entries(settings).map(([k, v]) => `${k}=${String(v)}`);
-    const cfg = `# AI Chat Exporter Settings\n# version=0.12.14\n${lines.join('\n')}\n`;
+    const cfg = `# AI Chat Exporter Settings\n# version=0.12.18\n${lines.join('\n')}\n`;
     const date = new Date().toISOString().slice(0, 10);
     downloadBlob(new Blob([cfg], { type: 'text/plain' }), `ai_chat_exporter_settings_${date}.cfg`);
   }
@@ -154,6 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function requestExtraction() {
+    logActivity('flow', 'requestExtraction.start', { tabId: activeTabId });
     const options = { convertImages: checkImages.checked, rawHtml: checkRawHtml.checked, highlightCode: checkCode.checked, extractFiles: checkExportFiles.checked };
     setAnalyzeProgress(25, 'Agent self-test');
 
@@ -174,14 +193,14 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     };
 
-    const selfTest = await sendToActiveTab({ action: 'self_test_local_agent', options: { debug: !!checkDebugOverlay?.checked } });
+    const selfTest = await sendToActiveTab({ action: 'self_test_local_agent', options: { debug: !!checkDebugLogging?.checked } });
     if (!selfTest?.success || selfTest?.status === 'FAIL') {
       runLegacyFallback();
       return;
     }
 
     setAnalyzeProgress(55, 'Agentic extraction');
-    const local = await sendToActiveTab({ action: 'extract_local_agent', options: { debug: !!checkDebugOverlay?.checked, requireModel: true } });
+    const local = await sendToActiveTab({ action: 'extract_local_agent', options: { debug: !!checkDebugLogging?.checked, requireModel: true } });
     if (!local?.success) {
       runLegacyFallback();
       return;
@@ -285,6 +304,7 @@ document.addEventListener('DOMContentLoaded', () => {
       updateDetectedSummary(res.messages || [], res.dataset || null);
       setAnalyzeProgress(100, 'Completed');
       chrome.runtime.sendMessage({ action: 'SET_DATA', tabId: activeTabId, data: res });
+      logActivity('outbound', 'runtime.SET_DATA', { tabId: activeTabId, platform: res?.platform, messages: res?.messages?.length || 0 });
       updateExportBtn();
       return;
     }
@@ -375,10 +395,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const el = document.getElementById('detected-summary');
     if (!el) return;
     const c = computeDetectedCounts(messages, dataset);
-    el.textContent = `Detected: ${c.messages} messages • ${c.photos} photos • ${c.files} files • ${c.others} others (code:${c.otherCodeBlocks}, links:${c.otherLinks}, quotes:${c.otherQuotes})`;
+    el.textContent = `Detected: ${c.messages} messages | ${c.photos} photos | ${c.files} files | ${c.others} others (code:${c.otherCodeBlocks}, links:${c.otherLinks}, quotes:${c.otherQuotes})`;
   }
 
   btnExport.onclick = async () => {
+    logActivity('ui', 'export.main.click', { formatCount: getSelectedFormats().length });
     const formats = Array.from(document.querySelectorAll('.format-item.selected')).map((i) => i.dataset.ext);
     if (!formats.length || !currentChatData) return;
     btnExport.disabled = true;
@@ -418,6 +439,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   btnLoadFull.onclick = () => {
+    logActivity('ui', 'fetch.full.click', { tabId: activeTabId });
     if (!activeTabId) return;
     const ok = window.confirm('Load full chat from the beginning? This may take longer for long chats.');
     if (!ok) return;
@@ -447,6 +469,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   btnExportConfig.onclick = () => {
+    logActivity('ui', 'settings.export', collectSettings());
     const settings = collectSettings();
     saveSettingsToStorage(settings);
     exportSettingsCfg(settings);
@@ -462,6 +485,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   btnExportImages.onclick = async () => {
+    logActivity('ui', 'export.images.click', { tabId: activeTabId });
     if (!currentChatData) return;
     const permPromise = requestAssetPermissionsFromGesture();
     const imageList = extractAllImageSources(currentChatData.messages, currentChatData.dataset);
@@ -510,6 +534,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   btnExportFiles.onclick = async () => {
+    logActivity('ui', 'export.files.click', { tabId: activeTabId });
     if (!currentChatData) return;
     if (!checkExportFiles.checked) return showInfo('Files Export Disabled', 'Enable "Extract and ZIP Chat Files" in Settings first.');
 
@@ -537,8 +562,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const resolved = await resolveAssetViaBroker(path);
         return resolved?.sourceUrl || resolved?.download_url || null;
       }, (progress) => {
-        if (progress.status === 'ok') console.log(`[FILES][${progress.index}/${progress.total}] ✓ ${progress.fileName}`);
-        else console.warn(`[FILES][${progress.index}/${progress.total}] ✗ ${progress.fileName}: ${progress.error || 'failed'}`);
+        if (progress.status === 'ok') console.log(`[FILES][${progress.index}/${progress.total}] OK ${progress.fileName}`);
+        else console.warn(`[FILES][${progress.index}/${progress.total}] FAIL ${progress.fileName}: ${progress.error || 'failed'}`);
       })
       : { succeeded: [], failed: filesFound, total: filesFound.length };
 
@@ -603,8 +628,9 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   btnExtractLocal.onclick = async () => {
+    logActivity('ui', 'extract.local.click', { debug: !!checkDebugLogging?.checked });
     if (!activeTabId) return;
-    const response = await sendToActiveTab({ action: 'extract_local_agent', options: { debug: !!checkDebugOverlay?.checked } });
+    const response = await sendToActiveTab({ action: 'extract_local_agent', options: { debug: !!checkDebugLogging?.checked } });
     if (!response?.success) {
       showError(new Error(response?.error || 'Local extract failed. Check Ping + Self-Test and open page console for [SmartMiner]/[SCAN]/[DL] diagnostics.'));
       return;
@@ -614,8 +640,9 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   btnSelfTest.onclick = async () => {
+    logActivity('ui', 'self.test.click', { debug: !!checkDebugLogging?.checked });
     if (!activeTabId) return;
-    const response = await sendToActiveTab({ action: 'self_test_local_agent', options: { debug: !!checkDebugOverlay?.checked } });
+    const response = await sendToActiveTab({ action: 'self_test_local_agent', options: { debug: !!checkDebugLogging?.checked } });
     if (!response?.success) {
       showError(new Error(response?.error || 'Self-test failed.'));
       return;
@@ -1037,8 +1064,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function detectScriptProfile(text) {
     const s = String(text || '');
-    const isRtl = /[֐-ࣿיִ-﷽ﹰ-ﻼ]/.test(s);
-    const isCjk = /[぀-ヿ㐀-鿿豈-﫿]/.test(s);
+    const isRtl = /[\u0590-\u08FF\uFB1D-\uFDFD\uFE70-\uFEFC]/.test(s);
+    const isCjk = /[\u3040-\u30FF\u3400-\u9FFF\uF900-\uFAFF]/.test(s);
     return { isRtl, isCjk };
   }
 
@@ -1295,12 +1322,16 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function sendToActiveTab(payload) {
+    logActivity('outbound', 'tabs.sendMessage', { tabId: activeTabId, action: payload?.action });
     return new Promise((resolve) => {
       chrome.tabs.sendMessage(activeTabId, payload, (res) => {
         if (chrome.runtime.lastError) {
-          resolve({ success: false, error: chrome.runtime.lastError.message });
+          const error = chrome.runtime.lastError.message;
+          logActivity('inbound', 'tabs.sendMessage.error', { action: payload?.action, error }, 'ERROR');
+          resolve({ success: false, error });
           return;
         }
+        logActivity('inbound', 'tabs.sendMessage.ok', { action: payload?.action, success: !!res?.success });
         resolve(res || { success: false, error: 'No response from content script.' });
       });
     });

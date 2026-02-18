@@ -121,11 +121,11 @@
     <header>
       <div class="logo-area"><h1>AI Exporter <span class="dev-badge">ULTIMATE</span></h1></div>
       <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
-        <button id="btn-open-settings" class="icon-btn" title="Settings">⚙️</button>
-        <button id="btn-open-about" class="icon-btn" title="About draft page">ℹ️</button>
-        <button id="btn-open-login" class="icon-btn" title="Login draft page">🔐</button>
-        <button id="btn-open-contact" class="icon-btn" title="Contact draft page">✉️</button>
-        <button id="theme-btn" class="icon-btn" title="Theme">🌓</button>
+        <button id="btn-open-settings" class="icon-btn" title="Settings">Settings</button>
+        <button id="btn-open-about" class="icon-btn" title="About draft page">Info</button>
+        <button id="btn-open-login" class="icon-btn" title="Login draft page">Login</button>
+        <button id="btn-open-contact" class="icon-btn" title="Contact draft page">Contact</button>
+        <button id="theme-btn" class="icon-btn" title="Theme">Theme</button>
       </div>
     </header>
 
@@ -136,7 +136,7 @@
         <div id="stats-view" style="display: none;">
           <div class="message-count" id="msg-count">0</div>
           <div class="message-label">Messages Ready</div>
-          <div class="message-label" id="detected-summary" style="margin-top:2px;">Detected: 0 messages • 0 photos • 0 files • 0 others</div>
+          <div class="message-label" id="detected-summary" style="margin-top:2px;">Detected: 0 messages | 0 photos | 0 files | 0 others</div>
           <div id="analyze-progress" class="message-label" style="margin-top:4px;">Analysis Progress: 0%</div>
           <div class="action-row">
             <button id="btn-preview" class="action-btn" title="Preview extracted messages before export">Preview</button>
@@ -153,7 +153,7 @@
           </div>
           <div class="action-row">
             <label class="action-btn" style="display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;">
-              <input type="checkbox" id="check-debug-overlay" /> Debug Overlay
+              <input type="checkbox" id="check-debug-logging" /> Debug Logging
             </label>
           </div>
           <div class="action-row">
@@ -182,7 +182,7 @@
     </main>
 
     <footer>
-      <div class="copyright">Dr. Babak Sorkhpour © 2026</div>
+      <div class="copyright">Dr. Babak Sorkhpour (c) 2026</div>
       <div class="footer-links">
         <span id="link-legal" title="Open legal usage information">Legal</span>
         <span id="link-security" title="Open security model information">Security</span>
@@ -193,7 +193,7 @@
     <!-- Settings Modal -->
     <div id="settings-modal" class="modal-overlay">
         <div class="modal-content">
-            <div class="modal-header"><h2>Settings</h2><button id="btn-close-settings" style="border:none;background:none;cursor:pointer;">✕</button></div>
+            <div class="modal-header"><h2>Settings</h2><button id="btn-close-settings" style="border:none;background:none;cursor:pointer;">Close</button></div>
             <div class="settings-list">
                 <div class="setting-item">
                     <label class="setting-row"><span class="setting-label">Include Images</span><input type="checkbox" id="check-images" checked title="Enable image extraction and embedding for rich formats"></label>
@@ -228,7 +228,7 @@
     <div id="error-modal" class="modal-overlay">
         <div class="modal-content">
             <div class="error-header">
-                <span style="font-size: 24px;">⚠️</span>
+                <span style="font-size: 24px;">Warning</span>
                 <span class="error-title">Export Failed</span>
             </div>
             <div class="error-detail-box" id="error-msg">Unknown error occurred.</div>
@@ -240,7 +240,7 @@
     <!-- About Modal -->
     <div id="about-modal" class="modal-overlay">
         <div class="modal-content">
-            <div class="modal-header"><h2>About</h2><button id="btn-close-about" style="border:none;background:none;cursor:pointer;">✕</button></div>
+            <div class="modal-header"><h2>About</h2><button id="btn-close-about" style="border:none;background:none;cursor:pointer;">Close</button></div>
             <div class="about-row"><span class="about-label">Owner & Management</span>Dr. Babak Sorkhpour <a href="https://x.com/Drbabakskr" target="_blank" class="about-link">(@Drbabakskr)</a></div>
             <div class="about-row"><span class="about-label">Author & Engineering</span>Dr. Babak Sorkhpour with support from Gemini, Google AI Studio, ChatGPT, OpenAI Codex and Claude.ai.</div>
             <div class="about-row"><span class="about-label">License</span>MIT License (Ultimate Edition)</div>
