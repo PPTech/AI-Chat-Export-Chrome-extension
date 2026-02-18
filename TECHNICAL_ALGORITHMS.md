@@ -2,7 +2,7 @@
 # Code generated with support from CODEX and CODEX CLI.
 # Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 
-# Technical Algorithms (v0.10.7)
+# Technical Algorithms (v0.10.8)
 
 ## A) Extraction Algorithms (`content.js`)
 
@@ -103,3 +103,8 @@
 ### C3. Local-only Constraint
 - No endpoint in runtime sends chat text, image, or code to external servers.
 - Downloads are browser-local, user-triggered actions.
+
+### B6. File Token and ZIP Export Strategy
+- Extract file links from message nodes (`a[href]`, `download`, `data-file-url`).
+- Normalize to `[[FILE:url|name]]` tokens.
+- On Export Files action, fetch each file in current session and pack with ZIP writer.

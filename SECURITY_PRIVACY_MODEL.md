@@ -2,7 +2,7 @@
 # Code generated with support from CODEX and CODEX CLI.
 # Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 
-# Security, Privacy & Compliance Model (v0.10.7)
+# Security, Privacy & Compliance Model (v0.10.8)
 
 > Important: This document is a technical implementation guide, not legal advice.
 

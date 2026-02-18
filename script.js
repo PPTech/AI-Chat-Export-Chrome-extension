@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// script.js - Main Controller v0.10.7
+// script.js - Main Controller v0.10.8
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnClearAll = document.getElementById('btn-clear-all');
   const btnPreview = document.getElementById('btn-preview');
   const btnExportImages = document.getElementById('btn-export-images');
+  const btnExportFiles = document.getElementById('btn-export-files');
   const btnLogs = document.getElementById('btn-download-logs');
   const btnExportConfig = document.getElementById('btn-export-config');
   const checkImages = document.getElementById('check-images');
@@ -19,6 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const checkRawHtml = document.getElementById('check-raw-html');
   const checkZip = document.getElementById('check-zip');
   const checkPhotoZip = document.getElementById('check-photo-zip');
+  const checkExportFiles = document.getElementById('check-export-files');
 
   const settingsModal = document.getElementById('settings-modal');
   const errorModal = document.getElementById('error-modal');
@@ -38,7 +40,8 @@ document.addEventListener('DOMContentLoaded', () => {
       highlightCode: true,
       rawHtml: false,
       zip: false,
-      photoZip: true
+      photoZip: true,
+      exportFiles: true
     };
   }
 
@@ -49,6 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
       rawHtml: !!checkRawHtml.checked,
       zip: !!checkZip.checked,
       photoZip: !!checkPhotoZip.checked,
+      exportFiles: !!checkExportFiles.checked,
       updatedAt: new Date().toISOString()
     };
   }
@@ -60,6 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
     checkRawHtml.checked = !!s.rawHtml;
     checkZip.checked = !!s.zip;
     checkPhotoZip.checked = !!s.photoZip;
+    checkExportFiles.checked = !!s.exportFiles;
   }
 
   function saveSettingsToStorage(settings) {
@@ -74,7 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function exportSettingsCfg(settings) {
     const lines = Object.entries(settings).map(([k, v]) => `${k}=${String(v)}`);
-    const cfg = `# AI Chat Exporter Settings\n# version=0.10.7\n${lines.join('\n')}\n`;
+    const cfg = `# AI Chat Exporter Settings\n# version=0.10.8\n${lines.join('\n')}\n`;
     const date = new Date().toISOString().slice(0, 10);
     downloadBlob(new Blob([cfg], { type: 'text/plain' }), `ai_chat_exporter_settings_${date}.cfg`);
   }
@@ -93,7 +98,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function requestExtraction() {
-    const options = { convertImages: checkImages.checked, rawHtml: checkRawHtml.checked, highlightCode: checkCode.checked };
+    const options = { convertImages: checkImages.checked, rawHtml: checkRawHtml.checked, highlightCode: checkCode.checked, extractFiles: checkExportFiles.checked };
     setAnalyzeProgress(30, 'Extracting');
     chrome.tabs.sendMessage(activeTabId, { action: 'extract_chat', options }, (res) => {
       if (chrome.runtime.lastError) {
@@ -107,6 +112,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function processData(res) {
+    if (!res) {
+      document.getElementById('platform-badge').textContent = 'No Data (Retrying)';
+      setAnalyzeProgress(0, 'Retrying');
+      return;
+    }
     if (res?.success) {
       currentChatData = res;
       document.getElementById('platform-badge').textContent = res.platform;
@@ -262,6 +272,33 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
+  btnExportFiles.onclick = async () => {
+    if (!currentChatData) return;
+    if (!checkExportFiles.checked) return showInfo('Files Export Disabled', 'Enable "Extract and ZIP Chat Files" in Settings first.');
+    const filesFound = extractAllFileSources(currentChatData.messages);
+    if (!filesFound.length) return showError(new Error('No chat-generated file links were detected.'));
+
+    const packed = [];
+    let i = 1;
+    for (const file of filesFound) {
+      try {
+        const blob = await fetch(file.url).then((r) => r.blob());
+        const ext = (blob.type.split('/')[1] || 'bin').replace('jpeg', 'jpg');
+        const name = file.name.includes('.') ? file.name : `${file.name}.${ext}`;
+        const data = new Uint8Array(await blob.arrayBuffer());
+        packed.push({ name: `${String(i).padStart(3, '0')}_${name}`, content: data, mime: blob.type || 'application/octet-stream' });
+        i += 1;
+      } catch {
+        // skip failed file
+      }
+    }
+    if (!packed.length) return showError(new Error('Detected files could not be downloaded from current session.'));
+    const zip = await createRobustZip(packed);
+    const date = new Date().toISOString().slice(0, 10);
+    const platformPrefix = (currentChatData.platform || 'Export').replace(/[^a-zA-Z0-9]/g, '');
+    downloadBlob(zip, `${platformPrefix}_${date}_chat_files.zip`);
+  };
+
   document.getElementById('link-legal').onclick = () => showInfo('Legal', 'This is a local-processing developer version. Users remain responsible for lawful and compliant use in their jurisdiction.');
   document.getElementById('link-security').onclick = () => showInfo('Security', 'Security baseline: local-only processing, sanitized exports, no eval, and optional risky Raw HTML mode.');
   document.getElementById('btn-close-info').onclick = () => closeModal(infoModal);
@@ -339,6 +376,24 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
     return Array.from(set);
+  }
+
+  function extractAllFileSources(messages) {
+    const files = [];
+    const fileRegex = /\[\[FILE:([^|\]]+)\|([^\]]+)\]\]/g;
+    for (const m of messages || []) {
+      let match;
+      while ((match = fileRegex.exec(m.content || '')) !== null) {
+        const rawUrl = (match[1] || '').trim();
+        const fileName = (match[2] || 'file.bin').trim();
+        if (!rawUrl) continue;
+        const safeName = fileName.replace(/[\/:*?"<>|]+/g, '_') || 'file.bin';
+        files.push({ url: rawUrl, name: safeName });
+      }
+    }
+    const uniq = new Map();
+    files.forEach((f) => { if (!uniq.has(f.url)) uniq.set(f.url, f); });
+    return Array.from(uniq.values());
   }
 
   async function generateContent(fmt, data) {

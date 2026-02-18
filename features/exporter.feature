@@ -41,3 +41,10 @@ Feature: Multi-platform chat export reliability
     Given extracted messages contain Arabic and CJK content
     When the user exports as pdf
     Then PDF text blocks are rendered with script-aware wrapping and direction
+
+
+  Scenario: Export chat-generated files as ZIP
+    Given extracted messages contain file tokens
+    And Extract and ZIP Chat Files is enabled
+    When the user clicks Export Files
+    Then detected files are downloaded as one ZIP package

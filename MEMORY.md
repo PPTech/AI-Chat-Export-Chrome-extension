@@ -13,7 +13,7 @@
   3. Stable multi-tab isolation with clear logs.
 
 
-## Platform Engine Orchestrator (v0.10.7)
+## Platform Engine Orchestrator (v0.10.8)
 - Dedicated engine per platform for selectors and role mapping.
 - Standardized message contract for export compatibility.
 - Image tokens captured before node cleanup to preserve media in rich exports.
@@ -21,3 +21,4 @@
 - Runtime cache encryption enabled in `background.js` (AES-GCM, in-memory per-tab state).
 - Settings persist locally and are exportable as `.cfg` backup.
 - Popup now includes draft menu entries for Login/Contact and analysis progress percentage.
+- Added file token export flow for chat-generated artifacts with ZIP packaging.

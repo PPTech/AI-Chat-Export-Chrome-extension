@@ -141,6 +141,7 @@
             <button id="btn-preview" class="action-btn" title="Preview extracted messages before export">Preview</button>
             <button id="btn-load-full" class="action-btn" title="Load full chat history from beginning">Fetch Full</button>
             <button id="btn-export-images" class="action-btn" title="Export all detected chat images separately">Export Photos</button>
+            <button id="btn-export-files" class="action-btn" title="Export files created in chat as ZIP">Export Files</button>
           </div>
         </div>
         <div id="empty-view">
@@ -168,7 +169,7 @@
       <div class="footer-links">
         <span id="link-legal" title="Open legal usage information">Legal</span>
         <span id="link-security" title="Open security model information">Security</span>
-        <span class="version">v0.10.7</span>
+        <span class="version">v0.10.8</span>
       </div>
     </footer>
 
@@ -194,6 +195,9 @@
                 </div>
                 <div class="setting-item">
                     <label class="setting-row"><span class="setting-label">Pack Photos as ZIP</span><input type="checkbox" id="check-photo-zip" checked title="If enabled, Export Photos creates one ZIP file. If disabled, photos are exported in batch files."></label>
+                </div>
+                <div class="setting-item">
+                    <label class="setting-row"><span class="setting-label">Extract and ZIP Chat Files</span><input type="checkbox" id="check-export-files" checked title="If enabled, detected chat file links are exported and packed into ZIP."></label>
                 </div>
                 <!-- Encryption Removed per Security Audit -->
                 <button id="btn-export-config" title="Download settings as local .cfg file" style="width:100%; padding:8px; border:1px solid var(--border); background:var(--surface); border-radius:6px; cursor:pointer; font-size:11px; margin-bottom:6px;">Export Settings Config (.cfg)</button>
@@ -224,7 +228,7 @@
             <div class="about-row"><span class="about-label">Author & Engineering</span>Dr. Babak Sorkhpour with support from Gemini 2.0 Flash (Google)</div>
             <div class="about-row"><span class="about-label">License</span>MIT License (Ultimate Edition)</div>
             <div class="about-row"><span class="about-label">Technology</span>Generated via CODEX CLI</div>
-            <div class="about-row"><span class="about-label">Version</span>0.10.7</div>
+            <div class="about-row"><span class="about-label">Version</span>0.10.8</div>
             <button class="close-btn" id="btn-ack-about">Close</button>
         </div>
     </div>

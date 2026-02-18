@@ -2,7 +2,7 @@
 # Code generated with support from CODEX and CODEX CLI.
 # Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 
-# Platform Engine Architecture (v0.10.7)
+# Platform Engine Architecture (v0.10.8)
 
 ## Objective
 Build one dedicated extraction engine per chat platform, then normalize all outputs to a secure shared model for export.
@@ -65,3 +65,8 @@ Build one dedicated extraction engine per chat platform, then normalize all outp
 - The architecture is local-only.
 - No external AI inferencing endpoint is used for extraction.
 - No chat message content is transmitted outside the user browser session.
+
+
+## Extended Normalized Tokens
+- Image tokens: `[[IMG:...]]`
+- File tokens: `[[FILE:url|name]]`

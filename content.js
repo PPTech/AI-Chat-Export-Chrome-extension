@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// content.js - Platform Engine Orchestrator v0.10.7
+// content.js - Platform Engine Orchestrator v0.10.8
 
 (() => {
   if (window.hasRunContent) return;
@@ -239,7 +239,7 @@
       matches: () => location.hostname.includes('chatgpt.com') || location.hostname.includes('chat.openai.com'),
       async extract(options, utils) {
         const analysis = await runChatGptDomAnalysis(options.fullLoad ? 'full' : 'visible', options, utils);
-        const messages = analysis.messages.map((m) => ({
+        let messages = analysis.messages.map((m) => ({
           role: m.inferredRole.role === 'assistant' ? 'Assistant' : (m.inferredRole.role === 'user' ? 'User' : 'Unknown'),
           content: composeContentFromBlocks(m.parsed.blocks, options),
           meta: {
@@ -249,6 +249,18 @@
             evidence: m.inferredRole.evidence
           }
         }));
+
+        if (!messages.length) {
+          const fallbackNodes = utils.adaptiveQuery('main [data-message-author-role], main article, main [data-testid*="message"], main section', 1)
+            .filter((n) => utils.hasMeaningfulContent(n));
+          messages = [];
+          for (const node of fallbackNodes) {
+            const marker = `${node.getAttribute('data-message-author-role') || ''} ${node.getAttribute('data-testid') || ''}`.toLowerCase();
+            const isUser = marker.includes('user');
+            const content = await utils.extractNodeContent(node, options, isUser, this.name, 'chatgpt-fallback');
+            if (content) messages.push({ role: isUser ? 'User' : 'Assistant', content, meta: { platform: this.name, sourceSelector: 'chatgpt-fallback' } });
+          }
+        }
 
         const isCodex = /chatgpt\.com\/codex/i.test(location.href);
         const platformName = isCodex ? 'ChatGPT Codex' : this.name;
@@ -406,11 +418,32 @@
       return [...new Set(tokens)];
     },
 
+    async extractFileTokensFromNode(node) {
+      const links = Array.from(node.querySelectorAll('a[href], a[download], button[data-file-url], [data-file-url]'));
+      const tokens = [];
+      for (const link of links) {
+        const href = link.getAttribute('href') || link.getAttribute('data-file-url') || '';
+        if (!href) continue;
+        const abs = (() => {
+          try { return new URL(href, location.href).toString(); } catch { return ''; }
+        })();
+        if (!abs) continue;
+        const isFileLike = /download|attachment|file|uploads|backend-api\/(files|estuary\/content)|blob:|\/artifact\//i.test(abs)
+          || !!link.getAttribute('download');
+        if (!isFileLike) continue;
+        const nameRaw = link.getAttribute('download') || link.textContent || abs.split('/').pop() || 'file.bin';
+        const safeName = nameRaw.replace(/[\/:*?"<>|]+/g, '_').trim() || 'file.bin';
+        tokens.push(`[[FILE:${abs}|${safeName}]]`);
+      }
+      return [...new Set(tokens)];
+    },
+
     async extractNodeContent(node, options, isUser) {
       if (!node) return '';
       if (options.rawHtml) return node.innerHTML || '';
 
       const imageTokens = await this.extractImageTokensFromNode(node, options, isUser);
+      const fileTokens = options.extractFiles ? await this.extractFileTokensFromNode(node) : [];
 
       const clone = node.cloneNode(true);
       clone.querySelectorAll('script,style,button,svg,[role="tooltip"],.sr-only').forEach((n) => n.remove());
@@ -424,8 +457,9 @@
 
       const text = (clone.innerText || '').replace(/\n{3,}/g, '\n\n').trim();
       const images = imageTokens.length ? `\n${imageTokens.join('\n')}\n` : '';
-      return `${text}${images}`.trim();
-    }
+      const files = fileTokens.length ? `\n${fileTokens.join('\n')}\n` : '';
+      return `${text}${images}${files}`.trim();
+    },
   };
 
   function domSignature(el) {

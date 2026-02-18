@@ -1,6 +1,6 @@
 # 🚀 AI Chat Exporter Ultimate
 
-**Version**: 0.10.7  
+**Version**: 0.10.8  
 **License**: MIT (Ultimate Edition)  
 **Code Source**: Generated with support from CODEX and CODEX CLI.  
 **Owner / Management**: Dr. Babak Sorkhpour ([@Drbabakskr](https://x.com/Drbabakskr))  
@@ -79,7 +79,8 @@ To install the developer preview directly from GitHub:
    - ZIP bundling
 7. Click **Generate Package**.
 8. To export only images, click **Export Photos**.
-9. If needed, download logs from Settings for troubleshooting.
+9. To export chat-generated files, click **Export Files** (ZIP output).
+10. If needed, download logs from Settings for troubleshooting.
 
 ## 🔬 Manual Engineering Commands
 
@@ -226,4 +227,12 @@ This prevents image token corruption and ensures valid `<img>` tags are emitted 
 ### Limitations
 - PDF remains image-backed pages for robust multilingual glyph rendering.
 - Text selection in PDF is limited compared to pure text-PDF output.
+
+
+
+## 📦 Chat-Generated File Export
+
+- Enable **Extract and ZIP Chat Files** in Settings.
+- Extraction records file references as `[[FILE:url|name]]` tokens.
+- Click **Export Files** to download all detected files as a single ZIP package.
 
