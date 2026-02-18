@@ -240,7 +240,7 @@ let gestureProofToken = "";
     }
 
     return {
-      schemaVersion: '0.11.5',
+      schemaVersion: '0.12.0',
       messages,
       attachments: artifacts,
       artifacts,
@@ -256,7 +256,7 @@ let gestureProofToken = "";
     const diag = dataset?.diagnostics || {};
     return {
       runId,
-      version: '0.11.5',
+      version: '0.12.0',
       host: location.hostname || 'unknown',
       pageUrl: location.href || '',
       timestamp: now,
@@ -315,7 +315,7 @@ let gestureProofToken = "";
     const el = document.getElementById('analyze-progress');
     if (!el) return;
     const bounded = Math.max(0, Math.min(100, Math.round(percent)));
-    el.textContent = `Analysis Progress: ${bounded}% (${label})`;
+    el.textContent = `Analysis Progress (messages/images/files): ${bounded}% (${label})`;
   }
 
   function computeDetectedCounts(messages = []) {
@@ -431,6 +431,9 @@ let gestureProofToken = "";
   btnLogs.onclick = () => {
     chrome.runtime.sendMessage({ action: 'GET_LOGS' }, (logs) => {
       downloadBlob(new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' }), 'ai_exporter_logs.json');
+    });
+    chrome.runtime.sendMessage({ action: 'GET_DIAGNOSTICS_JSONL' }, (diag) => {
+      if (diag?.success) downloadBlob(new Blob([(diag.lines || []).join('\n')], { type: 'application/x-ndjson' }), 'ai_exporter_diagnostics.jsonl');
     });
   };
 
@@ -1252,6 +1255,12 @@ let gestureProofToken = "";
     });
   }
 
+  async function fetchMediaViaBackgroundProxy(url) {
+    return new Promise((resolve) => {
+      chrome.runtime.sendMessage({ action: "MEDIA_FETCH_PROXY", payload: { url, userInitiated: true } }, (res) => resolve(res || { success: false }));
+    });
+  }
+
   async function fetchFileBlob(url) {
     if (!url) return null;
     if (!activeTabId) return null;
@@ -1263,8 +1272,10 @@ let gestureProofToken = "";
       return dataUrlToBlob(pageBlob.dataUrl);
     }
     const pageBlob = await resolveAssetViaBroker(clean);
-    if (!pageBlob?.success) return null;
-    return dataUrlToBlob(pageBlob.dataUrl);
+    if (pageBlob?.success) return dataUrlToBlob(pageBlob.dataUrl);
+    const bgProxy = await fetchMediaViaBackgroundProxy(clean);
+    if (!bgProxy?.success) return null;
+    return dataUrlToBlob(bgProxy.dataUrl);
   }
 
   function dataUrlToBlob(dataUrl) {

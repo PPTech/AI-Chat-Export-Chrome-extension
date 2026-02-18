@@ -49,3 +49,5 @@
 
 - v0.11.6: Added prior-vs-current verifier score delta tracking for concrete learning signal validation.
 - v0.11.6: Diagnostics bundle generator now emits required schema-aligned fields in export path.
+
+- v0.12.0: Added measurable agent payload context (redacted DOM snapshot + goals), media proxy safeguards, and intelligence scorecard governance.

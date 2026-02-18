@@ -244,3 +244,14 @@
 
 ### I3. Diagnostics Contract Builder
 - Export pipeline constructs schema-aligned diagnostics object with required top-level sections.
+
+
+## v0.12.0 AEGIS-2026 Validation Algorithms
+### J1. Redacted Context Injection
+- Content script sends capped/redacted DOM snapshot and goal directives to the agent loop payload.
+
+### J2. User-Gated Background Media Proxy
+- Background proxy allows external media retrieval only when user initiated and host allowlist checks pass.
+
+### J3. Intelligence Scoring Governance
+- Each release must publish quantified intelligence metrics and explicit residual-risk critique in scorecard docs.

@@ -26,9 +26,40 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// background.js - State & Log Manager v0.11.5
+// background.js - State & Log Manager v0.12.0
 
 console.log('[LOCAL-ONLY] AI engine network disabled; offline models only.');
+const nativeBackgroundFetch = globalThis.fetch?.bind(globalThis);
+
+
+function isAllowedMediaHost(url) {
+  try {
+    const host = new URL(url).hostname;
+    const allow = ['chatgpt.com','chat.openai.com','oaiusercontent.com','oaistatic.com','openai.com','claude.ai','anthropic.com','googleusercontent.com','gstatic.com','google.com'];
+    return allow.some((h) => host === h || host.endsWith(`.${h}`));
+  } catch {
+    return false;
+  }
+}
+
+async function mediaFetchProxy(payload = {}) {
+  const url = String(payload.url || '');
+  const userInitiated = !!payload.userInitiated;
+  if (!userInitiated) return { success: false, error: 'user_initiation_required' };
+  if (!/^https?:\/\//i.test(url)) return { success: false, error: 'unsupported_scheme' };
+  if (!isAllowedMediaHost(url)) return { success: false, error: 'host_not_allowlisted' };
+  if (!nativeBackgroundFetch) return { success: false, error: 'fetch_unavailable' };
+  try {
+    const res = await nativeBackgroundFetch(url, { credentials: 'include' });
+    if (!res.ok) return { success: false, error: `HTTP_${res.status}` };
+    const buf = await res.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    const b64 = Buffer.from(bytes).toString('base64');
+    return { success: true, mime: res.headers.get('content-type') || 'application/octet-stream', dataUrl: `data:${res.headers.get('content-type') || 'application/octet-stream'};base64,${b64}`, byteLength: bytes.length };
+  } catch (e) {
+    return { success: false, error: e.message || 'media_fetch_failed' };
+  }
+}
 
 function patchLocalOnlyNetworkGuards() {
   const allow = ['chrome-extension://', 'data:', 'blob:'];
@@ -278,6 +309,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
       }
 
+
+      case 'MEDIA_FETCH_PROXY': {
+        mediaFetchProxy(message.payload || {}).then(sendResponse);
+        return true;
+      }
 
       case 'DOWNLOAD_MHTML_ARTIFACT': {
         downloadMhtmlArtifact(message.payload || {}).then(sendResponse);

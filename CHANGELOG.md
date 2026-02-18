@@ -144,3 +144,11 @@
 - Extended recipe memory load path to include prior verifier score and compute per-run score delta in agent learning trace.
 - Added canonical diagnostics bundle generation in popup pipeline with required top-level fields.
 - Added verifier metrics read API in IndexedDB layer for measurable run-over-run comparisons.
+
+## 0.12.0 - AEGIS 2026 Agentic Upgrade
+- Added user-initiated background Media Fetch Proxy with strict host allowlist and denial for non-user-initiated requests.
+- Enriched agent payload with redacted DOM snapshot (<=40k chars) and explicit extraction goals.
+- Extended plan metadata (`confidence`, `why`) and trace fields (`goalHints`, `domSnapshotChars`).
+- Exposed purge-learning action in options UI.
+- Added 2026 validation tests and BDD scenarios plus an explicit Intelligence Scorecard document.
+- Synchronized release version to 0.12.0 across manifest/version metadata.

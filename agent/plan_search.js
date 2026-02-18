@@ -1,12 +1,14 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// agent/plan_search.js - Multi-attempt plan synthesis v0.11.0
+// agent/plan_search.js - Multi-attempt plan synthesis v0.12.0
 
 (function () {
   function planFromSelection(nodes, idx) {
     const selectors = nodes.map((n) => n.selector).filter(Boolean).slice(0, 12);
     return {
+      confidence: Number((0.9 - idx * 0.08).toFixed(2)),
+      why: ['ranked_by_model_scores', 'selector_window_plan'],
       id: `plan_${idx + 1}`,
       selectors,
       attempt: idx + 1,

@@ -1833,6 +1833,12 @@
     }
   }
 
+
+  function buildRedactedDomSnapshot(limit = 40000) {
+    const txt = String(document.body?.innerText || '').replace(/https?:\/\/\S+/g, '[REDACTED_URL]').replace(/[A-Za-z0-9_\-]{24,}/g, '[REDACTED_TOKEN]');
+    return txt.slice(0, limit);
+  }
+
   async function runLocalAgentExtract(options = {}) {
     let items = [];
     let root = { method: 'miner_fallback', evidence: [] };
@@ -1906,7 +1912,9 @@
           hostname: location.hostname,
           domainFingerprint,
           pageUrl: location.href,
-          candidatesFeatures: items
+          candidatesFeatures: items,
+          domSnapshot: buildRedactedDomSnapshot(40000),
+          extractionGoals: { includeMessages: true, includeImages: true, includeFiles: true }
         }
       });
       const learnedItems = agentRun?.bestExtraction?.items || [];

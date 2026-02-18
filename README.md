@@ -384,3 +384,8 @@ This prevents image token corruption and ensures valid `<img>` tags are emitted 
 - Trace now distinguishes real local model load from fallback mode with explicit reason fields.
 - Agent diagnostics include prior score and score delta to verify whether extraction quality improved between runs.
 - Export diagnostics bundle now conforms to the required top-level diagnostics contract.
+
+## AEGIS 2026 Validation & Intelligence Score (v0.12.0)
+- Agent payload now includes redacted DOM context + explicit extraction goals for measurable planning.
+- Background now supports user-initiated media proxy fetch with strict allowlist enforcement.
+- See `docs/INTELLIGENCE_SCORECARD.md` for quantified intelligence readiness and brutal self-critique.

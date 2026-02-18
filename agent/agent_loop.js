@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// agent/agent_loop.js - Observe/Plan/Act/Verify/Learn orchestrator v0.11.5
+// agent/agent_loop.js - Observe/Plan/Act/Verify/Learn orchestrator v0.12.0
 
 (function () {
   function mapPredictedType(item, predicted) {
@@ -15,6 +15,8 @@
     const host = payload.hostname || payload.host || 'unknown';
     const domainFingerprint = payload.domainFingerprint || 'default';
     const candidates = payload.candidatesFeatures || [];
+    const goalHints = payload.extractionGoals || { includeMessages: true, includeImages: true, includeFiles: true };
+    const domSnapshotRedacted = String(payload.domSnapshot || "").slice(0, 40000);
     const mem = await self.AgentRecipeMemory.load(host, domainFingerprint);
     const priorScore = Number(mem?.verifier?.verifierMetrics?.score || 0);
     const learnerState = mem.learner || await self.AgentOnlineLearner.load(mem.key);
@@ -30,7 +32,7 @@
       const selected = candidates.filter((c) => !plan.selectors.length || plan.selectors.includes(c.selector));
       const acted = selected.map((s, idx) => mapPredictedType(s, classes[idx]?.label));
       const metrics = self.AgentVerifier.verify(acted);
-      attempts.push({ planId: plan.id, attempt: plan.attempt, metrics });
+      attempts.push({ planId: plan.id, attempt: plan.attempt, confidence: plan.confidence || 0, why: plan.why || [], metrics });
       if (metrics.score > best.score) best = { score: metrics.score, items: acted, plan, metrics };
       if (metrics.score > 0.82) break;
     }
@@ -63,6 +65,8 @@
       mode: 'agent_loop',
       bestExtraction: { items: best.items, recipe: best.plan, metrics: best.metrics },
       trace: {
+        goalHints,
+        domSnapshotChars: domSnapshotRedacted.length,
         priorBestScore: priorScore,
         model: features.embeddingMeta.model,
         embeddingsCount: features.embeddingMeta.embeddingsCount,
