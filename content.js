@@ -23,11 +23,11 @@
  * [INSERT_CONTACT_EMAIL_OR_WEBSITE]
  * -------------------------------------------------------------------------
  */
-// License: AGPL-3.0
+// License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
-// content.js - Platform Engine Orchestrator v0.12.11
+// content.js - Platform Engine Orchestrator v0.12.12
 
 (() => {
   if (window.hasRunContent) return;
@@ -628,7 +628,7 @@
             if (seen.has(el)) return;
             const textLen = (el.textContent || '').trim().length;
             if (textLen < 20 && !el.querySelector('pre,code,a[href],img')) return;
-            if (el.closest('button,[role="button"],nav,aside,header,.group\/status,[class*="transition"], [class*="grid-rows"]')) return;
+            if (el.closest('button,[role="button"],nav,aside,header,.group\\/status,[class*="transition"], [class*="grid-rows"]')) return;
             seen.add(el);
             hits.push(el);
           });

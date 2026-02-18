@@ -1,4 +1,4 @@
-// License: AGPL-3.0
+// License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // agent/recipe_memory.js - Domain memory bridge v0.11.5

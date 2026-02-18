@@ -1,4 +1,4 @@
-// License: AGPL-3.0
+// License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // smart_miner.js - Visual Mining Engine v0.10.20

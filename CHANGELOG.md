@@ -1,8 +1,14 @@
-# License: AGPL-3.0
+# License: MIT
 # Code generated with support from CODEX and CODEX CLI.
 # Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 
 # Changelog
+
+## 0.12.12 - Claude Selector Hotfix + Version Surface Alignment
+- Fixed invalid selector crash in Claude extraction path by properly escaping class name selector `.group\/status` in `content.js`.
+- Synchronized in-app visible version labels in popup (`index.html`) with release metadata.
+- Updated settings export/version diagnostics markers to current release value.
+- Restored project header markers to `License: MIT` per project instruction.
 
 ## 0.12.11 - CSP Fetch Fix + User-Only Export Artifacts + AGPL Headers
 - Fixed extension CSP fetch violations for user-initiated media proxy by expanding allowed `connect-src` hosts in `manifest.json`.

@@ -23,7 +23,7 @@
  * [INSERT_CONTACT_EMAIL_OR_WEBSITE]
  * -------------------------------------------------------------------------
  */
-// License: AGPL-3.0
+// License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // export_core.js - AEGIS Artifact Factory v0.11.1

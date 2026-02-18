@@ -1,4 +1,4 @@
-// License: AGPL-3.0
+// License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 
@@ -12,6 +12,6 @@ test('Legal header exists in required runtime files', () => {
   for (const f of files) {
     const txt = fs.readFileSync(f, 'utf8');
     assert.match(txt, /AI Chat Export & Local Agent \(Project Aegis\)/, `missing legal header in ${f}`);
-    assert.match(txt, /License: AGPL-3.0/, `missing project AGPL ownership header in ${f}`);
+    assert.match(txt, /License: MIT/, `missing project AGPL ownership header in ${f}`);
   }
 });

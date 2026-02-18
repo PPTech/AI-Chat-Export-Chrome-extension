@@ -1,4 +1,4 @@
-// License: AGPL-3.0
+// License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // prometheus_runtime_contract.test.mjs - Prometheus runtime contracts v0.12.8
