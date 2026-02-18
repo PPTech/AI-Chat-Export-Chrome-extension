@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "AI Chat Exporter (Ultimate)",
-  "version": "0.10.26",
-  "description": "Industrial-grade multi-platform chat extraction. Secure local-first architecture. Powered by Gemini 2.0 Flash.",
+  "version": "0.11.2",
+  "description": "AEGIS-2026 local-only autonomous extractor with self-healing and secure artifact export.",
   "action": {
     "default_popup": "index.html",
     "default_title": "AI Chat Exporter"
@@ -37,6 +37,11 @@
         "*://aistudio.google.com/*"
       ],
       "js": [
+        "security_guard.js",
+        "smart_vision.js",
+        "offline_brain.js",
+        "logger.js",
+        "export_core.js",
         "visual_walker.js",
         "asset_processor.js",
         "smart_miner.js",
@@ -54,7 +59,12 @@
         "recipes_store.js",
         "models/*",
         "lib/*",
-        "export_manager.js"
+        "export_manager.js",
+        "smart_vision.js",
+        "security_guard.js",
+        "offline_brain.js",
+        "export_core.js",
+        "logger.js"
       ],
       "matches": [
         "<all_urls>"
@@ -62,6 +72,6 @@
     }
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self'"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'"
   }
 }

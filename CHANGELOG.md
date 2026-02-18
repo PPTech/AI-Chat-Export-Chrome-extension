@@ -94,3 +94,23 @@
 - Updated About section text with requested Author & Engineering wording, supported platforms list, and AI-generated-code disclosure.
 - Improved Claude file/artifact detection heuristics for downloadable files and artifact-like nodes.
 - Synced runtime/docs metadata to `0.10.10`.
+
+## 0.11.0 - True Local AI Agent
+- Added agent loop modules (`/agent`) with local embeddings, multi-plan search, verifier scoring, and online learner persistence.
+- Wired `OFFSCREEN_RUN_AGENT` into extraction critical path and persisted learning artifacts in IndexedDB.
+- Added AssetBroker allowlist controls, gesture proof token flow, and docs/test scaffolding for proof-of-intelligence.
+
+## 0.11.1 - AEGIS-2026 Documentation + Security/Export Hardening
+- Added production modules: `smart_vision.js`, `security_guard.js`, `offline_brain.js`, `export_core.js`, and `logger.js` with explicit local-only and anti-tamper controls.
+- Updated `manifest.json` to include AEGIS modules in content-script pipeline, strict extension CSP, and web-accessible resource declarations.
+- Extended `background.js` with `DOWNLOAD_MHTML_ARTIFACT` action for service-worker download management of generated MHTML artifacts.
+- Added unit tests validating AEGIS security allowlist and local offline classifier code-wrapping behavior.
+- Expanded project documentation and memory baselines for version-control traceability, module responsibilities, and release-readiness handoff.
+
+## 0.11.2 - Agentic Default Path + Continuity Governance
+- Set extraction default flow to `self_test_local_agent` + `extract_local_agent` first, with legacy `extract_chat` fallback only on failure.
+- Added selector emission in `smart_agent.js` candidates/items to improve recipe persistence and iterative learning quality.
+- Added local asset verification gate (`scripts/verify_local_assets.cjs`) and bundled local runtime fallback asset (`lib/transformers.min.js`) with model metadata.
+- Expanded asset allowlists for modern ChatGPT/CDN host patterns including `*.oaiusercontent.com`.
+- Added continuity/security docs: `AGENTIC_ARCHITECTURE.md`, `SECURITY.md`, `RELEASE_CHECKLIST.md`, `PROJECT_CONTINUITY_BRIEF.md`, `diagnostics_schema.json`, and `pts_map.json`.
+- Added A/B and diagnostics contract integration tests.

@@ -134,6 +134,15 @@
       return true;
     }
 
+    if (msg?.action === 'OFFSCREEN_EMBED_TEXTS') {
+      self.LocalEmbeddingEngine.embed(msg?.payload?.texts || []).then((res) => sendResponse({ ok: true, vectors: (res.vectors || []).map((v) => Array.from(v)), model: res.modelInfo })).catch((e) => sendResponse({ ok: false, error: e.message }));
+      return true;
+    }
+    if (msg?.action === 'OFFSCREEN_PURGE_LEARNING') {
+      RecipeManager.purgeLearning().then(() => sendResponse({ ok: true })).catch((e) => sendResponse({ ok: false, error: e.message }));
+      return true;
+    }
+
     if (msg?.action === 'OFFSCREEN_GET_RECIPE') {
       RecipeManager.getRecipe(msg.payload?.host, msg.payload?.domainFingerprint).then((recipe) => sendResponse({ ok: true, recipe })).catch((e) => sendResponse({ ok: false, error: e.message }));
       return true;

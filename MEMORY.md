@@ -27,3 +27,14 @@
 - Added file token export flow for chat-generated artifacts with ZIP packaging.
 - Added cross-service link scan actions and ChatGPT sandbox download diagnostics (`Ping`, scan table, PASS/WARN/FAIL logs).
 - Added local-agent layer (`smart_agent`, `ai_engine`, `offscreen`, `recipes_store`) for offline visual+semantic extraction and self-healing fallback.
+
+
+## AEGIS-2026 Memory Snapshot (v0.11.1)
+- Added architecture-level modules for visual extraction, offline text classification, secure network interception, MHTML generation, and forensic logging.
+- Manifest pipeline now injects security + vision + brain modules before content orchestration.
+- Release quality gate now includes targeted A/B checks for security allowlist and code auto-wrap normalization.
+- Documentation maturity objective: each release produces operator-ready details enabling full handover to a new engineer.
+
+- v0.11.2: Agentic extraction promoted to default runtime path with legacy fallback retained for resilience.
+- v0.11.2: SmartAgent now emits selector data, unlocking better recipe reuse and online learning convergence.
+- v0.11.2: Continuity docs and PTS mapping added for faster onboarding and safer release governance.

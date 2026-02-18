@@ -1,0 +1,9 @@
+{
+  "script.js": ["tests/integration/ab_default_agent_path.test.mjs"],
+  "content.js": ["tests/integration/proof_of_intelligence.test.mjs"],
+  "smart_agent.js": ["tests/unit/feature_extractor.test.mjs"],
+  "security_guard.js": ["tests/unit/aegis_modules.test.mjs"],
+  "offline_brain.js": ["tests/unit/aegis_modules.test.mjs"],
+  "manifest.json": ["tests/integration/diagnostics_contract.test.mjs"],
+  "docs/*": ["tests/integration/diagnostics_contract.test.mjs"]
+}

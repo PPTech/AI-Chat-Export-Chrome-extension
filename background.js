@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// background.js - State & Log Manager v0.10.26
+// background.js - State & Log Manager v0.11.2
 
 console.log('[LOCAL-ONLY] AI engine network disabled; offline models only.');
 
@@ -25,6 +25,22 @@ function patchLocalOnlyNetworkGuards() {
 patchLocalOnlyNetworkGuards();
 
 const tabStates = {};
+
+async function downloadMhtmlArtifact(payload = {}) {
+  const fileName = payload.fileName || `aegis_export_${new Date().toISOString().slice(0, 10)}.mhtml`;
+  const content = String(payload.content || '');
+  if (!content) return { success: false, error: 'empty_mhtml' };
+  const blob = new Blob([content], { type: 'multipart/related' });
+  const url = URL.createObjectURL(blob);
+  return new Promise((resolve) => {
+    chrome.downloads.download({ url, filename: fileName, saveAs: false }, (downloadId) => {
+      setTimeout(() => URL.revokeObjectURL(url), 12_000);
+      if (chrome.runtime.lastError) resolve({ success: false, error: chrome.runtime.lastError.message });
+      else resolve({ success: true, downloadId });
+    });
+  });
+}
+
 const appLogs = [];
 const pendingCaptures = new Map();
 let captureSeq = 0;
@@ -118,7 +134,7 @@ chrome.webRequest.onBeforeRequest.addListener((details) => {
       downloadId: null
     });
   }
-}, { urls: ['https://chatgpt.com/*', 'https://chat.openai.com/*'] });
+}, { urls: ['https://chatgpt.com/*', 'https://chat.openai.com/*', 'https://*.oaistatic.com/*', 'https://*.openai.com/*', 'https://*.oaiusercontent.com/*', 'https://claude.ai/*', 'https://*.anthropic.com/*', 'https://gemini.google.com/*', 'https://aistudio.google.com/*', 'https://*.googleusercontent.com/*'] });
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (!changeInfo?.url) return;
@@ -221,6 +237,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
       }
 
+
+      case 'DOWNLOAD_MHTML_ARTIFACT': {
+        downloadMhtmlArtifact(message.payload || {}).then(sendResponse);
+        return true;
+      }
+
       case 'RUN_LOCAL_AGENT_ENGINE': {
         routeToOffscreen('OFFSCREEN_RUN_AGENT', message.payload || {}, sendResponse);
         return true;
@@ -261,6 +283,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
       }
 
+
+      case 'LOCAL_PURGE_LEARNING': {
+        routeToOffscreen('OFFSCREEN_PURGE_LEARNING', message.payload || {}, sendResponse);
+        return true;
+      }
       default:
         sendResponse({ success: false, error: 'Unknown action' });
         break;

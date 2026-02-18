@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// smart_agent.js - Local Visual + Semantic Agent v0.10.22
+// smart_agent.js - Local Visual + Semantic Agent v0.11.1
 
 (() => {
   if (window.SmartAgent) return;
@@ -56,6 +56,27 @@
     });
     SmartAgentRuntime.mo.observe(rootEl, { childList: true, subtree: true });
     SmartAgentRuntime.initialized = true;
+  }
+
+
+  function cssPathFor(el) {
+    if (!el || !(el instanceof Element)) return '';
+    if (el.id) return `#${CSS.escape(el.id)}`;
+    const parts = [];
+    let cur = el;
+    let depth = 0;
+    while (cur && cur.nodeType === 1 && depth < 5) {
+      const tag = cur.tagName.toLowerCase();
+      const cls = (cur.className || '').toString().trim().split(/\s+/).filter(Boolean).slice(0, 2).map((c) => `.${CSS.escape(c)}`).join('');
+      const parent = cur.parentElement;
+      if (!parent) { parts.unshift(`${tag}${cls}`); break; }
+      const siblings = Array.from(parent.children).filter((n) => n.tagName === cur.tagName);
+      const idx = siblings.indexOf(cur) + 1;
+      parts.unshift(`${tag}${cls}:nth-of-type(${idx})`);
+      cur = parent;
+      depth += 1;
+    }
+    return parts.join(' > ');
   }
 
   class NodeScorer {
@@ -203,7 +224,8 @@
               display: cs.display
             },
             signals: signal,
-            evidence: [bg !== bodyBg ? 'bg_diff_from_body' : 'bg_similar_body', signal.clickable ? 'clickable' : 'not_clickable']
+            evidence: [bg !== bodyBg ? 'bg_diff_from_body' : 'bg_similar_body', signal.clickable ? 'clickable' : 'not_clickable'],
+            selector: cssPathFor(el)
           });
         }
       };
@@ -248,7 +270,8 @@
           text: candidate.textSnippet,
           href: candidate.attrsWhitelist.href || null,
           src: candidate.attrsWhitelist.src || null,
-          evidence: scored.evidence
+          evidence: scored.evidence,
+          selector: candidate.selector || ''
         });
       }
       return items;

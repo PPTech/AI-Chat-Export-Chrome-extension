@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Local Agent Trace",
+  "type": "object",
+  "required": ["model", "embeddingsCount", "attempts", "chosenPlanId", "elapsedMs", "learned"],
+  "properties": {
+    "model": {
+      "type": "object",
+      "required": ["name", "hash"],
+      "properties": {
+        "name": { "type": "string" },
+        "hash": { "type": "string" }
+      }
+    },
+    "embeddingsCount": { "type": "integer", "minimum": 0 },
+    "embeddingMs": { "type": "integer", "minimum": 0 },
+    "attempts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["planId", "attempt", "metrics"],
+        "properties": {
+          "planId": { "type": "string" },
+          "attempt": { "type": "integer", "minimum": 1 },
+          "metrics": { "type": "object" }
+        }
+      }
+    },
+    "chosenPlanId": { "type": ["string", "null"] },
+    "elapsedMs": { "type": "integer", "minimum": 0 },
+    "learned": {
+      "type": "object",
+      "required": ["updates", "positives", "negatives"],
+      "properties": {
+        "updates": { "type": "integer", "minimum": 0 },
+        "positives": { "type": "integer", "minimum": 0 },
+        "negatives": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}
