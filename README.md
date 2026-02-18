@@ -1,6 +1,6 @@
 # 🚀 AI Chat Exporter Ultimate
 
-**Version**: 0.10.14  
+**Version**: 0.10.15  
 **License**: MIT (Ultimate Edition)  
 **Code Source**: Generated with support from CODEX and CODEX CLI.  
 **Owner / Management**: Dr. Babak Sorkhpour ([@Drbabakskr](https://x.com/Drbabakskr))  
@@ -68,7 +68,7 @@ To install the developer preview directly from GitHub:
 
 ## 🛠 Manual Usage (Step-by-step)
 
-1. Open a supported chat tab (`chatgpt.com`, `claude.ai`, `gemini.google.com`, `aistudio.google.com`).
+1. Open a supported chat tab (`chatgpt.com`, `chat.openai.com`, `claude.ai`, `gemini.google.com`, `aistudio.google.com`).
 2. Open extension popup.
 3. If chat is long, click **Fetch Full** and confirm loading from beginning.
 4. Check message count and preview with **Preview**.
@@ -82,9 +82,10 @@ To install the developer preview directly from GitHub:
 8. To export only images, click **Export Photos**.
 9. To export chat-generated files, click **Export Files** (ZIP output).
 10. For ChatGPT sandbox files (`sandbox:/mnt/data/...`):
+   - Click **Ping** first to verify extension injection state for the active tab.
    - Click **Scan File Links** to detect file references and print diagnostic tables in page console.
    - Click **Resolve + Download All** to dynamically resolve sandbox URLs and download each file sequentially.
-   - Inspect `window.__CHATGPT_FILE_LINKS__` in page DevTools for full explainable `FileRef` objects.
+   - Inspect `window.__SANDBOX_FILE_REFS__` and `window.__CHATGPT_FILE_LINKS__` in page DevTools for full explainable diagnostics.
 11. If needed, download logs from Settings for troubleshooting.
 12. For Claude live diagnostics, run the extension message action `discover_claude_files` to inspect detected file/download elements in `window.CLAUDE_FILE_DISCOVERY`.
 

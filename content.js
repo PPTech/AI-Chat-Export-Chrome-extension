@@ -1,11 +1,12 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// content.js - Platform Engine Orchestrator v0.10.14
+// content.js - Platform Engine Orchestrator v0.10.15
 
 (() => {
   if (window.hasRunContent) return;
   window.hasRunContent = true;
+  console.log(`[INJECT] content script active on ${location.href}`);
 
   const CHATGPT_ANALYSIS_KEY = 'CHATGPT_DOM_ANALYSIS';
 
@@ -1198,79 +1199,148 @@
     };
   }
 
+  function getRootsDeep(startRoot) {
+    const roots = [];
+    const stack = [startRoot];
+    while (stack.length) {
+      const root = stack.pop();
+      if (!root) continue;
+      roots.push(root);
+      const elements = root.querySelectorAll ? Array.from(root.querySelectorAll('*')) : [];
+      elements.forEach((el) => {
+        if (el.shadowRoot) stack.push(el.shadowRoot);
+      });
+    }
+    return roots;
+  }
+
+  function queryAllDeep(startRoot, selector) {
+    const out = [];
+    const roots = getRootsDeep(startRoot);
+    roots.forEach((root) => {
+      if (!root.querySelectorAll) return;
+      out.push(...Array.from(root.querySelectorAll(selector)));
+    });
+    return out;
+  }
+
   function detectConversationRootForFiles() {
-    const candidates = Array.from(document.querySelectorAll('main,section,div,[role="main"],[role="log"],article'));
+    const candidates = queryAllDeep(document, 'main,section,div,[role="main"],[role="log"],article');
     const scored = candidates.map((el) => {
       const cs = getComputedStyle(el);
       const scroll = ['auto', 'scroll', 'overlay'].includes(cs.overflowY) ? 1 : 0;
       const ratio = el.scrollHeight / Math.max(1, el.clientHeight);
-      const density = ((el.innerText || '').trim().length / Math.max(1, el.querySelectorAll('*').length));
-      const links = el.querySelectorAll('a[href],button,[role="button"]').length;
-      const score = (scroll * 2) + Math.min(3, ratio) + Math.min(3, density / 30) + Math.min(2, links / 15);
-      return { el, score, evidence: [`scroll:${scroll}`, `ratio:${ratio.toFixed(2)}`, `density:${density.toFixed(2)}`, `links:${links}`] };
-    }).filter((c) => c.score >= 2.2).sort((a, b) => b.score - a.score);
+      const textLength = (el.innerText || '').trim().length;
+      const descCount = Math.max(1, el.querySelectorAll('*').length);
+      const density = textLength / descCount;
+      const links = el.querySelectorAll('a[href]').length;
+      const code = el.querySelectorAll('pre code').length;
+      const imgs = el.querySelectorAll('img').length;
+      const score = (scroll * 2) + Math.min(3, ratio) + Math.min(2, density / 35) + Math.min(1.5, links / 12) + Math.min(1.2, code / 5) + Math.min(1.2, imgs / 6);
+      return {
+        el,
+        score,
+        evidence: [`scroll:${scroll}`, `ratio:${ratio.toFixed(2)}`, `density:${density.toFixed(2)}`, `links:${links}`, `code:${code}`, `imgs:${imgs}`]
+      };
+    }).sort((a, b) => b.score - a.score);
     const top = scored[0];
-    if (!top) {
-      return { rootEl: document.body, confidence: 0.3, method: 'fallback-body', evidence: ['no_candidate_above_threshold'] };
+    if (!top || top.score < 3.5) {
+      return { rootEl: document.body, confidence: 0.3, method: 'fallback-body', evidence: ['no_candidate_confident_enough'] };
     }
     return { rootEl: top.el, confidence: Math.min(0.99, top.score / 8), method: 'score-ranked-root', evidence: top.evidence };
   }
 
-  function discoverFileLinks(rootEl) {
+  function discoverSandboxFileRefs(rootEl) {
     const pageUrl = location.href;
     const refs = [];
+    const diagnostics = {
+      href: location.href,
+      rootSignature: rootEl ? buildDomPath(rootEl, 3) : 'body',
+      sourceCounts: { anchor: 0, text: 0, button: 0 },
+      warnings: []
+    };
     const sandboxRegex = /sandbox:(?:\/\/)?\/mnt\/data\/[^\s)\]>"']+/gi;
 
-    Array.from(rootEl.querySelectorAll('a')).forEach((a) => {
-      const href = a.getAttribute('href') || '';
+    const anchors = queryAllDeep(rootEl, 'a');
+    anchors.forEach((a) => {
+      const rawAttr = a.getAttribute('href') || '';
+      const absHref = a.href || '';
       const text = (a.textContent || '').trim();
-      const hit = href.startsWith('sandbox:') || /\/mnt\/data\//i.test(href) || /sandbox:(?:\/\/)?\/mnt\/data\//i.test(text);
+      const hit = rawAttr.startsWith('sandbox:') || absHref.startsWith('sandbox:')
+        || /\/mnt\/data\//i.test(rawAttr) || /\/mnt\/data\//i.test(absHref)
+        || /sandbox:(?:\/\/)?\/mnt\/data\//i.test(text);
       if (!hit) return;
-      const ref = createFileRef({ source: 'anchor', rawHref: href, displayText: text, sandboxPath: href || text, element: a, pageUrl });
+      const sandboxPath = canonicalSandboxPath(rawAttr) || canonicalSandboxPath(text) || canonicalSandboxPath(absHref);
+      const ref = createFileRef({ source: 'anchor', rawHref: rawAttr || absHref, displayText: text, sandboxPath, element: a, pageUrl });
+      ref.rawAttr = rawAttr || null;
+      ref.absHref = absHref || null;
+      ref.hasClickEl = true;
       ref.resolved.evidence.push('anchor_match');
-      if (/^https?:\/\//i.test(href)) {
+      if (/^https?:\/\//i.test(rawAttr || absHref)) {
         ref.resolved.status = 'direct';
-        ref.resolved.finalUrl = href;
+        ref.resolved.finalUrl = rawAttr || absHref;
         ref.resolved.method = 'direct_href';
         ref.resolved.evidence.push('href_is_http(s)');
       }
       refs.push(ref);
+      diagnostics.sourceCounts.anchor += 1;
     });
 
-    const walker = document.createTreeWalker(rootEl, NodeFilter.SHOW_TEXT);
-    while (walker.nextNode()) {
-      const node = walker.currentNode;
-      const text = node.textContent || '';
-      const matches = text.match(sandboxRegex) || [];
-      matches.forEach((match) => {
-        const parent = node.parentElement;
-        const ref = createFileRef({ source: 'text', rawHref: match, displayText: match, sandboxPath: match, element: parent, pageUrl });
-        ref.resolved.evidence.push('text_regex_match');
-        refs.push(ref);
-      });
-    }
+    const roots = getRootsDeep(rootEl);
+    roots.forEach((root) => {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) {
+        const node = walker.currentNode;
+        const text = node.textContent || '';
+        const matches = text.match(sandboxRegex) || [];
+        matches.forEach((match) => {
+          const parent = node.parentElement || rootEl;
+          const mappedAnchor = parent?.querySelector?.('a[href]') || null;
+          const ref = createFileRef({ source: 'text', rawHref: match, displayText: match, sandboxPath: match, element: mappedAnchor || parent, pageUrl });
+          ref.hasClickEl = !!mappedAnchor;
+          ref.resolved.evidence.push(mappedAnchor ? 'text_mapped_to_anchor' : 'text_regex_match');
+          refs.push(ref);
+          diagnostics.sourceCounts.text += 1;
+        });
+      }
+    });
 
-    const buttonCandidates = Array.from(rootEl.querySelectorAll('button,[role="button"],div[tabindex]')).filter((el) => {
+    const clickable = queryAllDeep(rootEl, 'button,[role="button"],div[tabindex],a[role="button"]');
+    clickable.forEach((el) => {
       const txt = (el.textContent || '').trim();
-      return /download|mnt\/data|\.(pdf|xlsx|pptx|zip|png|jpe?g|txt|csv|json|py|md)\b/i.test(txt);
-    });
-    buttonCandidates.forEach((el) => {
+      const style = getComputedStyle(el);
+      const fileish = /\/mnt\/data\/|sandbox:|\.(pdf|xlsx|pptx|zip|png|jpe?g|webp|md|txt|csv|json|py)\b/i.test(txt);
+      const maybeClickable = el.tagName === 'BUTTON' || el.getAttribute('role') === 'button' || style.cursor === 'pointer';
+      if (!fileish || !maybeClickable) return;
       const nestedAnchor = el.querySelector('a[href]');
       const rawHref = nestedAnchor?.getAttribute('href') || '';
-      const text = (el.textContent || '').trim();
-      const match = text.match(sandboxRegex)?.[0] || rawHref;
-      if (!match) return;
-      const ref = createFileRef({ source: 'button', rawHref, displayText: text, sandboxPath: match, element: nestedAnchor || el, pageUrl });
+      const absHref = nestedAnchor?.href || '';
+      const sandboxPath = canonicalSandboxPath(txt) || canonicalSandboxPath(rawHref) || canonicalSandboxPath(absHref);
+      if (!sandboxPath && !rawHref && !absHref) return;
+      const ref = createFileRef({ source: 'button', rawHref: rawHref || absHref, displayText: txt, sandboxPath: sandboxPath || rawHref || absHref, element: nestedAnchor || el, pageUrl });
+      ref.rawAttr = rawHref || null;
+      ref.absHref = absHref || null;
+      ref.hasClickEl = true;
       ref.resolved.evidence.push('button_widget_match');
       refs.push(ref);
+      diagnostics.sourceCounts.button += 1;
     });
 
     const dedupe = new Map();
     refs.forEach((ref) => {
-      const key = ref.sandboxPath || `${ref.rawHref}|${ref.filename}`;
+      const key = ref.sandboxPath || `${ref.rawAttr || ref.rawHref || ''}|${ref.absHref || ''}|${ref.displayText || ''}`;
       if (!dedupe.has(key)) dedupe.set(key, ref);
     });
-    return Array.from(dedupe.values());
+
+    const normalized = Array.from(dedupe.values());
+    if (!normalized.length) diagnostics.warnings.push('no_sandbox_refs_detected');
+    window.__SANDBOX_FILE_REFS__ = {
+      ts: Date.now(),
+      href: location.href,
+      refs: normalized,
+      diagnostics
+    };
+    return { refs: normalized, diagnostics };
   }
 
   function findElementForRef(ref, rootEl) {
@@ -1285,7 +1355,7 @@
     }
     const text = `${ref.sandboxPath || ''} ${ref.filename || ''}`.trim();
     if (!text) return null;
-    return Array.from(rootEl.querySelectorAll('a,button,[role="button"]')).find((el) => {
+    return queryAllDeep(rootEl, 'a,button,[role="button"],div[tabindex]').find((el) => {
       const t = (el.textContent || '').trim();
       const href = el.getAttribute('href') || '';
       return t.includes(ref.filename) || href.includes(ref.filename) || href.includes(ref.sandboxPath || '');
@@ -1323,9 +1393,17 @@
       return ref;
     }
 
-    const armed = await sendRuntime({ action: 'START_DOWNLOAD_CAPTURE', tabId, expectedFilename: ref.filename, timeoutMs: 9000 });
+    const armed = await sendRuntime({ action: 'START_DOWNLOAD_CAPTURE', tabId, expectedFilename: ref.filename, timeoutMs: 10000 });
     ref.resolved.evidence.push('capture_armed');
-    element.click();
+    const beforeHref = location.href;
+    let dispatchResult = false;
+    try {
+      dispatchResult = element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+      if (typeof element.click === 'function') element.click();
+    } catch {
+      // continue to capture attempt
+    }
+    ref.resolved.evidence.push(`dispatch_result:${dispatchResult}`);
     await wait(180);
     const captured = await sendRuntime({ action: 'WAIT_DOWNLOAD_CAPTURE', captureId: armed.captureId });
     if (captured?.success && captured.finalUrl) {
@@ -1334,6 +1412,10 @@
       ref.resolved.method = captured.method || 'downloads_api';
       ref.resolved.evidence.push(captured.method === 'webrequest' ? 'webrequest_captured' : 'downloads_api_captured');
       return ref;
+    }
+
+    if (location.href !== beforeHref) {
+      ref.resolved.evidence.push('tab_navigation_detected');
     }
 
     ref.resolved.status = 'failed';
@@ -1393,16 +1475,22 @@
       return { success: false, error: 'This scanner supports ChatGPT domains only.' };
     }
     const root = detectConversationRootForFiles();
-    const refs = discoverFileLinks(root.rootEl);
+    const scanned = discoverSandboxFileRefs(root.rootEl);
+    const refs = scanned.refs;
     window.__CHATGPT_FILE_LINKS__ = refs;
     const summary = {
       total: refs.length,
       sandbox: refs.filter((r) => !!r.sandboxPath).length,
-      direct: refs.filter((r) => /^https?:\/\//i.test(r.rawHref || '')).length
+      direct: refs.filter((r) => /^https?:\/\//i.test(r.rawHref || '')).length,
+      clickable: refs.filter((r) => !!r.hasClickEl).length,
+      anchor: refs.filter((r) => r.source === 'anchor').length,
+      text: refs.filter((r) => r.source === 'text').length,
+      button: refs.filter((r) => r.source === 'button').length
     };
-    console.log('[FileScan] root:', root.method, root.confidence, root.evidence);
-    console.table(refs.map((r) => ({ filename: r.filename, sandboxPath: r.sandboxPath, rawHref: r.rawHref, source: r.source })));
-    return { success: true, root, refs, summary };
+    console.log(`[SCAN] total=${summary.total} clickable=${summary.clickable} sourceBreakdown anchor=${summary.anchor},text=${summary.text},button=${summary.button}`);
+    console.log('[FileScan] root:', root.method, root.confidence, root.evidence, scanned.diagnostics);
+    console.table(refs.map((r) => ({ filename: r.filename, sandboxPath: r.sandboxPath, source: r.source, hasClickEl: !!r.hasClickEl, rawAttr: r.rawAttr || '', absHref: r.absHref || '' })));
+    return { success: true, root, refs, summary, diagnostics: scanned.diagnostics };
   }
 
   async function resolveAndDownloadChatGptFileLinks(tabId) {
@@ -1429,6 +1517,10 @@
   }
 
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'ping_content') {
+      sendResponse({ injected: true, href: location.href, domain: location.hostname });
+      return true;
+    }
     if (request.action === 'extract_chat') {
       extractChatData(request.options || {}).then(sendResponse);
       return true;

@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// background.js - State & Log Manager v0.10.14
+// background.js - State & Log Manager v0.10.15
 
 const tabStates = {};
 const appLogs = [];
@@ -71,6 +71,20 @@ chrome.webRequest.onBeforeRequest.addListener((details) => {
     });
   }
 }, { urls: ['https://chatgpt.com/*', 'https://chat.openai.com/*'] });
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (!changeInfo?.url) return;
+  for (const [captureId, state] of pendingCaptures.entries()) {
+    if (!matchCapture(state, tabId, changeInfo.url, '')) continue;
+    if (!/(download|files|mnt\/data|artifact|blob:)/i.test(changeInfo.url)) continue;
+    completeCapture(captureId, {
+      success: true,
+      method: 'tabs_update',
+      finalUrl: changeInfo.url,
+      downloadId: null
+    });
+  }
+});
 
 function log(level, message, details = null) {
   const entry = {

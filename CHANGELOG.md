@@ -4,11 +4,13 @@
 
 # Changelog
 
-## 0.10.14 - 2026-02-18
-- Added temporary media cache lifecycle for export jobs: clear on popup init, clear at export start, clear on export completion/failure, and clear on popup close.
-- Updated HTML/DOC image embedding pipeline to load remote images through temporary cache before embedding as Base64, then remove cache artifacts.
-- Added Claude file discovery utility (`discover_claude_files`) to inspect download/file presentation from live DOM and expose diagnostics via `window.CLAUDE_FILE_DISCOVERY`.
-- Synced runtime/docs metadata to `0.10.14`.
+## 0.10.15 - 2026-02-18
+- Added explicit injection health check: content script now logs `[INJECT]` on load and supports `ping_content`; popup now exposes a **Ping** button for deterministic verification.
+- Hardened ChatGPT sandbox file discovery (`discoverSandboxFileRefs`) with deep Shadow DOM traversal, raw-vs-absolute href detection, text-node detection, button/card detection, canonical normalization, and stable diagnostics in `window.__SANDBOX_FILE_REFS__`.
+- Improved sandbox download resolution with stronger click dispatch evidence and additional background capture path via `tabs.onUpdated` besides downloads/webRequest capture windows.
+- Added `chat.openai.com` coverage to content script matching and narrowed host permissions to explicit supported domains.
+- Kept temporary media cache lifecycle for export jobs (begin/finish/close cleanup) and cache-backed HTML/Word embedding behavior.
+- Synced runtime/docs metadata to `0.10.15`.
 
 ## 0.10.13 - 2026-02-18
 - Added dedicated ChatGPT sandbox file workflow with popup actions: **Scan File Links** and **Resolve + Download All**.

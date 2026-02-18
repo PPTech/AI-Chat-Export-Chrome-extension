@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// script.js - Main Controller v0.10.14
+// script.js - Main Controller v0.10.15
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnExportFiles = document.getElementById('btn-export-files');
   const btnScanFiles = document.getElementById('btn-scan-files');
   const btnResolveDownload = document.getElementById('btn-resolve-download');
+  const btnPingContent = document.getElementById('btn-ping-content');
   const btnLogs = document.getElementById('btn-download-logs');
   const btnExportConfig = document.getElementById('btn-export-config');
   const checkImages = document.getElementById('check-images');
@@ -79,7 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function exportSettingsCfg(settings) {
     const lines = Object.entries(settings).map(([k, v]) => `${k}=${String(v)}`);
-    const cfg = `# AI Chat Exporter Settings\n# version=0.10.14\n${lines.join('\n')}\n`;
+    const cfg = `# AI Chat Exporter Settings\n# version=0.10.15\n${lines.join('\n')}\n`;
     const date = new Date().toISOString().slice(0, 10);
     downloadBlob(new Blob([cfg], { type: 'text/plain' }), `ai_chat_exporter_settings_${date}.cfg`);
   }
@@ -372,6 +373,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const stats = response.stats || { total: 0, downloaded: 0, failed: 0 };
     showInfo('Resolve + Download Finished', `[${stats.downloaded === stats.total ? 'PASS' : (stats.downloaded > 0 ? 'WARN' : 'FAIL')}] downloaded ${stats.downloaded}/${stats.total}, failed ${stats.failed}.`);
     setAnalyzeProgress(100, 'Completed');
+  };
+
+  btnPingContent.onclick = async () => {
+    if (!activeTabId) return;
+    const response = await sendToActiveTab({ action: 'ping_content' });
+    if (!response?.injected) {
+      showError(new Error(response?.error || 'Ping failed: content script unavailable on current tab.'));
+      return;
+    }
+    showInfo('Ping OK', `injected=${response.injected}, domain=${response.domain}, href=${response.href}`);
   };
 
   document.getElementById('link-legal').onclick = () => showInfo('Legal', 'This is a local-processing developer version. Users remain responsible for lawful and compliant use in their jurisdiction.');
