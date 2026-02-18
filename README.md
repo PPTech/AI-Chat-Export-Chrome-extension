@@ -1,6 +1,6 @@
 # 🚀 AI Chat Exporter Ultimate
 
-**Version**: 0.10.23  
+**Version**: 0.10.24  
 **License**: MIT (Ultimate Edition)  
 **Code Source**: Generated with support from CODEX and CODEX CLI.  
 **Owner / Management**: Dr. Babak Sorkhpour ([@Drbabakskr](https://x.com/Drbabakskr))  
@@ -27,6 +27,7 @@
 *   **Industrial Archiving**: CRC32 validated ZIP archives.
 *   **Embedded Media**: Automatically converts remote images to Base64 for fully offline Word and HTML documents.
 *   **CORS/CSP-safe media embedding**: Popup routes media fetch through page-context proxy to avoid extension-page CORS/connect-src failures.
+*   **Claude content-noise filter**: Extractor prioritizes prose/markdown content containers and removes UI-status noise before parsing text/files.
 *   **Temporary Media Cache Hygiene**: Downloads media to temporary in-memory cache during export, embeds output, then clears cache at begin/finish/close.
 *   **Security Hardened**: Input sanitization prevents XSS in exported files.
 *   **Local Agent (Air-Gapped Ready)**: Visual + semantic local extraction with self-test and recipe fallback; no external AI API required.

@@ -4,6 +4,12 @@
 
 # Changelog
 
+## 0.10.24 - 2026-02-18
+- Fixed Claude extraction quality by prioritizing real content containers (`prose/markdown/message-content`) and filtering UI noise blocks (status/grid/transition/button wrappers).
+- Improved Claude text cleaning pipeline to skip UI-only lines and preserve meaningful paragraphs/code/file links.
+- Improved file token capture by reading `link.href` in addition to attributes for blob/normalized URLs.
+- Kept popup CORS/CSP-safe media flow from page-context proxy and synced runtime/docs metadata to `0.10.24`.
+
 ## 0.10.23 - 2026-02-18
 - Fixed popup-side CORS/CSP media failures by removing remote `fetch(...)` usage from popup cache/image conversion paths and forcing page-context blob retrieval.
 - Updated `GeminiArtifactGenerator.toBase64()` and temp media cache to use `fetchFileBlob()` (content-script proxy) instead of direct extension-page fetch.

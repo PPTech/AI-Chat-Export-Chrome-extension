@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// offscreen.js - Hidden Local Agent Bridge v0.10.23
+// offscreen.js - Hidden Local Agent Bridge v0.10.24
 
 (() => {
   const allowPrefixes = ['chrome-extension://', 'blob:', 'data:'];

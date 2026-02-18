@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// content.js - Platform Engine Orchestrator v0.10.23
+// content.js - Platform Engine Orchestrator v0.10.24
 
 (() => {
   if (window.hasRunContent) return;
@@ -481,15 +481,17 @@
       matches: () => location.hostname.includes('claude.ai'),
       selectors: ['[data-testid="user-message"]', '[data-testid="assistant-message"]', '[data-testid*="message"]', '.font-user-message', '.font-claude-response', '.font-claude-message', '[data-is-streaming-or-done]', 'main article', 'main section'],
       async extract(options, utils) {
-        const nodes = utils.adaptiveQuery(this.selectors.join(','), 1).filter((n) => !n.closest('nav,aside,header') && utils.hasMeaningfulContent(n));
+        const seed = utils.adaptiveQuery(this.selectors.join(','), 1).filter((n) => !n.closest('nav,aside,header') && utils.hasMeaningfulContent(n));
+        const scoped = utils.findClaudeContentNodes(seed);
+        const nodes = scoped.length ? scoped : seed;
         const messages = [];
         for (const node of nodes) {
-          const marker = `${node.getAttribute('data-testid') || ''} ${node.className || ''}`.toLowerCase();
-          const isUser = marker.includes('user');
+          const marker = `${node.getAttribute('data-testid') || ''} ${node.className || ''} ${node.getAttribute('data-message-author') || ''}`.toLowerCase();
+          const isUser = /\buser\b|human/.test(marker);
           const content = await utils.extractNodeContent(node, options, isUser, this.name, 'claude-node');
           if (content) messages.push({ role: isUser ? 'User' : 'Claude', content, meta: { platform: this.name, sourceSelector: 'claude-node' } });
         }
-        return { platform: this.name, title: document.title, messages };
+        return { platform: this.name, title: document.title, messages: utils.dedupe(messages) };
       }
     },
 
@@ -553,6 +555,55 @@
 
     hasMeaningfulContent(node) {
       return !!node && ((node.innerText || '').trim().length > 0 || !!node.querySelector('img,pre,code'));
+    },
+
+    isClaudeUiNoiseText(text = '') {
+      const t = String(text || '').trim();
+      if (!t) return true;
+      if (/grid-rows|transition-colors|group\/status|Nothing to see here|class=|style=/i.test(t)) return true;
+      if (t.length < 3) return true;
+      return false;
+    },
+
+    cleanExtractedText(text = '') {
+      return String(text || '')
+        .replace(/[\t\u00A0]+/g, ' ')
+        .replace(/\n{3,}/g, '\n\n')
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => !this.isClaudeUiNoiseText(line))
+        .join('\n')
+        .trim();
+    },
+
+    findClaudeContentNodes(seedNodes = []) {
+      const hits = [];
+      const seen = new Set();
+      const selectors = [
+        '.prose',
+        '[class*="prose"]',
+        '[class*="markdown"]',
+        '[class*="message-content"]',
+        '[class*="whitespace-pre-wrap"]',
+        '.font-claude-response',
+        '.font-claude-message'
+      ];
+
+      for (const seed of seedNodes || []) {
+        for (const sel of selectors) {
+          const found = Array.from(seed.querySelectorAll(sel));
+          found.forEach((el) => {
+            if (seen.has(el)) return;
+            const textLen = (el.textContent || '').trim().length;
+            if (textLen < 20 && !el.querySelector('pre,code,a[href],img')) return;
+            if (el.closest('button,[role="button"],nav,aside,header,.group\/status,[class*="transition"], [class*="grid-rows"]')) return;
+            seen.add(el);
+            hits.push(el);
+          });
+        }
+      }
+
+      return hits.sort((a, b) => (b.textContent || '').trim().length - (a.textContent || '').trim().length);
     },
 
     queryOrdered(selector) {
@@ -648,7 +699,7 @@
           .filter((name) => /url|href|src|download|file/i.test(name))
           .map((name) => link.getAttribute(name))
           .filter(Boolean);
-        const href = link.getAttribute('href') || link.getAttribute('data-file-url') || link.getAttribute('src') || urlHints[0] || '';
+        const href = link.getAttribute('href') || link.href || link.getAttribute('data-file-url') || link.getAttribute('src') || urlHints[0] || '';
         const srcdoc = link.getAttribute('srcdoc') || '';
         const abs = href ? (() => {
           if (/^sandbox:\/\//i.test(href) || /^sandbox:\//i.test(href)) return href;
@@ -677,15 +728,19 @@
       return [...new Set(tokens)];
     },
 
-    async extractNodeContent(node, options, isUser) {
+    async extractNodeContent(node, options, isUser, platformName = '', sourceSelector = '') {
       if (!node) return '';
       if (options.rawHtml) return node.innerHTML || '';
 
+      const isClaude = /claude/i.test(String(platformName || '')) || location.hostname.includes('claude.ai');
       const imageTokens = await this.extractImageTokensFromNode(node, options, isUser);
       const fileTokens = options.extractFiles ? await this.extractFileTokensFromNode(node) : [];
 
       const clone = node.cloneNode(true);
-      clone.querySelectorAll('script,style,button,svg,[role="tooltip"],.sr-only').forEach((n) => n.remove());
+      clone.querySelectorAll('script,style,svg,[role="tooltip"],.sr-only').forEach((n) => n.remove());
+      if (isClaude) {
+        clone.querySelectorAll('button,[role="button"],[class*="group/status"],[class*="transition"],[class*="grid-rows"],nav,aside,header').forEach((n) => n.remove());
+      }
       clone.querySelectorAll('img').forEach((img) => img.remove());
 
       clone.querySelectorAll('pre').forEach((pre) => {
@@ -694,7 +749,24 @@
         pre.replaceWith(`\n\`\`\`${lang}\n${code}\n\`\`\`\n`);
       });
 
-      const text = (clone.innerText || '').replace(/\n{3,}/g, '\n\n').trim();
+      let text = '';
+      if (isClaude) {
+        const proseCandidates = this.findClaudeContentNodes([clone]);
+        if (proseCandidates.length) {
+          text = proseCandidates
+            .map((el) => this.cleanExtractedText(el.innerText || el.textContent || ''))
+            .filter(Boolean)
+            .join('\n\n');
+        }
+        if (!text) {
+          const paras = Array.from(clone.querySelectorAll('p,li,h1,h2,h3,h4,blockquote'))
+            .map((el) => this.cleanExtractedText(el.innerText || el.textContent || ''))
+            .filter(Boolean);
+          text = paras.join('\n');
+        }
+      }
+
+      if (!text) text = this.cleanExtractedText(clone.innerText || clone.textContent || '');
       const images = imageTokens.length ? `\n${imageTokens.join('\n')}\n` : '';
       const files = fileTokens.length ? `\n${fileTokens.join('\n')}\n` : '';
       return `${text}${images}${files}`.trim();
