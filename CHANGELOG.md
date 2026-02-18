@@ -138,3 +138,9 @@
 - Added AssetResolutionGraph scaffold and zip-safe filename sanitization.
 - Added diagnostics JSONL redacted ring buffer route from service worker.
 - Added BDD/PTS updates and fixture scaffolding for e2e agentic testing.
+
+## 0.11.6 - Local Intelligence Signal Integrity
+- Improved embedding engine telemetry to explicitly report `loaded`, `fallbackReason`, and embedding dimension for trace reliability.
+- Extended recipe memory load path to include prior verifier score and compute per-run score delta in agent learning trace.
+- Added canonical diagnostics bundle generation in popup pipeline with required top-level fields.
+- Added verifier metrics read API in IndexedDB layer for measurable run-over-run comparisons.

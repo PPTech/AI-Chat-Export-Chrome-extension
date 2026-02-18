@@ -1,13 +1,13 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// agent/local_embedding_engine.js - Local embedding wrapper v0.11.0
+// agent/local_embedding_engine.js - Local embedding wrapper v0.11.5
 
 (function () {
   class LocalEmbeddingEngine {
     constructor() {
       this.model = null;
-      this.modelInfo = { name: 'keyword-fallback', hash: 'fallback-v1' };
+      this.modelInfo = { name: 'keyword-fallback', hash: 'fallback-v1', loaded: false, fallbackReason: 'model_not_initialized', dim: 16 };
       this.cache = new Map();
       this.cacheOrder = [];
       this.maxCache = 128;
@@ -22,7 +22,7 @@
         quantized: true,
         local_files_only: true
       });
-      this.modelInfo = { name: 'MiniLM-local', hash: 'Xenova/all-MiniLM-L6-v2@local' };
+      this.modelInfo = { name: 'MiniLM-local', hash: 'Xenova/all-MiniLM-L6-v2@local', loaded: true, fallbackReason: '', dim: 384 };
       return this.modelInfo;
     }
 
@@ -68,6 +68,7 @@
           fallback[2] = /https?:\/\//.test(lower) ? 1 : 0;
           fallback[3] = /file|download|attachment|sandbox:\//.test(lower) ? 1 : 0;
           fallback[4] = Math.min(1, norm.length / 500);
+          this.modelInfo = { ...this.modelInfo, loaded: false, fallbackReason: this.modelInfo.fallbackReason || 'local_transformer_unavailable', dim: 16 };
           vector = fallback;
         }
         this.setCached(norm, vector);

@@ -379,3 +379,8 @@ This prevents image token corruption and ensures valid `<img>` tags are emitted 
 - Version source-of-truth is now `version.js`, synchronized by `npm run sync:version`.
 - CI gates enforce local assets, model checksums, release consistency, and tests.
 - Dataset contract includes attachments as canonical export source (token output remains backward-compatible).
+
+## Local Intelligence Signal Integrity (v0.11.6)
+- Trace now distinguishes real local model load from fallback mode with explicit reason fields.
+- Agent diagnostics include prior score and score delta to verify whether extraction quality improved between runs.
+- Export diagnostics bundle now conforms to the required top-level diagnostics contract.

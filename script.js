@@ -199,7 +199,7 @@ let gestureProofToken = "";
         return { role: m.role, content: parts.join('
 '), order: idx, attachments: m.attachments || [] };
       }),
-      diagnostics: dataset.diagnostics
+      diagnostics: buildDiagnosticsBundle(dataset, "LocalAgent")
     };
 
     processData(normalized);
@@ -246,6 +246,27 @@ let gestureProofToken = "";
       artifacts,
       diagnostics: trace || null,
       raw: { items }
+    };
+  }
+
+
+  function buildDiagnosticsBundle(dataset, platform = 'LocalAgent') {
+    const now = new Date().toISOString();
+    const runId = `run_${Date.now()}`;
+    const diag = dataset?.diagnostics || {};
+    return {
+      runId,
+      version: '0.11.5',
+      host: location.hostname || 'unknown',
+      pageUrl: location.href || '',
+      timestamp: now,
+      ai: { model: diag.model || { name: 'unknown', loaded: false }, embeddingMs: diag.embeddingMs || 0, embeddingsCount: diag.embeddingsCount || 0 },
+      extraction: { candidateCount: (dataset?.raw?.items || []).length, planAttempts: diag.attempts || [], bestPlanId: diag.chosenPlanId || null, bestPlanScore: diag.bestPlanScore || 0 },
+      assets: { totalImagesDetected: (dataset?.attachments || []).filter((a) => a.kind === 'image').length, totalFilesDetected: (dataset?.attachments || []).filter((a) => a.kind === 'file').length },
+      security: { blockedOutboundCount: 0, allowlistMode: 'default' },
+      learning: { scoreDelta: diag?.learned?.scoreDelta || 0, updates: diag?.learned?.updates || 0 },
+      perf: { elapsedMs: diag.elapsedMs || 0 },
+      platform
     };
   }
 

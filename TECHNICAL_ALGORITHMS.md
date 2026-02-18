@@ -233,3 +233,14 @@
 
 ### H3. Diagnostics Ring Buffer
 - Persist redacted JSONL diagnostics entries in service worker for forensic replay without raw sensitive payload retention.
+
+
+## v0.11.6 Signal-Integrity Algorithms
+### I1. Embedding Telemetry Integrity
+- Model metadata now includes explicit `loaded` boolean and `fallbackReason` for trustworthy AI-state reporting.
+
+### I2. Learning Delta Metric
+- Agent loop loads prior verifier score and emits `scoreDelta` per run to quantify improvement/regression.
+
+### I3. Diagnostics Contract Builder
+- Export pipeline constructs schema-aligned diagnostics object with required top-level sections.

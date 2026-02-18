@@ -16,6 +16,7 @@
     const domainFingerprint = payload.domainFingerprint || 'default';
     const candidates = payload.candidatesFeatures || [];
     const mem = await self.AgentRecipeMemory.load(host, domainFingerprint);
+    const priorScore = Number(mem?.verifier?.verifierMetrics?.score || 0);
     const learnerState = mem.learner || await self.AgentOnlineLearner.load(mem.key);
 
     const features = await self.AgentFeatureExtractor.toVectors(candidates);
@@ -62,6 +63,7 @@
       mode: 'agent_loop',
       bestExtraction: { items: best.items, recipe: best.plan, metrics: best.metrics },
       trace: {
+        priorBestScore: priorScore,
         model: features.embeddingMeta.model,
         embeddingsCount: features.embeddingMeta.embeddingsCount,
         embeddingMs: features.embeddingMeta.embeddingMs,
@@ -69,7 +71,7 @@
         bestPlanScore: best.metrics?.score || 0,
         chosenPlanId: best.plan?.id || null,
         elapsedMs: Date.now() - started,
-        learned: { updates: training.updates, positives: positives.length, negatives: negatives.length }
+        learned: { updates: training.updates, positives: positives.length, negatives: negatives.length, scoreDelta: Number(((best.metrics?.score || 0) - priorScore).toFixed(4)) }
       },
       persistedUpdates: { domainKey: mem.key, recipeSaved: !!best.plan, learnerSaved: true, maxAttempts: MAX_ATTEMPTS }
     };

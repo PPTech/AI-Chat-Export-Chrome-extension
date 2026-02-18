@@ -46,3 +46,6 @@
 
 - v0.11.5: Canonical dataset contract introduced for attachment-driven export behavior.
 - v0.11.5: Added model checksum/release consistency CI gates and JSONL diagnostics ring buffer.
+
+- v0.11.6: Added prior-vs-current verifier score delta tracking for concrete learning signal validation.
+- v0.11.6: Diagnostics bundle generator now emits required schema-aligned fields in export path.

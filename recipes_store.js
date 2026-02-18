@@ -129,6 +129,18 @@
       return put(STORES.verifier, { id, host, domainFingerprint, verifierMetrics, updatedAt: new Date().toISOString() });
     }
 
+
+    static async getVerifierMetrics(host, domainFingerprint) {
+      const id = `${host || 'unknown'}::${domainFingerprint || 'default'}`;
+      const db = await openDb();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORES.verifier, 'readonly');
+        const req = tx.objectStore(STORES.verifier).get(id);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
     static async purgeLearning() {
       const db = await openDb();
       return new Promise((resolve, reject) => {

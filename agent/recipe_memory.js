@@ -1,14 +1,15 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// agent/recipe_memory.js - Domain memory bridge v0.11.0
+// agent/recipe_memory.js - Domain memory bridge v0.11.5
 
 (function () {
   async function load(host, domainFingerprint) {
     const key = `${host}::${domainFingerprint}`;
     const recipe = await self.RecipeManager.getRecipe(host, domainFingerprint).catch(() => null);
     const learner = await self.RecipeManager.getLearnerState(key).catch(() => null);
-    return { key, recipe, learner };
+    const verifier = await self.RecipeManager.getVerifierMetrics(host, domainFingerprint).catch(() => null);
+    return { key, recipe, learner, verifier };
   }
 
   async function persist(payload = {}) {
