@@ -273,3 +273,21 @@
 
 ### J8. Deterministic Image Embedding Helper
 - `DataProcessor.embedImageAsBase64` provides a single image-embedding primitive used by `embedImages` for explicit success/failure handling.
+
+
+### J9. Visual Cortex Geometry Classifier
+- `VisualCortexEngine` classifies turns from geometry/color/icon/typography evidence using TreeWalker + ShadowRoot recursion, avoiding class-name coupling.
+
+### J10. Universal Artifact Builder
+- `ArtifactBuilder` provides script-stripped single-file HTML and multipart MHTML generation for offline portable artifacts with explicit MIME boundaries.
+
+
+### J11. Permission De-duplication Gate
+- Release verification enforces CDN host presence in `optional_host_permissions` and rejects required/optional duplication to satisfy MV3 permission semantics.
+
+
+### J12. Neural-Eye Evidence Pipeline
+- Canonical pipeline modules now enforce extractor→normalizer→resolver→packager contracts with diagnostics reason-codes and deterministic bundle manifest output.
+
+### J13. Predictive Test Selection Mapping
+- `tools/pts.mjs` maps changed module domains to targeted unit/integration suites to reduce test scope while preserving correctness evidence.

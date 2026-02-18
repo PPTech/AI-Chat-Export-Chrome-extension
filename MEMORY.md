@@ -59,3 +59,9 @@
 - v0.12.2: Tightened version governance by syncing package/runtime header versions and enforcing them in release verification.
 
 - v0.12.3: Added explicit logger/security integration in content flow and real image embed helper in DataProcessor.
+
+- v0.12.4: Added Visual Cortex + Universal Artifact Builder modules with orchestrator routes and contract tests.
+
+- v0.12.5: Removed redundant optional/required host permission overlap and added architecture-level file relationship mapping.
+
+- v0.12.6: Added Neural-Eye evidence-gated extraction contracts, local-only resolver module, and PTS/self-heal testable loop scaffolding.

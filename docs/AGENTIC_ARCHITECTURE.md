@@ -45,3 +45,15 @@
 ## Canonical Export Contract (v0.11.5)
 - Exporters should consume `dataset.messages[].attachments[]` as source of truth.
 - Legacy token markers are treated as compatibility output, not primary contract.
+
+
+## File Relationship Map (Tooling + Contributor Model)
+- `manifest.json` → runtime wiring root (content scripts, background worker, offscreen bridge, web-accessible resources).
+- `content.js` ↔ `visual_engine.js`/`smart_agent.js`/`asset_processor.js` for extraction + asset capture logic.
+- `content.js` ↔ `background.js` via runtime actions (`extract_local_agent`, diagnostics routes, media proxy, artifact download).
+- `background.js` ↔ `offscreen.js` for local classifier/agent orchestration and persistence routes.
+- `offscreen.js` ↔ `agent/*` + `recipes_store.js` for local loop execution and learning memory.
+- `script.js` (popup) ↔ `content.js`/`background.js` for user-triggered extraction/export orchestration.
+- `artifact_builder.js` + `export_manager.js` + `export_core.js` compose standalone HTML/MHTML and artifact bundles.
+- `scripts/sync_version.cjs` + `scripts/verify_release_consistency.cjs` + `scripts/verify_claims.cjs` enforce release/version/process contracts in CI.
+- `tests/unit/*` validate module contracts; `tests/integration/*` validate cross-module runtime contracts; `features/*.feature` track BDD behavior expectations.

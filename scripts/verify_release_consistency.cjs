@@ -25,9 +25,10 @@ if (version.version !== v) problems.push(`VERSION.json mismatch: ${version.versi
 if (metadata.version !== v) problems.push(`metadata.json mismatch: ${metadata.version} != ${v}`);
 if (pkg.version !== v) problems.push(`package.json mismatch: ${pkg.version} != ${v}`);
 
-const requiredHosts = ['https://*.oaiusercontent.com/*', 'https://*.oaistatic.com/*'];
-for (const h of requiredHosts) {
-  if (!(manifest.host_permissions || []).includes(h)) problems.push(`missing host permission ${h}`);
+const requiredOptionalHosts = ['https://*.oaiusercontent.com/*', 'https://*.oaistatic.com/*'];
+for (const h of requiredOptionalHosts) {
+  if (!(manifest.optional_host_permissions || []).includes(h)) problems.push(`missing optional host permission ${h}`);
+  if ((manifest.host_permissions || []).includes(h)) problems.push(`redundant host permission duplicated in required+optional: ${h}`);
 }
 
 const headerFiles = [

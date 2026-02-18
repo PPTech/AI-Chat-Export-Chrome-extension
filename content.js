@@ -27,7 +27,7 @@
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // نویسنده دکتر بابک سرخپور با کمک ابزار چت جی پی تی.
-// content.js - Platform Engine Orchestrator v0.12.3
+// content.js - Platform Engine Orchestrator v0.12.6
 
 (() => {
   if (window.hasRunContent) return;
@@ -1169,7 +1169,18 @@
     const extracted = await engine.extract(options, utils);
     let messages = utils.dedupe(extracted.messages || []);
 
-    if (!messages.length && window.VisualDOMWalker) {
+    if (!messages.length && window.VisualCortexEngine) {
+      try {
+        const cortex = new window.VisualCortexEngine();
+        messages = cortex.extractMessages(document).map((v) => ({
+          role: v.role === 'Assistant' ? engine.name : v.role,
+          content: v.content,
+          meta: { platform: engine.name, sourceSelector: 'visual-cortex-engine', evidence: v.evidence, bbox: v.bbox }
+        }));
+      } catch {
+        // keep empty if visual cortex fails
+      }
+    } else if (!messages.length && window.VisualDOMWalker) {
       try {
         const walker = new window.VisualDOMWalker();
         const visual = walker.walk(document);
@@ -1887,6 +1898,26 @@
       // continue with standard flow
     }
 
+    if (!items.length && window.VisualCortexEngine) {
+      try {
+        const cortex = new window.VisualCortexEngine();
+        const visualMessages = cortex.extractMessages(document).slice(0, 600);
+        items = visualMessages.map((entry) => ({
+          type: entry.role === 'User' ? 'USER_TURN' : (entry.role === 'Assistant' ? 'MODEL_TURN' : 'CODE_BLOCK'),
+          roleGuess: entry.role.toLowerCase(),
+          confidence: 0.78,
+          bbox: entry.bbox,
+          text: entry.content,
+          href: null,
+          src: null,
+          evidence: ['visual_cortex_engine', ...(entry.evidence || [])]
+        }));
+        if (items.length) root = { method: 'visual_cortex', evidence: [`total=${items.length}`] };
+      } catch {
+        // continue with existing fallbacks
+      }
+    }
+
     if (!items.length && window.SmartAgent) {
       root = window.SmartAgent.detectMainScrollableRoot();
       candidates = window.SmartAgent.getVisualCandidates(root.rootEl, { maxScan: 8000 });
@@ -2181,6 +2212,27 @@
     }
     if (request.action === 'self_test_local_agent') {
       runLocalAgentSelfTest(request.options || {}).then(sendResponse);
+      return true;
+    }
+    if (request.action === 'extract_visual_cortex') {
+      if (!window.VisualCortexEngine) {
+        sendResponse({ success: false, error: 'VisualCortexEngine unavailable' });
+      } else {
+        const cortex = new window.VisualCortexEngine();
+        const messages = cortex.extractMessages(document);
+        const debugLog = cortex.buildDebugLog(messages);
+        sendResponse({ success: true, messages, debugLog });
+      }
+      return true;
+    }
+    if (request.action === 'build_artifacts_preview') {
+      if (!window.ArtifactBuilder) {
+        sendResponse({ success: false, error: 'ArtifactBuilder unavailable' });
+      } else {
+        const html = window.ArtifactBuilder.buildSingleFileHtml({ title: document.title || 'AEGIS Export', bodyHtml: document.body?.innerHTML || '', inlineCss: 'img{max-width:100%;height:auto} body{font-family:Arial,sans-serif;padding:16px}' });
+        const mhtml = window.ArtifactBuilder.buildMhtml({ html, resources: [] });
+        sendResponse({ success: true, htmlLength: html.length, mhtmlLength: mhtml.length });
+      }
       return true;
     }
     if (request.action === 'extract_visual_snapshot') {

@@ -27,7 +27,7 @@
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // نویسنده دکتر بابک سرخپور با کمک ابزار چت جی پی تی.
-// background.js - State & Log Manager v0.12.3
+// background.js - State & Log Manager v0.12.6
 
 console.log('[LOCAL-ONLY] AI engine network disabled; offline models only.');
 const nativeBackgroundFetch = globalThis.fetch?.bind(globalThis);
@@ -115,6 +115,17 @@ async function ensureOffscreenDocument() {
   return true;
 }
 
+
+function routeToTabAction(tabId, action, payload, sendResponse) {
+  if (!tabId) { sendResponse({ success: false, error: 'missing_tab_id' }); return; }
+  chrome.tabs.sendMessage(tabId, { action, ...(payload || {}) }, (response) => {
+    if (chrome.runtime.lastError) {
+      sendResponse({ success: false, error: chrome.runtime.lastError.message || 'tab_route_failed' });
+      return;
+    }
+    sendResponse(response || { success: false, error: 'empty_tab_response' });
+  });
+}
 
 function routeToOffscreen(action, payload, sendResponse) {
   ensureOffscreenDocument().then((ok) => {
@@ -310,6 +321,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
       }
 
+
+
+      case 'EXTRACT_VISUAL_CORTEX': {
+        routeToTabAction(tabId, 'extract_visual_cortex', message.payload || {}, sendResponse);
+        return true;
+      }
+
+      case 'BUILD_ARTIFACTS_PREVIEW': {
+        routeToTabAction(tabId, 'build_artifacts_preview', message.payload || {}, sendResponse);
+        return true;
+      }
 
       case 'MEDIA_FETCH_PROXY': {
         mediaFetchProxy(message.payload || {}).then(sendResponse);
