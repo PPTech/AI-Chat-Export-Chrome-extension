@@ -2,39 +2,93 @@
 # Code generated with support from CODEX and CODEX CLI.
 # Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 
-# Technical Algorithms
+# Technical Algorithms (v0.10.6)
 
-## Extraction pipeline (`content.js`)
-1. Detect platform by hostname.
-2. Use platform-specific selectors to collect message candidates.
-3. For each message node:
-   - remove UI noise elements,
-   - convert code blocks to fenced markdown,
-   - convert assistant/model images to `[[IMG:...]]` tokens (optionally base64),
-   - normalize text.
-4. Deduplicate messages by `(role, content)` pair.
-5. Return `success`, `platform`, `title`, `messages`.
+## A) Extraction Algorithms (`content.js`)
 
-## Export pipeline (`script.js`)
-1. User selects one/multiple target formats.
-2. For each format:
-   - `pdf`: build standalone PDF bytes with UTF-16 text objects.
-   - `html/doc`: escape HTML, then convert `[[IMG:...]]` tokens to `<img src=...>`.
-   - `json/csv/txt/sql/md`: convert tokens to textual image references.
-3. If one file and ZIP is disabled: direct download.
-4. Else: bundle with local ZIP writer (CRC32).
+### A1. Root Discovery (Explainable)
+- Candidate roots are scored using:
+  - scrollability,
+  - viewport occupancy,
+  - text density,
+  - structured-content hints (`pre`, `img`, links),
+  - repetition signatures.
+- Top candidate selected with confidence score.
 
-## ZIP algorithm
-- Writes local file headers + central directory + EOCD.
-- Uses CRC32 checksum per entry.
+### A2. Message Candidate Collection
+- Pull candidate blocks with text/code/image presence.
+- Score each candidate with role/control hints.
+- Deterministic nested dedupe keeps the strongest message container.
 
-## Security controls
-- HTML export uses output escaping before rich rendering steps.
-- Script/style tags are removed from extraction content clones.
-- No dynamic `eval` / no external runtime injection.
+### A3. Role Inference
+- Inputs:
+  - alignment delta,
+  - aria/data attributes,
+  - control hints,
+  - avatar/profile markers,
+  - text patterns (localized-safe where possible).
+- Output:
+  - `role`, `confidence`, `evidence[]`.
 
+### A4. Ordered Block Parsing
+- TreeWalker traverses DOM order.
+- Emits semantic blocks:
+  - `text`, `code`, `list`, `quote`, `image`, `link`.
+- Preserves code text exactly.
+- Converts image nodes to stable `[[IMG:...]]` references.
 
-## Platform Engine Orchestrator (v0.10.3)
-- Dedicated engine per platform for selectors and role mapping.
-- Standardized message contract for export compatibility.
-- Image tokens captured before node cleanup to preserve media in rich exports.
+### A5. Claude Discovery Algorithm
+- Local inspection utility (`discover_claude_structure`) collects:
+  - root candidates + score,
+  - selector hit counts,
+  - role marker evidence,
+  - content signal counts.
+- Stores findings in `window.CLAUDE_DOM_DISCOVERY`.
+
+## B) Export Algorithms (`script.js`)
+
+### B1. Multi-format Export Orchestration
+1. Collect selected formats.
+2. Generate each format sequentially.
+3. Update visible progress percentage in popup.
+4. Download single file or bundle ZIP.
+
+### B2. HTML/Word Rich Rendering
+- Uses `renderRichMessageHtml(content)`:
+  - split message into text/image parts,
+  - escape text,
+  - render image tokens as `<img>`.
+- Produces standalone complete HTML document.
+
+### B3. PDF Generation
+- Builds page canvas, draws role/text/images.
+- Encodes pages to JPEG.
+- Builds valid PDF object graph + xref table.
+
+### B4. Photo Export Mode
+- Controlled by settings checkbox (`Pack Photos as ZIP`).
+- Mode 1: ZIP all photos.
+- Mode 2: batch download each photo file.
+
+### B5. ZIP Writer
+- Local ZIP writer with:
+  - local file headers,
+  - central directory,
+  - EOCD,
+  - CRC32 checksum.
+
+## C) Security and Data-Safety Algorithms
+
+### C1. Runtime Cache Protection (`background.js`)
+- Per-tab extracted data is encrypted in memory with AES-GCM.
+- Runtime key generated via WebCrypto API.
+- Data decrypted only when popup requests per-tab state.
+
+### C2. Sanitization
+- HTML text is escaped before rendering.
+- Script/style elements are removed from parsed clones.
+- No `eval`/dynamic script execution.
+
+### C3. Local-only Constraint
+- No endpoint in runtime sends chat text, image, or code to external servers.
+- Downloads are browser-local, user-triggered actions.

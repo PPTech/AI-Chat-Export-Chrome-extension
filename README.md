@@ -1,6 +1,6 @@
 # 🚀 AI Chat Exporter Ultimate
 
-**Version**: 0.10.5  
+**Version**: 0.10.6  
 **License**: MIT (Ultimate Edition)  
 **Code Source**: Generated with support from CODEX and CODEX CLI.  
 **Owner / Management**: Dr. Babak Sorkhpour ([@Drbabakskr](https://x.com/Drbabakskr))  
@@ -58,6 +58,7 @@ To install the developer preview directly from GitHub:
 - `TECHNICAL_ALGORITHMS.md`: High-level algorithm documentation for extraction/export logic.
 - `PLATFORM_ENGINE_ARCHITECTURE.md`: Engine separation strategy + normalized extraction model.
 - `RELEASE_PROCESS.md`: Manual/operational release flow and tag policy.
+- `LICENSES_THIRD_PARTY.md`: Third-party licensing inventory and review notes.
 - `features/exporter.feature`: Hand-written BDD scenarios for core flows.
 - `features/auto_generated.feature`: Auto-generated BDD scenarios from parser/export signatures.
 - `scripts/generate_gherkin_from_code.cjs`: Script that generates Gherkin feature coverage from source code.
@@ -173,3 +174,42 @@ This discovery reports root candidates, message selector candidates, role hints,
 - **Export Photos** asks whether to:
   - pack all photos into one ZIP, or
   - export photos as batch files directly.
+
+
+## 🧠 Engine Details by Platform
+
+- **ChatGPT / ChatGPT Codex**
+  - Uses explainable analyzer stages for root detection, message scoring, role evidence, and semantic block parsing.
+  - URL rule: `https://chatgpt.com/codex` is labeled as **ChatGPT Codex**.
+- **Claude**
+  - Uses adaptive extraction and local structure discovery (`discover_claude_structure`) to inspect live DOM candidates.
+- **Gemini**
+  - Uses `GeminiExtractor` probe model (deep traversal, scoring, role evidence, block parsing).
+- **AI Studio**
+  - Uses adaptive selectors with fallback role hints and normalization.
+
+All engines normalize output into the same shared contract for exporters.
+
+## 🔒 Security & Compliance (Implementation Summary)
+
+- Chat content never leaves the local browser by design.
+- Per-tab runtime cache is encrypted in memory (`AES-GCM`) in `background.js`.
+- Settings are stored locally and can be exported as `.cfg`.
+- No hidden telemetry or remote inference pipeline is used.
+- Regulatory design targets documented for GDPR/DSGVO and US privacy expectations are in `SECURITY_PRIVACY_MODEL.md`.
+
+## ⚙️ New Settings and Menu Drafts
+
+- New menu drafts in popup header:
+  - **About** (existing)
+  - **Login (Draft)**
+  - **Contact (Draft)**
+- New settings:
+  - **Pack Photos as ZIP** checkbox
+  - **Export Settings Config (.cfg)** button
+- Save Settings now persists local config and exports a `.cfg` file for user backup.
+
+## ❓ Why photos now render in HTML/Word
+
+The export renderer now uses `renderRichMessageHtml()` to split text and image tokens before escaping text.
+This prevents image token corruption and ensures valid `<img>` tags are emitted in full standalone HTML/Word output.

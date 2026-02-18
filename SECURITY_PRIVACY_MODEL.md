@@ -2,28 +2,52 @@
 # Code generated with support from CODEX and CODEX CLI.
 # Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 
-# Security & Privacy Model (v0.10.3)
+# Security, Privacy & Compliance Model (v0.10.6)
 
-## Core Principle
-All extraction, normalization, and export processing is executed locally in the user's browser extension context.
+> Important: This document is a technical implementation guide, not legal advice.
 
-## Data Handling Rules
-1. No chat payload is sent to external AI APIs by this extension runtime.
-2. No background telemetry endpoint is configured for message content.
-3. Adaptive analyzer is local-only heuristic scoring on page DOM.
-4. Export artifacts are created on-device and downloaded by the browser.
+## 1) Core Privacy Rule
+- Chat content (text/code/images) is processed locally in-browser.
+- The extension does not use remote AI APIs for extraction.
+- No telemetry endpoint is configured for chat payload transfer.
 
-## Encryption and Storage
-- No remote storage is used for extracted messages.
-- Temporary runtime state is tab-scoped in extension background memory.
-- Optional local file downloads are user-triggered.
+## 2) Data Classification
+- **Sensitive user data**: prompts, model responses, uploaded images.
+- **Operational data**: error logs and counts.
+- **Configuration data**: export preferences.
 
-## Threat Surface Controls
-- Script/style nodes are removed from extracted clones.
-- HTML export sanitizes content before reconstruction.
-- No `eval` or dynamic script execution in extraction/export flow.
+## 3) Storage and Encryption
+- Chat extraction cache (per-tab) is encrypted in extension runtime memory using AES-GCM (`background.js`).
+- Settings are saved in `chrome.storage.local` and can be exported by user as `.cfg`.
+- Exported files are user-triggered and saved locally.
 
-## Compliance Mapping (operational)
-- GDPR/DSGVO: local processing, data minimization, no external transfer by default.
-- CCPA-style expectation: no sale/share of data by extension runtime.
-- BSI/NSA/CISA baseline alignment: least privilege, local processing, explicit user action for export.
+## 4) Security Controls (Algorithmic)
+1. Sanitization: remove `script/style/button/svg` noise in extraction clone.
+2. Output escaping: HTML text escaped before rich rendering.
+3. No dynamic execution: no `eval`, no remote code loading.
+4. Least privilege: extension permissions limited to required browser capabilities.
+5. Local-only engine: role inference and DOM analysis execute on user machine.
+
+## 5) Regulatory Mapping (EU/US)
+
+### GDPR / DSGVO (EU + Germany)
+- Lawfulness/transparency: local processing design documented in README.
+- Data minimization: only active-tab chat data processed.
+- Purpose limitation: extraction/export only.
+- Integrity/confidentiality: encrypted runtime cache and local-only processing.
+- User rights support: user can clear data, export, and control local files.
+
+### CCPA/CPRA (US)
+- No sale or sharing of chat content by runtime design.
+- No ad-targeting data pipeline exists in extension runtime.
+
+## 6) Security Standards Alignment Notes
+- **BSI/CISA/NSA principles** applied:
+  - secure-by-default,
+  - minimal attack surface,
+  - explicit user actions for data export,
+  - no hidden data exfiltration channels.
+
+## 7) Incident and Audit Guidance
+- Keep `AUDIT_FINDINGS.md`, `CHANGELOG.md`, and workflow logs updated each release.
+- Re-run checks (`node -c`, build, BDD generation) before publishing.

@@ -4,6 +4,11 @@ Feature: Multi-platform chat export reliability
     When extraction runs
     Then user and assistant messages are returned in chronological order
 
+  Scenario: Codex route uses explicit platform label
+    Given the active URL is https://chatgpt.com/codex
+    When extraction runs
+    Then platform name is ChatGPT Codex
+
   Scenario: Exported HTML and Word files include assistant images
     Given extracted content contains image tokens in assistant messages
     When the user exports as html or doc
@@ -15,23 +20,18 @@ Feature: Multi-platform chat export reliability
     Then only conversation messages are included
     And navigation/sidebar text is excluded
 
-  Scenario: Export photos from detected chat image URLs
+  Scenario: Claude discovery reports live DOM findings
+    Given a logged-in Claude chat page is open
+    When discover_claude_structure is executed
+    Then a discovery result is saved in window.CLAUDE_DOM_DISCOVERY
+
+  Scenario: Export photos honors settings checkbox mode
     Given extracted messages contain image URLs or image tokens
+    And Pack Photos as ZIP is disabled
     When the user clicks Export Photos
-    Then image files are downloaded or bundled for download
+    Then photos are exported as batch files
 
-  Scenario: ChatGPT uploaded user images are preserved for rich exports
-    Given a ChatGPT message includes an image tag with alt "Uploaded image"
-    When extraction runs with image mode enabled
-    Then the standardized content contains image tokens for export
-
-  Scenario: Popup controls provide usage tooltips
-    Given the popup UI is loaded
-    When the user hovers controls
-    Then each main action and settings control shows a short title hint
-
-  Scenario: ChatGPT DOM analyzer produces explainable diagnostics
-    Given a ChatGPT chat page is open
-    When analyze_dom runs in visible mode
-    Then a diagnostic object is stored on window.CHATGPT_DOM_ANALYSIS
-    And console output ends with PASS WARN or FAIL
+  Scenario: Popup analysis progress displays percentage
+    Given extraction is running for the active tab
+    When data processing advances
+    Then Analysis Progress displays percentage updates

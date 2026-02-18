@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// script.js - Main Controller v0.10.5
+// script.js - Main Controller v0.10.6
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
@@ -13,10 +13,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnPreview = document.getElementById('btn-preview');
   const btnExportImages = document.getElementById('btn-export-images');
   const btnLogs = document.getElementById('btn-download-logs');
+  const btnExportConfig = document.getElementById('btn-export-config');
   const checkImages = document.getElementById('check-images');
   const checkCode = document.getElementById('check-code');
   const checkRawHtml = document.getElementById('check-raw-html');
   const checkZip = document.getElementById('check-zip');
+  const checkPhotoZip = document.getElementById('check-photo-zip');
 
   const settingsModal = document.getElementById('settings-modal');
   const errorModal = document.getElementById('error-modal');
@@ -27,7 +29,59 @@ document.addEventListener('DOMContentLoaded', () => {
 
   init();
 
+
+  const SETTINGS_KEY = 'ai_exporter_settings_v1';
+
+  function getDefaultSettings() {
+    return {
+      convertImages: true,
+      highlightCode: true,
+      rawHtml: false,
+      zip: false,
+      photoZip: true
+    };
+  }
+
+  function collectSettings() {
+    return {
+      convertImages: !!checkImages.checked,
+      highlightCode: !!checkCode.checked,
+      rawHtml: !!checkRawHtml.checked,
+      zip: !!checkZip.checked,
+      photoZip: !!checkPhotoZip.checked,
+      updatedAt: new Date().toISOString()
+    };
+  }
+
+  function applySettings(settings) {
+    const s = { ...getDefaultSettings(), ...(settings || {}) };
+    checkImages.checked = !!s.convertImages;
+    checkCode.checked = !!s.highlightCode;
+    checkRawHtml.checked = !!s.rawHtml;
+    checkZip.checked = !!s.zip;
+    checkPhotoZip.checked = !!s.photoZip;
+  }
+
+  function saveSettingsToStorage(settings) {
+    chrome.storage.local.set({ [SETTINGS_KEY]: settings });
+  }
+
+  function loadSettingsFromStorage() {
+    chrome.storage.local.get([SETTINGS_KEY], (res) => {
+      applySettings(res?.[SETTINGS_KEY] || getDefaultSettings());
+    });
+  }
+
+  function exportSettingsCfg(settings) {
+    const lines = Object.entries(settings).map(([k, v]) => `${k}=${String(v)}`);
+    const cfg = `# AI Chat Exporter Settings\n# version=0.10.6\n${lines.join('\n')}\n`;
+    const date = new Date().toISOString().slice(0, 10);
+    downloadBlob(new Blob([cfg], { type: 'text/plain' }), `ai_chat_exporter_settings_${date}.cfg`);
+  }
+
   function init() {
+    loadSettingsFromStorage();
+    setAnalyzeProgress(10, 'Initializing');
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (!tabs[0] || tabs[0].url.startsWith('chrome://')) return;
       activeTabId = tabs[0].id;
@@ -40,6 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function requestExtraction() {
     const options = { convertImages: checkImages.checked, rawHtml: checkRawHtml.checked, highlightCode: checkCode.checked };
+    setAnalyzeProgress(30, 'Extracting');
     chrome.tabs.sendMessage(activeTabId, { action: 'extract_chat', options }, (res) => {
       if (chrome.runtime.lastError) {
         chrome.scripting.executeScript({ target: { tabId: activeTabId }, files: ['content.js'] }, () => {
@@ -58,11 +113,13 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('msg-count').textContent = res.messages.length;
       document.getElementById('empty-view').style.display = 'none';
       document.getElementById('stats-view').style.display = 'block';
+      setAnalyzeProgress(100, 'Completed');
       chrome.runtime.sendMessage({ action: 'SET_DATA', tabId: activeTabId, data: res });
       updateExportBtn();
       return;
     }
-    document.getElementById('platform-badge').textContent = `${res?.platform || 'Unknown'} (Wait)`;
+    document.getElementById('platform-badge').textContent = `${res?.platform || 'Unknown'} (Waiting)`;
+    setAnalyzeProgress(0, 'Waiting');
   }
 
   document.querySelectorAll('.format-item').forEach((item) => {
@@ -81,6 +138,13 @@ document.addEventListener('DOMContentLoaded', () => {
   function setProcessingProgress(percent, label = 'Processing') {
     const bounded = Math.max(0, Math.min(100, Math.round(percent)));
     btnExport.textContent = `${label} ${bounded}%`;
+  }
+
+  function setAnalyzeProgress(percent, label = 'Analyzing') {
+    const el = document.getElementById('analyze-progress');
+    if (!el) return;
+    const bounded = Math.max(0, Math.min(100, Math.round(percent)));
+    el.textContent = `Analysis Progress: ${bounded}% (${label})`;
   }
 
   btnExport.onclick = async () => {
@@ -123,7 +187,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!activeTabId) return;
     const ok = window.confirm('Load full chat from the beginning? This may take longer for long chats.');
     if (!ok) return;
+    setAnalyzeProgress(5, 'Preparing full-load scan');
     chrome.tabs.sendMessage(activeTabId, { action: 'scroll_chat' }, () => {
+      setAnalyzeProgress(80, 'Finalizing full-load scan');
       setTimeout(requestExtraction, 800);
     });
   };
@@ -145,6 +211,12 @@ document.addEventListener('DOMContentLoaded', () => {
     openModal(document.getElementById('preview-modal'));
   };
 
+  btnExportConfig.onclick = () => {
+    const settings = collectSettings();
+    saveSettingsToStorage(settings);
+    exportSettingsCfg(settings);
+  };
+
   btnLogs.onclick = () => {
     chrome.runtime.sendMessage({ action: 'GET_LOGS' }, (logs) => {
       downloadBlob(new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' }), 'ai_exporter_logs.json');
@@ -156,7 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const imageList = extractAllImageSources(currentChatData.messages);
     if (!imageList.length) return showError(new Error('No images found in extracted chat data.'));
 
-    const packMode = window.confirm('Pack all photos into one ZIP?\nOK = Pack ZIP, Cancel = Export as batch files');
+    const packMode = !!checkPhotoZip.checked;
     const date = new Date().toISOString().slice(0, 10);
     const platformPrefix = (currentChatData.platform || 'Export').replace(/[^a-zA-Z0-9]/g, '');
 
@@ -190,8 +262,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
-  document.getElementById('link-legal').onclick = () => showInfo('Legal', 'Local processing developer version. User is responsible for lawful and compliant use in their jurisdiction.');
-  document.getElementById('link-security').onclick = () => showInfo('Security', 'Security baseline: local-only processing, sanitized export paths, no eval, and removable risky raw HTML mode.');
+  document.getElementById('link-legal').onclick = () => showInfo('Legal', 'This is a local-processing developer version. Users remain responsible for lawful and compliant use in their jurisdiction.');
+  document.getElementById('link-security').onclick = () => showInfo('Security', 'Security baseline: local-only processing, sanitized exports, no eval, and optional risky Raw HTML mode.');
   document.getElementById('btn-close-info').onclick = () => closeModal(infoModal);
 
   function showInfo(title, body) {
@@ -540,8 +612,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const openModal = (m) => { if (m) m.style.display = 'flex'; };
   const closeModal = (m) => { if (m) m.style.display = 'none'; };
   document.getElementById('btn-open-settings').onclick = () => openModal(settingsModal);
-  document.getElementById('btn-close-settings').onclick = document.getElementById('btn-save-settings').onclick = () => closeModal(settingsModal);
+  document.getElementById('btn-close-settings').onclick = () => closeModal(settingsModal);
+  document.getElementById('btn-save-settings').onclick = () => {
+    const settings = collectSettings();
+    saveSettingsToStorage(settings);
+    exportSettingsCfg(settings);
+    closeModal(settingsModal);
+  };
   document.getElementById('btn-open-about').onclick = () => openModal(aboutModal);
+  document.getElementById('btn-open-login').onclick = () => showInfo('Login (Draft)', 'Draft login page is reserved for future account features. Current version works locally with your active browser session only.');
+  document.getElementById('btn-open-contact').onclick = () => showInfo('Contact (Draft)', 'Draft contact page is reserved for support and compliance requests.');
   document.getElementById('btn-close-about').onclick = document.getElementById('btn-ack-about').onclick = () => closeModal(aboutModal);
   document.getElementById('btn-close-error').onclick = () => closeModal(errorModal);
   document.getElementById('btn-close-preview').onclick = () => closeModal(document.getElementById('preview-modal'));

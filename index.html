@@ -120,9 +120,11 @@
   <div class="container">
     <header>
       <div class="logo-area"><h1>AI Exporter <span class="dev-badge">ULTIMATE</span></h1></div>
-      <div style="display:flex; gap:8px;">
+      <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
         <button id="btn-open-settings" class="icon-btn" title="Settings">⚙️</button>
-        <button id="btn-open-about" class="icon-btn" title="About">ℹ️</button>
+        <button id="btn-open-about" class="icon-btn" title="About draft page">ℹ️</button>
+        <button id="btn-open-login" class="icon-btn" title="Login draft page">🔐</button>
+        <button id="btn-open-contact" class="icon-btn" title="Contact draft page">✉️</button>
         <button id="theme-btn" class="icon-btn" title="Theme">🌓</button>
       </div>
     </header>
@@ -134,6 +136,7 @@
         <div id="stats-view" style="display: none;">
           <div class="message-count" id="msg-count">0</div>
           <div class="message-label">Messages Ready</div>
+          <div id="analyze-progress" class="message-label" style="margin-top:4px;">Analysis Progress: 0%</div>
           <div class="action-row">
             <button id="btn-preview" class="action-btn" title="Preview extracted messages before export">Preview</button>
             <button id="btn-load-full" class="action-btn" title="Load full chat history from beginning">Fetch Full</button>
@@ -165,7 +168,7 @@
       <div class="footer-links">
         <span id="link-legal" title="Open legal usage information">Legal</span>
         <span id="link-security" title="Open security model information">Security</span>
-        <span class="version">v0.10.5</span>
+        <span class="version">v0.10.6</span>
       </div>
     </footer>
 
@@ -189,7 +192,11 @@
                 <div class="setting-item">
                     <label class="setting-row"><span class="setting-label">ZIP Compression</span><input type="checkbox" id="check-zip" title="Bundle outputs into ZIP archive"></label>
                 </div>
+                <div class="setting-item">
+                    <label class="setting-row"><span class="setting-label">Pack Photos as ZIP</span><input type="checkbox" id="check-photo-zip" checked title="If enabled, Export Photos creates one ZIP file. If disabled, photos are exported in batch files."></label>
+                </div>
                 <!-- Encryption Removed per Security Audit -->
+                <button id="btn-export-config" title="Download settings as local .cfg file" style="width:100%; padding:8px; border:1px solid var(--border); background:var(--surface); border-radius:6px; cursor:pointer; font-size:11px; margin-bottom:6px;">Export Settings Config (.cfg)</button>
                 <button id="btn-download-logs" title="Download activity/error logs" style="width:100%; padding:8px; border:1px solid var(--border); background:var(--surface); border-radius:6px; cursor:pointer; font-size:11px;">Download Error Logs</button>
             </div>
             <button class="close-btn" id="btn-save-settings">Save</button>
@@ -217,7 +224,7 @@
             <div class="about-row"><span class="about-label">Author & Engineering</span>Dr. Babak Sorkhpour with support from Gemini 2.0 Flash (Google)</div>
             <div class="about-row"><span class="about-label">License</span>MIT License (Ultimate Edition)</div>
             <div class="about-row"><span class="about-label">Technology</span>Generated via CODEX CLI</div>
-            <div class="about-row"><span class="about-label">Version</span>0.10.5</div>
+            <div class="about-row"><span class="about-label">Version</span>0.10.6</div>
             <button class="close-btn" id="btn-ack-about">Close</button>
         </div>
     </div>

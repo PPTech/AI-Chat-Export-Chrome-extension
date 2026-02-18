@@ -2,19 +2,33 @@
 # Code generated with support from CODEX and CODEX CLI.
 # Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 
-# Release Process (v0.10.3)
+# Release Process (v0.10.6)
 
-## Steps
-1. Update `VERSION.json`, `manifest.json`, `metadata.json`, and UI version text.
-2. Update `CHANGELOG.md` with release notes.
-3. Run checks:
+## Mandatory Artifacts Per Release
+- `VERSION.json`
+- `manifest.json`
+- `metadata.json`
+- `CHANGELOG.md`
+- `MEMORY.md`
+- `README.md`
+- `.github/workflows/ci.yml`
+- `.github/workflows/release.yml`
+
+## Manual Release Steps
+1. Update versions in runtime + docs.
+2. Update changelog and technical/security docs.
+3. Run validations:
    - `node -c content.js`
    - `node -c script.js`
-   - `npm run build`
+   - `node -c background.js`
    - `npm run gherkin:generate`
-4. Commit with semantic message: `fix|feat|docs: ... (vX.Y.Z)`.
-5. Tag release in GitHub as `vX.Y.Z`.
+   - `npm run build`
+4. Run A/B test checklist manually:
+   - A: standard extraction + export.
+   - B: Fetch Full + long-thread export + image export mode.
+5. Commit with semantic message and version suffix.
+6. Tag in GitHub: `vX.Y.Z`.
 
-## Tag metadata (recommended)
-- Title: `vX.Y.Z`.
-- Notes: summary, breaking changes, platform-specific extraction updates.
+## License and Dependency Review
+- Verify any new package/library license compatibility with MIT distribution.
+- Record third-party license notes in `LICENSES_THIRD_PARTY.md`.
