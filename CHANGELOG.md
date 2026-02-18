@@ -4,6 +4,13 @@
 
 # Changelog
 
+## 0.10.22 - 2026-02-18
+- Upgraded `smart_agent.js` with incremental candidate mining runtime (`IntersectionObserver`, `MutationObserver`, `requestIdleCallback`) and capped prioritized sweeps for large DOM responsiveness.
+- Strengthened semantic evidence in `NodeScorer.calculateProbability()` with alignment and file-signal ratios for auditable decisions.
+- Hardened `offscreen.js` LocalOnlyGuard by patching `WebSocket` and `EventSource` in addition to `fetch`/`XMLHttpRequest`, with explicit local-only startup log.
+- Improved Self-Test in `content.js` to validate local classifier initialization (`LOCAL_INIT_CLASSIFIER`) and report local-only/classifier status in PASS/WARN/FAIL details.
+- Synced runtime/docs metadata to `0.10.22`.
+
 ## 0.10.21 - 2026-02-18
 - Added `VerifierLoop` (`ExtractionVerifier`) to validate extraction quality (`FAIL` for zero messages, `WARN` for role imbalance) before finalizing output.
 - Added `SelfHealer` text-density fallback flow in `content.js` that auto-recovers when verifier returns FAIL/WARN.

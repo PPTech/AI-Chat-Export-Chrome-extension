@@ -1,21 +1,36 @@
-Feature: Local agent extraction and self-healing
+Feature: Local smart agent extraction, verification and self-healing
 
-  Scenario: Extract repeating chat bubbles
+  Scenario: Extract chat turns from repeating bubbles
     Given a page has repeating visual chat blocks
     When local scan runs
     Then at least one message candidate is found
+
+  Scenario: Detect code blocks via monospace evidence
+    Given a page has code-like monospace regions
+    When local extract runs
+    Then code candidates include monospace evidence
 
   Scenario: Detect images from cards
     Given a page has visible media cards
     When local extract runs
     Then at least one image candidate is found
 
-  Scenario: Detect files and clickability
+  Scenario: Detect file cards and clickability
     Given a page has downloadable file links
     When local extract runs
     Then file candidates include clickable evidence
 
-  Scenario: Self-heal fallback
-    Given no reusable recipe exists
-    When planner fallback runs
-    Then a repaired extraction plan is produced
+  Scenario: Download capture path is available
+    Given a page has at least one file candidate
+    When resolve and download runs
+    Then capture status is PASS or WARN with evidence
+
+  Scenario: Verifier loop triggers healer
+    Given extraction result is empty or role-unbalanced
+    When verifier executes
+    Then self-healing fallback is attempted
+
+  Scenario: Self-heal learns recipe and reuses it
+    Given a fallback selector set succeeds
+    When recipe is saved by domain fingerprint
+    Then next run can load recipe before full scan

@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// offscreen.js - Hidden Local Agent Bridge v0.10.21
+// offscreen.js - Hidden Local Agent Bridge v0.10.22
 
 (() => {
   const allowPrefixes = ['chrome-extension://', 'blob:', 'data:'];
@@ -30,6 +30,21 @@
         return open.call(this, method, url, ...rest);
       };
     }
+    const WS = self.WebSocket;
+    if (WS) {
+      self.WebSocket = function GuardedWebSocket(url, protocols) {
+        assertLocal(url);
+        return new WS(url, protocols);
+      };
+    }
+    const ES = self.EventSource;
+    if (ES) {
+      self.EventSource = function GuardedEventSource(url, config) {
+        assertLocal(url);
+        return new ES(url, config);
+      };
+    }
+    console.log('[LOCAL-ONLY] outbound network disabled (CSP + runtime guard).');
   }
 
   patchLocalOnlyGuards();

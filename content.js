@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// content.js - Platform Engine Orchestrator v0.10.21
+// content.js - Platform Engine Orchestrator v0.10.22
 
 (() => {
   if (window.hasRunContent) return;
@@ -1861,18 +1861,23 @@
     const ext = await runLocalAgentExtract(options);
     if (!ext.success) return ext;
     let healed = false;
+    let localOnly = false;
+    let classifierModel = 'uninitialized';
     try {
       const planner = await sendRuntime({ action: 'RUN_LOCAL_AGENT_ENGINE', payload: { task: 'extract_messages', hostname: location.hostname, pageUrl: location.href, candidatesFeatures: (ext.result?.items || []).slice(0, 30) } });
       healed = !!planner?.recipe;
+      const initCls = await sendRuntime({ action: 'LOCAL_INIT_CLASSIFIER', payload: {} });
+      localOnly = !!initCls?.ready;
+      classifierModel = initCls?.model || 'keyword-fallback';
     } catch {
       healed = false;
     }
     const s = ext.summary;
     const pass = s.messages > 0 && (s.images > 0 || s.files > 0);
     const warn = s.messages > 0 && s.images === 0 && s.files === 0;
-    if (pass) return { success: true, status: 'PASS', details: `Extracted messages=${s.messages}, images=${s.images}, files=${s.files}, self-heal=${healed ? 'yes' : 'fallback-only'}` };
-    if (warn) return { success: true, status: 'WARN', details: `Messages detected but no media/files. messages=${s.messages}, self-heal=${healed ? 'yes' : 'fallback-only'}` };
-    return { success: true, status: 'FAIL', details: 'No viable candidates found.' };
+    if (pass) return { success: true, status: 'PASS', details: `Extracted messages=${s.messages}, images=${s.images}, files=${s.files}, self-heal=${healed ? 'yes' : 'fallback-only'}, localOnly=${localOnly}, classifier=${classifierModel}` };
+    if (warn) return { success: true, status: 'WARN', details: `Messages detected but no media/files. messages=${s.messages}, self-heal=${healed ? 'yes' : 'fallback-only'}, localOnly=${localOnly}, classifier=${classifierModel}` };
+    return { success: true, status: 'FAIL', details: `No viable candidates found. localOnly=${localOnly}, classifier=${classifierModel}` };
   }
 
   async function fetchBlobFromPage(url) {
