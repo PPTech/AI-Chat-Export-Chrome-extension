@@ -284,3 +284,10 @@
 
 ### J11. Permission De-duplication Gate
 - Release verification enforces CDN host presence in `optional_host_permissions` and rejects required/optional duplication to satisfy MV3 permission semantics.
+
+
+### J12. Neural-Eye Evidence Pipeline
+- Canonical pipeline modules now enforce extractor→normalizer→resolver→packager contracts with diagnostics reason-codes and deterministic bundle manifest output.
+
+### J13. Predictive Test Selection Mapping
+- `tools/pts.mjs` maps changed module domains to targeted unit/integration suites to reduce test scope while preserving correctness evidence.

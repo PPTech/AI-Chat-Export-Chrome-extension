@@ -4,6 +4,11 @@
 
 # Changelog
 
+## 0.12.6 - Evidence-Gated Neural-Eye Export Contracts
+- Added canonical local-only export modules (`content_miner`, `normalizer`, `attachment_resolver`, `packager`, `self_heal`, `tools/pts`) with deterministic diagnostics and reason-code contracts.
+- Added BDD contract feature `features/export.feature` and fixture-based contract tests for extraction, local-only blocking, self-heal persistence, and PTS routing.
+- Synchronized release metadata/version headers and kept CI verification gates green.
+
 ## 0.12.5 - Permission De-duplication + Integration Map
 - Removed redundant CDN domains from required `host_permissions` while keeping them in `optional_host_permissions` to satisfy MV3 validation.
 - Updated release verification and integration tests to enforce no duplication between required/optional host permissions.

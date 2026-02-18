@@ -417,3 +417,8 @@ This prevents image token corruption and ensures valid `<img>` tags are emitted 
 ## Permission De-duplication (v0.12.5)
 - CDN hosts required for media embedding are now requested only through `optional_host_permissions`, eliminating MV3 redundancy errors.
 - Release gates now fail if required and optional host permissions overlap on protected CDN entries.
+
+
+## Neural-Eye Evidence Contracts (v0.12.6)
+- Added local-only canonical extractor/normalizer/resolver/packager modules with diagnostics and reason-code output contracts.
+- Added fixture-driven export contract tests and PTS module mapping to ensure evidence-gated improvements and predictable fallback behavior.
