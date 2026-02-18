@@ -1,11 +1,13 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// script.js - Main Controller v0.10.26
+// نویسنده دکتر بابک سرخپور با کمک ابزار چت جی پی تی.
+// script.js - Main Controller v0.12.3
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
   let activeTabId = null;
+  let gestureProofToken = "";
 
   const btnExport = document.getElementById('btn-export-main');
   const btnLoadFull = document.getElementById('btn-load-full');
@@ -150,22 +152,123 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function requestExtraction() {
+  async function requestExtraction() {
     const options = { convertImages: checkImages.checked, rawHtml: checkRawHtml.checked, highlightCode: checkCode.checked, extractFiles: checkExportFiles.checked };
-    setAnalyzeProgress(30, 'Extracting');
-    chrome.tabs.sendMessage(activeTabId, { action: 'extract_chat', options }, (res) => {
-      if (chrome.runtime.lastError) {
-        if (chrome.scripting?.executeScript) {
-          chrome.scripting.executeScript({ target: { tabId: activeTabId }, files: ['smart_miner.js', 'smart_agent.js', 'content.js'] }, () => {
-            setTimeout(() => chrome.tabs.sendMessage(activeTabId, { action: 'extract_chat', options }, processData), 600);
-          });
-        } else {
-          setAnalyzeProgress(0, 'Content script unavailable');
+    await ensureAssetPermissions();
+    setAnalyzeProgress(25, 'Agent self-test');
+
+    const runLegacyFallback = () => {
+      setAnalyzeProgress(40, 'Legacy extraction fallback (mode=legacy_fallback)');
+      chrome.tabs.sendMessage(activeTabId, { action: 'extract_chat', options }, (res) => {
+        if (chrome.runtime.lastError) {
+          if (chrome.scripting?.executeScript) {
+            chrome.scripting.executeScript({ target: { tabId: activeTabId }, files: ['smart_miner.js', 'smart_agent.js', 'content.js'] }, () => {
+              setTimeout(() => chrome.tabs.sendMessage(activeTabId, { action: 'extract_chat', options }, processData), 600);
+            });
+          } else {
+            setAnalyzeProgress(0, 'Content script unavailable');
+          }
+          return;
         }
-        return;
+        processData(res);
+      });
+    };
+
+    const selfTest = await sendToActiveTab({ action: 'self_test_local_agent', options: { debug: !!checkDebugOverlay?.checked } });
+    if (!selfTest?.success || selfTest?.status === 'FAIL') {
+      runLegacyFallback();
+      return;
+    }
+
+    setAnalyzeProgress(55, 'Agentic extraction');
+    const local = await sendToActiveTab({ action: 'extract_local_agent', options: { debug: !!checkDebugOverlay?.checked, requireModel: true } });
+    if (!local?.success) {
+      runLegacyFallback();
+      return;
+    }
+
+    const dataset = buildChatExportDatasetFromItems(local.result?.items || [], local.result?.trace || null);
+    const normalized = {
+      success: true,
+      platform: 'LocalAgent',
+      dataset,
+      messages: dataset.messages.map((m, idx) => {
+        const parts = [
+          ...(m.contentBlocks || []).map((b) => String(b.text || '')),
+          ...(m.attachments || []).map((a) => a.kind === 'image' ? `[[IMG:${a.sourceUrl || ''}]]` : `[[FILE:${a.sourceUrl || ''}|${a.displayName || 'File'}]]`)
+        ].filter(Boolean);
+        return { role: m.role, content: parts.join('
+'), order: idx, attachments: m.attachments || [] };
+      }),
+      diagnostics: buildDiagnosticsBundle(dataset, "LocalAgent")
+    };
+
+    processData(normalized);
+  }
+
+
+  function buildChatExportDatasetFromItems(items = [], trace = null) {
+    const messages = [];
+    const artifacts = [];
+    let current = null;
+    let messageSeq = 0;
+
+    for (const item of items) {
+      if (item.type === 'USER_TURN' || item.type === 'MODEL_TURN' || item.type === 'CODE_BLOCK') {
+        current = {
+          id: `m_${messageSeq += 1}`,
+          role: item.type === 'USER_TURN' ? 'user' : 'assistant',
+          timestamp: null,
+          contentBlocks: [{ kind: item.type === 'CODE_BLOCK' ? 'code' : 'text', text: String(item.text || '') }],
+          attachments: []
+        };
+        messages.push(current);
+      } else if ((item.type === 'IMAGE_BLOCK' || item.type === 'FILE_CARD') && current) {
+        const kind = item.type === 'IMAGE_BLOCK' ? 'image' : 'file';
+        const sourceUrl = item.src || item.href || '';
+        const attach = {
+          kind,
+          sourceUrl,
+          resolved: { mime: null, bytesSha256: null, byteLength: null, dataUri: null },
+          fileNameSafe: kind === 'image' ? 'image.bin' : 'file.bin',
+          displayName: kind === 'image' ? 'Image' : 'File',
+          caption: '',
+          messageId: current.id
+        };
+        current.attachments.push(attach);
+        artifacts.push({ ...attach });
       }
-      processData(res);
-    });
+    }
+
+    return {
+      schemaVersion: '0.12.0',
+      messages,
+      attachments: artifacts,
+      artifacts,
+      diagnostics: trace || null,
+      raw: { items }
+    };
+  }
+
+
+  function buildDiagnosticsBundle(dataset, platform = 'LocalAgent') {
+    const now = new Date().toISOString();
+    const runId = `run_${Date.now()}`;
+    const diag = dataset?.diagnostics || {};
+    return {
+      runId,
+      version: '0.12.0',
+      host: location.hostname || 'unknown',
+      pageUrl: location.href || '',
+      timestamp: now,
+      ai: { model: diag.model || { name: 'unknown', loaded: false }, embeddingMs: diag.embeddingMs || 0, embeddingsCount: diag.embeddingsCount || 0 },
+      extraction: { candidateCount: (dataset?.raw?.items || []).length, planAttempts: diag.attempts || [], bestPlanId: diag.chosenPlanId || null, bestPlanScore: diag.bestPlanScore || 0 },
+      assets: { totalImagesDetected: (dataset?.attachments || []).filter((a) => a.kind === 'image').length, totalFilesDetected: (dataset?.attachments || []).filter((a) => a.kind === 'file').length },
+      security: { blockedOutboundCount: 0, allowlistMode: 'default' },
+      learning: { scoreDelta: diag?.learned?.scoreDelta || 0, updates: diag?.learned?.updates || 0 },
+      perf: { elapsedMs: diag.elapsedMs || 0 },
+      platform
+    };
   }
 
   function processData(res) {
@@ -213,7 +316,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const el = document.getElementById('analyze-progress');
     if (!el) return;
     const bounded = Math.max(0, Math.min(100, Math.round(percent)));
-    el.textContent = `Analysis Progress: ${bounded}% (${label})`;
+    el.textContent = `Analysis Progress (messages/images/files): ${bounded}% (${label})`;
   }
 
   function computeDetectedCounts(messages = []) {
@@ -273,6 +376,20 @@ document.addEventListener('DOMContentLoaded', () => {
         setProcessingProgress(percent, `Processing ${fmt.toUpperCase()}`);
       }
 
+
+      const bundleManifest = {
+        generatedAt: new Date().toISOString(),
+        version: '0.12.0',
+        fileCount: files.length,
+        files: files.map((f) => ({ name: f.name, mime: f.mime || 'application/octet-stream', byteLength: (typeof f.content === 'string' ? f.content.length : (f.content?.length || 0)) })),
+        datasetSummary: {
+          messages: currentChatData?.dataset?.messages?.length || currentChatData?.messages?.length || 0,
+          attachments: currentChatData?.dataset?.attachments?.length || 0
+        }
+      };
+      files.push({ name: `${baseName}.diagnostics.json`, content: JSON.stringify(currentChatData?.diagnostics || {}, null, 2), mime: 'application/json' });
+      files.push({ name: `${baseName}.export_bundle_manifest.json`, content: JSON.stringify(bundleManifest, null, 2), mime: 'application/json' });
+
       if (files.length === 1 && !checkZip.checked) {
         setProcessingProgress(95, 'Finalizing');
         downloadBlob(new Blob([files[0].content], { type: files[0].mime }), files[0].name);
@@ -330,16 +447,20 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.runtime.sendMessage({ action: 'GET_LOGS' }, (logs) => {
       downloadBlob(new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' }), 'ai_exporter_logs.json');
     });
+    chrome.runtime.sendMessage({ action: 'GET_DIAGNOSTICS_JSONL' }, (diag) => {
+      if (diag?.success) downloadBlob(new Blob([(diag.lines || []).join('\n')], { type: 'application/x-ndjson' }), 'ai_exporter_diagnostics.jsonl');
+    });
   };
 
   btnExportImages.onclick = async () => {
     if (!currentChatData) return;
-    const imageList = extractAllImageSources(currentChatData.messages);
+    const imageList = extractAllImageSources(currentChatData.messages, currentChatData.dataset);
     if (!imageList.length) return showError(new Error('No images found in extracted chat data.'));
 
     const packMode = !!checkPhotoZip.checked;
     const date = new Date().toISOString().slice(0, 10);
     const platformPrefix = (currentChatData.platform || 'Export').replace(/[^a-zA-Z0-9]/g, '');
+    await ensureAssetPermissions();
     const processor = window.DataProcessor ? new window.DataProcessor() : null;
     const textCorpus = (currentChatData.messages || []).map((m) => m.content || '').join('\n');
 
@@ -382,10 +503,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!currentChatData) return;
     if (!checkExportFiles.checked) return showInfo('Files Export Disabled', 'Enable "Extract and ZIP Chat Files" in Settings first.');
 
+    await ensureAssetPermissions();
     const processor = window.DataProcessor ? new window.DataProcessor() : null;
     const textCorpus = (currentChatData.messages || []).map((m) => m.content || '').join('\n');
     const metaFiles = processor ? processor.extractDownloadMetadata(textCorpus) : [];
-    const legacyFiles = extractAllFileSources(currentChatData.messages).map((f) => ({ fileName: f.name, url: f.url, type: /^sandbox:/i.test(f.url) ? 'sandbox' : 'text_reference', needsResolution: /^sandbox:/i.test(f.url) }));
+    const legacyFiles = extractAllFileSources(currentChatData.messages, currentChatData.dataset).map((f) => ({ fileName: f.name, url: f.url, type: /^sandbox:/i.test(f.url) ? 'sandbox' : 'text_reference', needsResolution: /^sandbox:/i.test(f.url) }));
     const filesFound = processor ? processor.deduplicateFiles([...legacyFiles, ...metaFiles]) : legacyFiles;
 
     if (!filesFound.length) return showError(new Error('No chat-generated file links were detected.'));
@@ -393,7 +515,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const result = processor
       ? await processor.downloadAllFiles(filesFound, fetchFileBlob, async (path) => {
-        const resolved = await sendToActiveTab({ action: 'fetch_blob_page', url: path });
+        const resolved = await resolveAssetViaBroker(path);
         return resolved?.sourceUrl || resolved?.download_url || null;
       }, (progress) => {
         if (progress.status === 'ok') console.log(`[FILES][${progress.index}/${progress.total}] ✓ ${progress.fileName}`);
@@ -409,7 +531,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let i = 1;
     for (const f of result.succeeded) {
       const ext = (f.type.split('/')[1] || 'bin').replace('jpeg', 'jpg');
-      const name = (f.fileName || `file_${i}`).includes('.') ? (f.fileName || `file_${i}`) : `${f.fileName || `file_${i}`}.${ext}`;
+      const rawName = (f.fileName || `file_${i}`).includes('.') ? (f.fileName || `file_${i}`) : `${f.fileName || `file_${i}`}.${ext}`;
+      const name = sanitizeZipName(rawName);
       const data = new Uint8Array(await f.blob.arrayBuffer());
       packed.push({ name: `${String(i).padStart(3, '0')}_${name}`, content: data, mime: f.type || 'application/octet-stream' });
       i += 1;
@@ -559,8 +682,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }).join('');
   }
 
-  function extractAllImageSources(messages) {
+  function extractAllImageSources(messages, dataset = null) {
     const set = new Set();
+    const canonical = (dataset?.attachments || []).filter((a) => a.kind === 'image').map((a) => a?.resolved?.dataUri || a?.sourceUrl || '').filter(Boolean);
+    canonical.forEach((src) => {
+      const norm = normalizeImageSrc(src);
+      if (norm) set.add(norm);
+    });
+
     const tokenRegex = /\[\[IMG:([\s\S]*?)\]\]/g;
     const mdRegex = /!\[[^\]]*\]\((data:image\/[^)]+|https?:\/\/[^)]+)\)/g;
     for (const m of messages || []) {
@@ -577,8 +706,15 @@ document.addEventListener('DOMContentLoaded', () => {
     return Array.from(set);
   }
 
-  function extractAllFileSources(messages) {
+  function extractAllFileSources(messages, dataset = null) {
     const files = [];
+    (dataset?.attachments || []).filter((a) => a.kind === 'file').forEach((a) => {
+      const url = String(a?.sourceUrl || '').trim();
+      if (!url) return;
+      const safeName = String(a?.fileNameSafe || a?.displayName || 'file.bin').replace(/[\/:*?"<>|]+/g, '_') || 'file.bin';
+      files.push({ url, name: safeName });
+    });
+
     const fileRegex = /\[\[FILE:([^|\]]+)\|([^\]]+)\]\]/g;
     for (const m of messages || []) {
       let match;
@@ -1048,6 +1184,10 @@ document.addEventListener('DOMContentLoaded', () => {
     return new Blob([...parts, ...cd, end], { type: 'application/zip' });
   }
 
+  function sanitizeZipName(name = "artifact.bin") {
+    return String(name || "artifact.bin").replace(/\.\.+/g, '.').replace(/[\\/:*?"<>|]/g, "_").slice(0, 120);
+  }
+
   function downloadBlob(blob, name) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1112,19 +1252,58 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  function ensureGestureProofToken() {
+    if (!gestureProofToken) gestureProofToken = `gesture_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
+    return gestureProofToken;
+  }
+
+  async function resolveAssetViaBroker(url) {
+    const token = ensureGestureProofToken();
+    return sendToActiveTab({ action: "fetch_blob_page", url, gestureToken: token });
+  }
+
+
+  async function ensureAssetPermissions() {
+    const origins = [
+      'https://*.oaiusercontent.com/*',
+      'https://*.oaistatic.com/*',
+      'https://*.openai.com/*',
+      'https://*.googleusercontent.com/*',
+      'https://*.gstatic.com/*',
+      'https://*.anthropic.com/*'
+    ];
+    return new Promise((resolve) => {
+      chrome.permissions.contains({ origins }, (has) => {
+        if (has) {
+          resolve(true);
+          return;
+        }
+        chrome.permissions.request({ origins }, (granted) => resolve(!!granted));
+      });
+    });
+  }
+
+  async function fetchMediaViaBackgroundProxy(url) {
+    return new Promise((resolve) => {
+      chrome.runtime.sendMessage({ action: "MEDIA_FETCH_PROXY", payload: { url, userInitiated: true } }, (res) => resolve(res || { success: false }));
+    });
+  }
+
   async function fetchFileBlob(url) {
     if (!url) return null;
     if (!activeTabId) return null;
     const clean = sanitizeTokenUrl(url);
     if (/^data:/i.test(clean)) return dataUrlToBlob(clean);
     if (/^blob:/i.test(clean)) {
-      const pageBlob = await sendToActiveTab({ action: 'fetch_blob_page', url: clean });
+      const pageBlob = await resolveAssetViaBroker(clean);
       if (!pageBlob?.success) return null;
       return dataUrlToBlob(pageBlob.dataUrl);
     }
-    const pageBlob = await sendToActiveTab({ action: 'fetch_blob_page', url: clean });
-    if (!pageBlob?.success) return null;
-    return dataUrlToBlob(pageBlob.dataUrl);
+    const pageBlob = await resolveAssetViaBroker(clean);
+    if (pageBlob?.success) return dataUrlToBlob(pageBlob.dataUrl);
+    const bgProxy = await fetchMediaViaBackgroundProxy(clean);
+    if (!bgProxy?.success) return null;
+    return dataUrlToBlob(bgProxy.dataUrl);
   }
 
   function dataUrlToBlob(dataUrl) {

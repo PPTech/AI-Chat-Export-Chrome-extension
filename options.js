@@ -1,7 +1,8 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// options.js - Extension Options v0.10.18
+// نویسنده دکتر بابک سرخپور با کمک ابزار چت جی پی تی.
+// options.js - Extension Options v0.12.3
 
 const KEY = 'local_agent_options_v1';
 const plannerEnabled = document.getElementById('planner-enabled');
@@ -20,5 +21,12 @@ document.getElementById('save').addEventListener('click', () => {
       debugOverlay: debugOverlay.checked,
       updatedAt: new Date().toISOString()
     }
+  });
+});
+
+
+document.getElementById('btn-purge-learning').addEventListener('click', () => {
+  chrome.runtime.sendMessage({ action: 'LOCAL_PURGE_LEARNING', payload: {} }, () => {
+    alert('Local learning artifacts purged.');
   });
 });

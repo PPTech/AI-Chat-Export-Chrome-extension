@@ -1,0 +1,7 @@
+{
+  "version": "0.11.2",
+  "name": "local-fallback-embedding",
+  "type": "feature-extraction",
+  "quantized": true,
+  "note": "Local bundled fallback metadata. Replace with full quantized model artifacts for production semantic quality."
+}

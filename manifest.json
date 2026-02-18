@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "AI Chat Exporter (Ultimate)",
-  "version": "0.10.26",
-  "description": "Industrial-grade multi-platform chat extraction. Secure local-first architecture. Powered by Gemini 2.0 Flash.",
+  "version": "0.12.3",
+  "description": "AEGIS-2026 local-only autonomous extractor with self-healing and secure artifact export.",
   "action": {
     "default_popup": "index.html",
     "default_title": "AI Chat Exporter"
@@ -25,7 +25,13 @@
     "https://chat.openai.com/*",
     "https://claude.ai/*",
     "https://gemini.google.com/*",
-    "https://aistudio.google.com/*"
+    "https://aistudio.google.com/*",
+    "https://*.oaiusercontent.com/*",
+    "https://*.oaistatic.com/*",
+    "https://*.openai.com/*",
+    "https://*.googleusercontent.com/*",
+    "https://*.gstatic.com/*",
+    "https://*.anthropic.com/*"
   ],
   "content_scripts": [
     {
@@ -37,6 +43,11 @@
         "*://aistudio.google.com/*"
       ],
       "js": [
+        "security_guard.js",
+        "smart_vision.js",
+        "offline_brain.js",
+        "logger.js",
+        "export_core.js",
         "visual_walker.js",
         "asset_processor.js",
         "smart_miner.js",
@@ -54,14 +65,31 @@
         "recipes_store.js",
         "models/*",
         "lib/*",
-        "export_manager.js"
+        "export_manager.js",
+        "smart_vision.js",
+        "security_guard.js",
+        "offline_brain.js",
+        "export_core.js",
+        "logger.js"
       ],
       "matches": [
-        "<all_urls>"
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://claude.ai/*",
+        "https://gemini.google.com/*",
+        "https://aistudio.google.com/*"
       ]
     }
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self'"
-  }
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'"
+  },
+  "optional_host_permissions": [
+    "https://*.oaiusercontent.com/*",
+    "https://*.oaistatic.com/*",
+    "https://*.openai.com/*",
+    "https://*.googleusercontent.com/*",
+    "https://*.gstatic.com/*",
+    "https://*.anthropic.com/*"
+  ]
 }

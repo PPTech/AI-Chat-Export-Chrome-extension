@@ -1,12 +1,44 @@
+/**
+ * AI Chat Export & Local Agent (Project Aegis)
+ * Copyright (C) 2026 [YOUR_COMPANY_NAME_HERE]
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program. If not, see https://www.gnu.org/licenses/.
+ *
+ * -------------------------------------------------------------------------
+ * COMMERCIAL LICENSE / PROPRIETARY USE:
+ * If you wish to use this code in a proprietary software product,
+ * enterprise environment, or commercial project where you do not wish to
+ * open-source your own code, you MUST purchase a Commercial License from:
+ * [INSERT_CONTACT_EMAIL_OR_WEBSITE]
+ * -------------------------------------------------------------------------
+ */
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// content.js - Platform Engine Orchestrator v0.10.26
+// نویسنده دکتر بابک سرخپور با کمک ابزار چت جی پی تی.
+// content.js - Platform Engine Orchestrator v0.12.3
 
 (() => {
   if (window.hasRunContent) return;
   window.hasRunContent = true;
   console.log(`[INJECT] content script active on ${location.href}`);
+
+  const AEGIS_LOGGER = window.AegisLogger || null;
+  const SECURITY_GUARD = window.SecurityGuard || null;
+  if (SECURITY_GUARD?.installNetworkKillSwitch) {
+    try { SECURITY_GUARD.installNetworkKillSwitch(window); } catch (error) { console.warn('[SECURITY] kill-switch setup failed', error?.message || error); }
+  }
 
   const CHATGPT_ANALYSIS_KEY = 'CHATGPT_DOM_ANALYSIS';
 
@@ -1808,6 +1840,12 @@
     }
   }
 
+
+  function buildRedactedDomSnapshot(limit = 40000) {
+    const txt = String(document.body?.innerText || '').replace(/https?:\/\/\S+/g, '[REDACTED_URL]').replace(/[A-Za-z0-9_\-]{24,}/g, '[REDACTED_TOKEN]');
+    return txt.slice(0, limit);
+  }
+
   async function runLocalAgentExtract(options = {}) {
     let items = [];
     let root = { method: 'miner_fallback', evidence: [] };
@@ -1872,6 +1910,30 @@
     }
 
     const verify = ExtractionVerifier.verify(items);
+
+    try {
+      const agentRun = await sendRuntime({
+        action: 'RUN_LOCAL_AGENT_ENGINE',
+        payload: {
+          task: 'extract_messages',
+          hostname: location.hostname,
+          domainFingerprint,
+          pageUrl: location.href,
+          candidatesFeatures: items,
+          domSnapshot: buildRedactedDomSnapshot(40000),
+          extractionGoals: { includeMessages: true, includeImages: true, includeFiles: true },
+          requireModel: options?.requireModel !== false
+        }
+      });
+      const learnedItems = agentRun?.bestExtraction?.items || [];
+      if (learnedItems.length) {
+        items = learnedItems;
+        root = { method: 'agent_loop', evidence: [`attempts=${(agentRun?.trace?.attempts || []).length}`, `score=${agentRun?.bestExtraction?.metrics?.score || 0}`] };
+      }
+      window.__LOCAL_AGENT_TRACE__ = agentRun?.trace || null;
+    } catch (error) {
+      console.warn('[LOCAL_AGENT] agent loop unavailable', error?.message || error);
+    }
     if (verify.shouldHeal) {
       const fallbackItems = runTextDensityFallback();
       const fallbackVerify = ExtractionVerifier.verify(fallbackItems);
@@ -1938,6 +2000,7 @@
 
     setDebugOverlay(items, !!options.debug);
     sendRuntime({ action: 'LOCAL_SAVE_CHAT', payload: { host: location.hostname, title: document.title, payload: { summary: diag, items: items.slice(0, 200) } } }).catch(() => null);
+    emitSessionDiagnostics(items).catch(() => null);
     return {
       success: true,
       summary: { messages: messages.length, images: images.length, files: files.length },
@@ -1968,7 +2031,19 @@
     return { success: true, status: 'FAIL', details: `No viable candidates found. localOnly=${localOnly}, classifier=${classifierModel}` };
   }
 
-  async function fetchBlobFromPage(url) {
+  const ASSET_ALLOWLIST = ['chatgpt.com', 'chat.openai.com', 'oaistatic.com', 'openai.com',
+    'oaiusercontent.com', 'claude.ai', 'anthropic.com', 'google.com', 'gstatic.com', 'googleusercontent.com'];
+
+  function isAllowlistedAssetUrl(url) {
+    try {
+      const u = new URL(url);
+      return ASSET_ALLOWLIST.some((h) => u.hostname === h || u.hostname.endsWith(`.${h}`));
+    } catch {
+      return false;
+    }
+  }
+
+  async function fetchBlobFromPage(url, gestureToken = "") {
     const clean = String(url || '').trim().replace(/[\]\)>'"\s]+$/g, '');
     let effectiveUrl = clean;
 
@@ -1991,6 +2066,10 @@
       }
     }
 
+    if (!gestureToken) return { success: false, error: "missing_gesture_token" };
+    if (/^https?:\/\//i.test(effectiveUrl) && !isAllowlistedAssetUrl(effectiveUrl)) {
+      return { success: false, error: `host_not_allowlisted:${effectiveUrl}` };
+    }
     if (!/^https?:\/\//i.test(effectiveUrl) && !/^blob:|^data:/i.test(effectiveUrl)) {
       return { success: false, error: `Unsupported URL scheme for page fetch: ${effectiveUrl.slice(0, 60)}` };
     }
@@ -2012,6 +2091,30 @@
     }
   }
 
+  async function emitSessionDiagnostics(items = []) {
+    if (!AEGIS_LOGGER?.buildSessionLog) return null;
+    try {
+      const exportedContent = (items || []).slice(0, 120).map((i) => i?.content || '').join('\n').slice(0, 5000);
+      const sessionLog = await AEGIS_LOGGER.buildSessionLog({
+        nodesDetected: (items || []).length,
+        securityBlocks: SECURITY_GUARD?.metrics?.securityBlocks || 0,
+        exportedContent,
+        visualElementsCount: (items || []).length
+      });
+      sendRuntime({ action: 'LOG_ERROR', message: 'AEGIS Session Log', details: JSON.stringify(sessionLog) }).catch(() => null);
+      return sessionLog;
+    } catch (error) {
+      console.warn('[LOGGER] failed to emit session diagnostics', error?.message || error);
+      return null;
+    }
+  }
+
+  function detectAllFileLinks() {
+    if (!window.DataProcessor) return [];
+    const processor = new window.DataProcessor();
+    return processor.detectAllFileReferences(document.body);
+  }
+
   async function runImageExtractionDiagnostic() {
     if (!window.DataProcessor) return { success: false, error: 'DataProcessor unavailable' };
     const processor = new window.DataProcessor();
@@ -2022,8 +2125,12 @@
   async function runFileDetectionDiagnostic() {
     if (!window.DataProcessor) return { success: false, error: 'DataProcessor unavailable' };
     const processor = new window.DataProcessor();
-    const files = processor.detectAllFileReferences(document.body);
+    const files = detectAllFileLinks();
     return { success: true, count: files.length, files };
+  }
+
+  async function extract_chat_agentic(options = {}) {
+    return runLocalAgentExtract({ ...options, mode: 'agentic' });
   }
 
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -2068,6 +2175,10 @@
       runLocalAgentExtract(request.options || {}).then(sendResponse);
       return true;
     }
+    if (request.action === 'extract_chat_agentic') {
+      extract_chat_agentic(request.options || {}).then(sendResponse);
+      return true;
+    }
     if (request.action === 'self_test_local_agent') {
       runLocalAgentSelfTest(request.options || {}).then(sendResponse);
       return true;
@@ -2082,7 +2193,7 @@
       return true;
     }
     if (request.action === 'fetch_blob_page') {
-      fetchBlobFromPage(request.url).then(sendResponse);
+      fetchBlobFromPage(request.url, request.gestureToken || '').then(sendResponse);
       return true;
     }
     if (request.action === 'test_image_extraction') {
