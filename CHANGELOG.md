@@ -4,6 +4,13 @@
 
 # Changelog
 
+## 0.10.9 - 2026-02-18
+- Stabilized popup initialization by moving startup execution to a safe end-of-script `safeInit()` call so menu buttons remain usable during active-tab analysis.
+- Restored simpler background tab-state manager (no runtime AES layer) to remove extraction-state compatibility regressions.
+- Kept chat-generated file export feature (`Extract and ZIP Chat Files` + `Export Files` ZIP action).
+- Retained ChatGPT fallback extraction path when analyzer returns zero messages.
+- Synced runtime/docs metadata to `0.10.9`.
+
 ## 0.10.8 - 2026-02-18
 - Added chat file extraction tokens (`[[FILE:url|name]]`) in content parsing and a new popup action to download detected chat-generated files as ZIP.
 - Added new settings option `Extract and ZIP Chat Files` and integrated it into extraction options.
@@ -11,10 +18,3 @@
 - Improved extraction resilience by adding ChatGPT fallback node scan when analyzer result is empty.
 - Hardened popup data flow with null-response handling so menu actions remain usable while analysis is in progress.
 - Synced runtime/docs metadata to `0.10.8`.
-
-## 0.10.7 - 2026-02-17
-- Improved multilingual PDF rendering by adding script-aware line wrapping (`wrapLineSmart`) with dedicated RTL and CJK handling.
-- Updated canvas text drawing to apply language direction (`rtl/ltr`) dynamically per text block.
-- Kept image embedding in PDF while improving mixed-language message readability.
-- Preserved complete standalone HTML/Word export rendering path with image token to `<img>` conversion.
-- Synced runtime/docs metadata to `0.10.7`.

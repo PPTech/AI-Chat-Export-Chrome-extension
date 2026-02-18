@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// script.js - Main Controller v0.10.8
+// script.js - Main Controller v0.10.9
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
@@ -28,9 +28,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const infoModal = document.getElementById('info-modal');
   const errorMsg = document.getElementById('error-msg');
   const errorFix = document.getElementById('error-fix');
-
-  init();
-
 
   const SETTINGS_KEY = 'ai_exporter_settings_v1';
 
@@ -82,6 +79,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const cfg = `# AI Chat Exporter Settings\n# version=0.10.8\n${lines.join('\n')}\n`;
     const date = new Date().toISOString().slice(0, 10);
     downloadBlob(new Blob([cfg], { type: 'text/plain' }), `ai_chat_exporter_settings_${date}.cfg`);
+  }
+
+  function safeInit() {
+    try {
+      init();
+    } catch (error) {
+      document.getElementById('platform-badge').textContent = 'Initialization Failed';
+      setAnalyzeProgress(0, 'Initialization failed');
+      console.error('Init error:', error);
+    }
   }
 
   function init() {
@@ -731,4 +738,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-close-about').onclick = document.getElementById('btn-ack-about').onclick = () => closeModal(aboutModal);
   document.getElementById('btn-close-error').onclick = () => closeModal(errorModal);
   document.getElementById('btn-close-preview').onclick = () => closeModal(document.getElementById('preview-modal'));
+
+  safeInit();
 });
