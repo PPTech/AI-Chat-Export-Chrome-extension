@@ -4,6 +4,11 @@
 
 # Changelog
 
+## 0.12.10 - Self-Test Media Count Reconciliation
+- Fixed `self_test_local_agent` mismatch where WARN could appear despite visible media in header summary.
+- Added media reconciliation in `content.js` using extraction item evidence + DOM evidence before deciding PASS/WARN.
+- Added integration contract assertions for self-test media evidence logic.
+
 ## 0.12.9 - Runtime Enforcement: Image/File/Integration Smoke Tests
 - Added executable runtime smoke tests: `test_image_embed.js`, `test_file_download.js`, and `test_integration.js`.
 - Added `npm run test:runtime` script and CI enforcement workflow `.github/workflows/enforce.yml`.

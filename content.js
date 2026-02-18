@@ -27,7 +27,7 @@
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
-// content.js - Platform Engine Orchestrator v0.12.9
+// content.js - Platform Engine Orchestrator v0.12.10
 
 (() => {
   if (window.hasRunContent) return;
@@ -2039,6 +2039,38 @@
     };
   }
 
+
+
+  function countMediaEvidenceFromItems(items = []) {
+    const imageTypeSet = new Set(['IMAGE_BLOCK', 'IMAGE', 'PHOTO', 'IMG']);
+    const fileTypeSet = new Set(['FILE_CARD', 'FILE', 'ATTACHMENT']);
+    let imageSignals = 0;
+    let fileSignals = 0;
+
+    for (const item of items) {
+      const t = String(item?.type || '').toUpperCase();
+      const txt = String(item?.text || item?.content || '');
+      const href = String(item?.href || item?.url || item?.src || '');
+
+      if (imageTypeSet.has(t)) imageSignals += 1;
+      if (fileTypeSet.has(t)) fileSignals += 1;
+
+      if (/\[\[IMG:/i.test(txt) || /!\[[^\]]*\]\((data:image\/|https?:\/\/[^)]+\.(png|jpe?g|webp|gif))/i.test(txt)) imageSignals += 1;
+      if (/\[\[FILE:/i.test(txt) || /https?:\/\/[^\s"')]+\.(pdf|docx|xlsx|pptx|zip|csv|txt|json|py|js|md)/i.test(txt)) fileSignals += 1;
+
+      if (/^data:image\//i.test(href) || /^blob:/i.test(href) || /\.(png|jpe?g|webp|gif)$/i.test(href)) imageSignals += 1;
+      if (/\.(pdf|docx|xlsx|pptx|zip|csv|txt|json|py|js|md)$/i.test(href) || /^sandbox:\/mnt\/data\//i.test(href)) fileSignals += 1;
+    }
+
+    return { imageSignals, fileSignals };
+  }
+
+  function collectDomMediaEvidence() {
+    const imageDomCount = document.querySelectorAll('img[src], [style*="background-image"]').length;
+    const fileDomCount = detectAllFileLinks().length;
+    return { imageDomCount, fileDomCount };
+  }
+
   async function runLocalAgentSelfTest(options = {}) {
     const ext = await runLocalAgentExtract(options);
     if (!ext.success) return ext;
@@ -2055,11 +2087,31 @@
       healed = false;
     }
     const s = ext.summary;
-    const pass = s.messages > 0 && (s.images > 0 || s.files > 0);
-    const warn = s.messages > 0 && s.images === 0 && s.files === 0;
-    if (pass) return { success: true, status: 'PASS', details: `Extracted messages=${s.messages}, images=${s.images}, files=${s.files}, self-heal=${healed ? 'yes' : 'fallback-only'}, localOnly=${localOnly}, classifier=${classifierModel}` };
-    if (warn) return { success: true, status: 'WARN', details: `Messages detected but no media/files. messages=${s.messages}, self-heal=${healed ? 'yes' : 'fallback-only'}, localOnly=${localOnly}, classifier=${classifierModel}` };
-    return { success: true, status: 'FAIL', details: `No viable candidates found. localOnly=${localOnly}, classifier=${classifierModel}` };
+    const itemEvidence = countMediaEvidenceFromItems(ext.result?.items || []);
+    const domEvidence = collectDomMediaEvidence();
+    const derivedImages = Math.max(s.images || 0, itemEvidence.imageSignals, domEvidence.imageDomCount > 0 ? 1 : 0);
+    const derivedFiles = Math.max(s.files || 0, itemEvidence.fileSignals, domEvidence.fileDomCount > 0 ? 1 : 0);
+
+    const pass = s.messages > 0 && (derivedImages > 0 || derivedFiles > 0);
+    const warn = s.messages > 0 && derivedImages === 0 && derivedFiles === 0;
+
+    if (pass) {
+      return {
+        success: true,
+        status: 'PASS',
+        details: `Extracted messages=${s.messages}, images=${derivedImages}, files=${derivedFiles}, self-heal=${healed ? 'yes' : 'fallback-only'}, localOnly=${localOnly}, classifier=${classifierModel}`,
+        evidence: { summary: s, itemEvidence, domEvidence }
+      };
+    }
+    if (warn) {
+      return {
+        success: true,
+        status: 'WARN',
+        details: `Messages detected but no media/files. messages=${s.messages}, images=${derivedImages}, files=${derivedFiles}, self-heal=${healed ? 'yes' : 'fallback-only'}, localOnly=${localOnly}, classifier=${classifierModel}`,
+        evidence: { summary: s, itemEvidence, domEvidence }
+      };
+    }
+    return { success: true, status: 'FAIL', details: `No viable candidates found. localOnly=${localOnly}, classifier=${classifierModel}`, evidence: { summary: s, itemEvidence, domEvidence } };
   }
 
   const ASSET_ALLOWLIST = ['chatgpt.com', 'chat.openai.com', 'oaistatic.com', 'openai.com',

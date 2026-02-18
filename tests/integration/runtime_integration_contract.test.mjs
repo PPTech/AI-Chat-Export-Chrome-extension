@@ -15,3 +15,12 @@ test('Content runtime integrates SecurityGuard kill switch and logger session di
   assert.match(contentSource, /emitSessionDiagnostics\(items\)/);
   assert.match(contentSource, /function detectAllFileLinks\(\)/);
 });
+
+
+test('Self-test reconciles media counts using item and DOM evidence', () => {
+  assert.match(contentSource, /function countMediaEvidenceFromItems\(/);
+  assert.match(contentSource, /function collectDomMediaEvidence\(/);
+  assert.match(contentSource, /const derivedImages = Math\.max\(/);
+  assert.match(contentSource, /const derivedFiles = Math\.max\(/);
+  assert.match(contentSource, /evidence: \{ summary: s, itemEvidence, domEvidence \}/);
+});

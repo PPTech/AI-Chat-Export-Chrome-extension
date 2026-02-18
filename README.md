@@ -1,6 +1,6 @@
 # 🚀 AI Chat Exporter Ultimate
 
-**Version**: 0.12.9  
+**Version**: 0.12.10  
 **License**: MIT (Ultimate Edition)  
 **Code Source**: Generated with support from CODEX and CODEX CLI.  
 **Owner / Management**: Dr. Babak Sorkhpour ([@Drbabakskr](https://x.com/Drbabakskr))  
@@ -59,6 +59,17 @@ The repository now includes explicit runtime smoke tests for critical user-visib
 - `node test_file_download.js` validates `downloadAllFiles()` success/failure accounting.
 - `node test_integration.js` validates logger/security wiring in `content.js` + manifest integration.
 - `npm run test:runtime` executes all three tests as a single mandatory gate.
+
+
+## Self-Test Consistency Fix (0.12.10)
+
+`self_test_local_agent` now reconciles media counts using three sources before PASS/WARN decision:
+
+- direct extraction summary (`images`, `files`),
+- item-level media evidence in extracted blocks/text,
+- DOM-level media/file evidence (`img`, file-link detection).
+
+This prevents false WARN messages when the header shows media but the strict item-type counters are sparse.
 
 ## 🛠 Features
 

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AI Chat Exporter (Ultimate)",
-  "version": "0.12.9",
+  "version": "0.12.10",
   "description": "AEGIS-2026 local-only autonomous extractor with self-healing and secure artifact export.",
   "action": {
     "default_popup": "index.html",
