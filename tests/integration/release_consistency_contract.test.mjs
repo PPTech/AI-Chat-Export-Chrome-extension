@@ -15,8 +15,11 @@ test('Release versions are synchronized', () => {
   assert.equal(manifest.version, metadata.version);
 });
 
-test('Manifest includes critical CDN host permissions', () => {
+test('Manifest includes critical CDN hosts only as optional permissions (no duplication)', () => {
   const hosts = manifest.host_permissions || [];
-  assert.ok(hosts.includes('https://*.oaiusercontent.com/*'));
-  assert.ok(hosts.includes('https://*.oaistatic.com/*'));
+  const optional = manifest.optional_host_permissions || [];
+  assert.ok(optional.includes('https://*.oaiusercontent.com/*'));
+  assert.ok(optional.includes('https://*.oaistatic.com/*'));
+  assert.ok(!hosts.includes('https://*.oaiusercontent.com/*'));
+  assert.ok(!hosts.includes('https://*.oaistatic.com/*'));
 });

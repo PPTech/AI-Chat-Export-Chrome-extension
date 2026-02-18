@@ -412,3 +412,8 @@ This prevents image token corruption and ensures valid `<img>` tags are emitted 
 ## Visual Cortex Protocol (v0.12.4)
 - Added `visual_engine.js` with geometry-first, TreeWalker-based extraction and Shadow DOM traversal for selector-agnostic robustness.
 - Added `artifact_builder.js` to produce script-free single-file HTML and multipart MHTML containers for offline Word-compatible artifacts.
+
+
+## Permission De-duplication (v0.12.5)
+- CDN hosts required for media embedding are now requested only through `optional_host_permissions`, eliminating MV3 redundancy errors.
+- Release gates now fail if required and optional host permissions overlap on protected CDN entries.

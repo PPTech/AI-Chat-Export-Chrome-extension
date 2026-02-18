@@ -27,7 +27,7 @@
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // نویسنده دکتر بابک سرخپور با کمک ابزار چت جی پی تی.
-// content.js - Platform Engine Orchestrator v0.12.4
+// content.js - Platform Engine Orchestrator v0.12.5
 
 (() => {
   if (window.hasRunContent) return;

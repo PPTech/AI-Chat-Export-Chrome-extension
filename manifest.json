@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AI Chat Exporter (Ultimate)",
-  "version": "0.12.4",
+  "version": "0.12.5",
   "description": "AEGIS-2026 local-only autonomous extractor with self-healing and secure artifact export.",
   "action": {
     "default_popup": "index.html",
@@ -25,13 +25,7 @@
     "https://chat.openai.com/*",
     "https://claude.ai/*",
     "https://gemini.google.com/*",
-    "https://aistudio.google.com/*",
-    "https://*.oaiusercontent.com/*",
-    "https://*.oaistatic.com/*",
-    "https://*.openai.com/*",
-    "https://*.googleusercontent.com/*",
-    "https://*.gstatic.com/*",
-    "https://*.anthropic.com/*"
+    "https://aistudio.google.com/*"
   ],
   "content_scripts": [
     {

@@ -2,7 +2,7 @@
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // نویسنده دکتر بابک سرخپور با کمک ابزار چت جی پی تی.
-// ai_engine.js - Agent Loop Bridge v0.12.4
+// ai_engine.js - Agent Loop Bridge v0.12.5
 
 (function () {
   const STRICT_ALLOWLIST = ['chrome-extension:', 'data:', 'blob:'];

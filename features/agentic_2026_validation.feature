@@ -24,3 +24,8 @@ Feature: AEGIS 2026 measurable intelligence validation
     Given a supported chat page is open
     When EXTRACT_VISUAL_CORTEX is requested
     Then extraction returns geometry-driven messages and debug log metrics
+
+  Scenario: Optional host permissions are not duplicated in required hosts
+    Given manifest host permissions are validated
+    When release consistency checks run
+    Then CDN domains exist in optional_host_permissions without required duplication

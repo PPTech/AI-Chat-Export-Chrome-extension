@@ -61,3 +61,5 @@
 - v0.12.3: Added explicit logger/security integration in content flow and real image embed helper in DataProcessor.
 
 - v0.12.4: Added Visual Cortex + Universal Artifact Builder modules with orchestrator routes and contract tests.
+
+- v0.12.5: Removed redundant optional/required host permission overlap and added architecture-level file relationship mapping.

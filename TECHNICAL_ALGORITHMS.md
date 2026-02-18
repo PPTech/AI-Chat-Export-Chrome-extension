@@ -280,3 +280,7 @@
 
 ### J10. Universal Artifact Builder
 - `ArtifactBuilder` provides script-stripped single-file HTML and multipart MHTML generation for offline portable artifacts with explicit MIME boundaries.
+
+
+### J11. Permission De-duplication Gate
+- Release verification enforces CDN host presence in `optional_host_permissions` and rejects required/optional duplication to satisfy MV3 permission semantics.

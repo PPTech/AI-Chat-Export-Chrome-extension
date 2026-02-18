@@ -2,7 +2,7 @@
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // نویسنده دکتر بابک سرخپور با کمک ابزار چت جی پی تی.
-// script.js - Main Controller v0.12.4
+// script.js - Main Controller v0.12.5
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;

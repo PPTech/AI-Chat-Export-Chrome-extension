@@ -4,6 +4,11 @@
 
 # Changelog
 
+## 0.12.5 - Permission De-duplication + Integration Map
+- Removed redundant CDN domains from required `host_permissions` while keeping them in `optional_host_permissions` to satisfy MV3 validation.
+- Updated release verification and integration tests to enforce no duplication between required/optional host permissions.
+- Added a detailed inter-file integration map in architecture docs for AI tools and contributor onboarding.
+
 ## 0.12.4 - AEGIS Visual Cortex + Universal Artifact Builder
 - Added `visual_engine.js` with TreeWalker + ShadowRoot traversal and geometry-based role/code heuristics (no class-selector dependency in cortex path).
 - Added `artifact_builder.js` with script-stripping single-file HTML and standards-aligned multipart MHTML primitives.
