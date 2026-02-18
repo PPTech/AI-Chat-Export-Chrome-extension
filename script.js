@@ -2,7 +2,7 @@
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
-// script.js - Main Controller v0.12.8
+// script.js - Main Controller v0.12.9
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;

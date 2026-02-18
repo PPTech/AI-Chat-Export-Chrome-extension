@@ -4,6 +4,11 @@
 
 # Changelog
 
+## 0.12.9 - Runtime Enforcement: Image/File/Integration Smoke Tests
+- Added executable runtime smoke tests: `test_image_embed.js`, `test_file_download.js`, and `test_integration.js`.
+- Added `npm run test:runtime` script and CI enforcement workflow `.github/workflows/enforce.yml`.
+- Hardened delivery gate so image embed/file download/integration contracts are validated before release checks.
+
 ## 0.12.8 - Prometheus Visual Inference Rescue Layer
 - Added Prometheus visual extraction path in `content.js` (`extract_prometheus_visual`) with recursive shadow traversal, geometry/icon role inference, CodeMirror-aware text extraction, Base64 image freezing, and text-density fallback.
 - Added background orchestration route `RUN_PROMETHEUS_EXPORT` to request tab extraction, generate MHTML, and trigger deterministic local download.

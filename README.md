@@ -1,6 +1,6 @@
 # 🚀 AI Chat Exporter Ultimate
 
-**Version**: 0.12.8  
+**Version**: 0.12.9  
 **License**: MIT (Ultimate Edition)  
 **Code Source**: Generated with support from CODEX and CODEX CLI.  
 **Owner / Management**: Dr. Babak Sorkhpour ([@Drbabakskr](https://x.com/Drbabakskr))  
@@ -49,6 +49,16 @@ The 0.12.8 release adds a dedicated visual extraction rescue path for Gemini and
 - Inline image URLs are frozen to Base64 data URLs at extraction time for true offline portability.
 - If visual heuristics return no turns, a text-density fallback scan emits best-effort conversation blocks instead of silent empty success.
 - `RUN_PROMETHEUS_EXPORT` in `background.js` builds and downloads Word-compatible MHTML in one action.
+
+
+## Runtime Enforcement Gate (0.12.9)
+
+The repository now includes explicit runtime smoke tests for critical user-visible promises:
+
+- `node test_image_embed.js` validates `embedImageAsBase64()` behavior.
+- `node test_file_download.js` validates `downloadAllFiles()` success/failure accounting.
+- `node test_integration.js` validates logger/security wiring in `content.js` + manifest integration.
+- `npm run test:runtime` executes all three tests as a single mandatory gate.
 
 ## 🛠 Features
 

@@ -1,7 +1,7 @@
 {
   "name": "ai-chat-exporter-(dev)",
   "private": true,
-  "version": "0.12.8",
+  "version": "0.12.9",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,7 +13,8 @@
     "verify:release": "node scripts/verify_release_consistency.cjs",
     "sync:version": "node scripts/sync_version.cjs",
     "verify:model": "node scripts/verify_model_checksum.cjs",
-    "verify:claims": "node scripts/verify_claims.cjs"
+    "verify:claims": "node scripts/verify_claims.cjs",
+    "test:runtime": "node test_image_embed.js && node test_file_download.js && node test_integration.js"
   },
   "dependencies": {},
   "devDependencies": {

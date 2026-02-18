@@ -2,7 +2,7 @@
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
-// offscreen.js - Hidden Local Agent Bridge v0.12.8
+// offscreen.js - Hidden Local Agent Bridge v0.12.9
 
 (() => {
   const allowPrefixes = ['chrome-extension://', 'blob:', 'data:'];
