@@ -73,7 +73,11 @@
         "logger.js"
       ],
       "matches": [
-        "<all_urls>"
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://claude.ai/*",
+        "https://gemini.google.com/*",
+        "https://aistudio.google.com/*"
       ]
     }
   ],

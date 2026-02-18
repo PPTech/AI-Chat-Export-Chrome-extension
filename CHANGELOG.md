@@ -152,3 +152,5 @@
 - Exposed purge-learning action in options UI.
 - Added 2026 validation tests and BDD scenarios plus an explicit Intelligence Scorecard document.
 - Synchronized release version to 0.12.0 across manifest/version metadata.
+
+- Added `docs/THREAT_MODEL.md` and `docs/PREMIUM_AGENT_CONSOLE_DESIGN.md` plus export bundle manifest emission (`*.diagnostics.json`, `*.export_bundle_manifest.json`).

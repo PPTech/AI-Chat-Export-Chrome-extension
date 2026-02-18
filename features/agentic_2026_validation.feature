@@ -14,3 +14,8 @@ Feature: AEGIS 2026 measurable intelligence validation
     Given media fetch is requested without user initiation
     When background proxy validates the request
     Then the request is denied with user_initiation_required
+
+  Scenario: Export bundle includes forensic manifests
+    Given export completes with one or more formats
+    When ZIP artifact is assembled
+    Then export bundle includes diagnostics JSON and export bundle manifest JSON

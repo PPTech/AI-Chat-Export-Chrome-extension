@@ -389,3 +389,5 @@ This prevents image token corruption and ensures valid `<img>` tags are emitted 
 - Agent payload now includes redacted DOM context + explicit extraction goals for measurable planning.
 - Background now supports user-initiated media proxy fetch with strict allowlist enforcement.
 - See `docs/INTELLIGENCE_SCORECARD.md` for quantified intelligence readiness and brutal self-critique.
+
+- Added threat model and premium local-agent console design docs for roadmap alignment.

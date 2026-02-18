@@ -15,4 +15,5 @@
 - [ ] Validate default extraction path uses self-test + local agent first.
 - [ ] Validate diagnostics bundle contains mandatory fields.
 - [ ] Update CHANGELOG / README / MEMORY / TECHNICAL_ALGORITHMS.
+- [ ] Review docs/THREAT_MODEL.md and validate controls remain accurate.
 - [ ] Run A/B regression check for verifier score improvements.

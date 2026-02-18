@@ -255,3 +255,6 @@
 
 ### J3. Intelligence Scoring Governance
 - Each release must publish quantified intelligence metrics and explicit residual-risk critique in scorecard docs.
+
+### J4. Export Forensics Manifest
+- Export ZIP now appends diagnostics JSON and bundle manifest JSON for reproducible artifact auditing.

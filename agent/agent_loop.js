@@ -1,6 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
+// نویسنده دکتر بابک سرخپور با کمک ابزار چت جی پی تی.
 // agent/agent_loop.js - Observe/Plan/Act/Verify/Learn orchestrator v0.12.0
 
 (function () {
@@ -22,8 +23,12 @@
     const learnerState = mem.learner || await self.AgentOnlineLearner.load(mem.key);
 
     const features = await self.AgentFeatureExtractor.toVectors(candidates);
+    const requireModel = payload?.requireModel !== false;
+    if (requireModel && !features?.embeddingMeta?.model?.loaded) {
+      return { ok: false, mode: "agent_model_unavailable", error: features?.embeddingMeta?.model?.fallbackReason || "model_not_loaded", trace: { model: features?.embeddingMeta?.model || null, attempts: [], elapsedMs: Date.now() - started } };
+    }
     const classes = features.vectors.map((v) => self.AgentOnlineLearner.classify(learnerState, v));
-    const MAX_ATTEMPTS = 6;
+    const MAX_ATTEMPTS = 8;
     const plans = self.AgentPlanSearch.generate(candidates, classes, MAX_ATTEMPTS);
 
     const attempts = [];

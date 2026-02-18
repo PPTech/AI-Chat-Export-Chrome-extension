@@ -1,6 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
+// نویسنده دکتر بابک سرخپور با کمک ابزار چت جی پی تی.
 // agent/local_embedding_engine.js - Local embedding wrapper v0.11.5
 
 (function () {
@@ -13,8 +14,31 @@
       this.maxCache = 128;
     }
 
+
+    async verifyIntegrity() {
+      try {
+        const checksumsUrl = chrome.runtime.getURL('models/minilm-l3-quantized/checksums.json');
+        const checksums = await fetch(checksumsUrl).then((r) => r.json());
+        const files = checksums?.files || {};
+        const enc = new TextEncoder();
+        for (const [file, expected] of Object.entries(files)) {
+          const url = chrome.runtime.getURL(file);
+          const text = await fetch(url).then((r) => r.text());
+          const hashBuffer = await crypto.subtle.digest('SHA-256', enc.encode(text));
+          const actual = Array.from(new Uint8Array(hashBuffer)).map((b) => b.toString(16).padStart(2, '0')).join('');
+          if (actual !== expected) throw new Error(`checksum_mismatch:${file}`);
+        }
+        return { ok: true };
+      } catch (error) {
+        this.modelInfo = { ...this.modelInfo, loaded: false, fallbackReason: error.message || 'integrity_check_failed' };
+        return { ok: false, error: error.message || 'integrity_check_failed' };
+      }
+    }
+
     async init() {
       if (this.model || !self.transformers?.pipeline) return this.modelInfo;
+      const integrity = await this.verifyIntegrity();
+      if (!integrity.ok) return this.modelInfo;
       self.transformers.env.allowRemoteModels = false;
       self.transformers.env.allowLocalModels = true;
       self.transformers.env.localModelPath = chrome.runtime.getURL('models/');

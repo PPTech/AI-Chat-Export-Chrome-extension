@@ -1,12 +1,13 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// script.js - Main Controller v0.10.26
+// نویسنده دکتر بابک سرخپور با کمک ابزار چت جی پی تی.
+// script.js - Main Controller v0.12.0
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
   let activeTabId = null;
-let gestureProofToken = "";
+  let gestureProofToken = "";
 
   const btnExport = document.getElementById('btn-export-main');
   const btnLoadFull = document.getElementById('btn-load-full');
@@ -157,7 +158,7 @@ let gestureProofToken = "";
     setAnalyzeProgress(25, 'Agent self-test');
 
     const runLegacyFallback = () => {
-      setAnalyzeProgress(40, 'Legacy extraction fallback');
+      setAnalyzeProgress(40, 'Legacy extraction fallback (mode=legacy_fallback)');
       chrome.tabs.sendMessage(activeTabId, { action: 'extract_chat', options }, (res) => {
         if (chrome.runtime.lastError) {
           if (chrome.scripting?.executeScript) {
@@ -180,7 +181,7 @@ let gestureProofToken = "";
     }
 
     setAnalyzeProgress(55, 'Agentic extraction');
-    const local = await sendToActiveTab({ action: 'extract_local_agent', options: { debug: !!checkDebugOverlay?.checked } });
+    const local = await sendToActiveTab({ action: 'extract_local_agent', options: { debug: !!checkDebugOverlay?.checked, requireModel: true } });
     if (!local?.success) {
       runLegacyFallback();
       return;
@@ -375,6 +376,20 @@ let gestureProofToken = "";
         setProcessingProgress(percent, `Processing ${fmt.toUpperCase()}`);
       }
 
+
+      const bundleManifest = {
+        generatedAt: new Date().toISOString(),
+        version: '0.12.0',
+        fileCount: files.length,
+        files: files.map((f) => ({ name: f.name, mime: f.mime || 'application/octet-stream', byteLength: (typeof f.content === 'string' ? f.content.length : (f.content?.length || 0)) })),
+        datasetSummary: {
+          messages: currentChatData?.dataset?.messages?.length || currentChatData?.messages?.length || 0,
+          attachments: currentChatData?.dataset?.attachments?.length || 0
+        }
+      };
+      files.push({ name: `${baseName}.diagnostics.json`, content: JSON.stringify(currentChatData?.diagnostics || {}, null, 2), mime: 'application/json' });
+      files.push({ name: `${baseName}.export_bundle_manifest.json`, content: JSON.stringify(bundleManifest, null, 2), mime: 'application/json' });
+
       if (files.length === 1 && !checkZip.checked) {
         setProcessingProgress(95, 'Finalizing');
         downloadBlob(new Blob([files[0].content], { type: files[0].mime }), files[0].name);
@@ -439,7 +454,7 @@ let gestureProofToken = "";
 
   btnExportImages.onclick = async () => {
     if (!currentChatData) return;
-    const imageList = extractAllImageSources(currentChatData.messages);
+    const imageList = extractAllImageSources(currentChatData.messages, currentChatData.dataset);
     if (!imageList.length) return showError(new Error('No images found in extracted chat data.'));
 
     const packMode = !!checkPhotoZip.checked;
@@ -492,7 +507,7 @@ let gestureProofToken = "";
     const processor = window.DataProcessor ? new window.DataProcessor() : null;
     const textCorpus = (currentChatData.messages || []).map((m) => m.content || '').join('\n');
     const metaFiles = processor ? processor.extractDownloadMetadata(textCorpus) : [];
-    const legacyFiles = extractAllFileSources(currentChatData.messages).map((f) => ({ fileName: f.name, url: f.url, type: /^sandbox:/i.test(f.url) ? 'sandbox' : 'text_reference', needsResolution: /^sandbox:/i.test(f.url) }));
+    const legacyFiles = extractAllFileSources(currentChatData.messages, currentChatData.dataset).map((f) => ({ fileName: f.name, url: f.url, type: /^sandbox:/i.test(f.url) ? 'sandbox' : 'text_reference', needsResolution: /^sandbox:/i.test(f.url) }));
     const filesFound = processor ? processor.deduplicateFiles([...legacyFiles, ...metaFiles]) : legacyFiles;
 
     if (!filesFound.length) return showError(new Error('No chat-generated file links were detected.'));
@@ -667,8 +682,14 @@ let gestureProofToken = "";
     }).join('');
   }
 
-  function extractAllImageSources(messages) {
+  function extractAllImageSources(messages, dataset = null) {
     const set = new Set();
+    const canonical = (dataset?.attachments || []).filter((a) => a.kind === 'image').map((a) => a?.resolved?.dataUri || a?.sourceUrl || '').filter(Boolean);
+    canonical.forEach((src) => {
+      const norm = normalizeImageSrc(src);
+      if (norm) set.add(norm);
+    });
+
     const tokenRegex = /\[\[IMG:([\s\S]*?)\]\]/g;
     const mdRegex = /!\[[^\]]*\]\((data:image\/[^)]+|https?:\/\/[^)]+)\)/g;
     for (const m of messages || []) {
@@ -685,8 +706,15 @@ let gestureProofToken = "";
     return Array.from(set);
   }
 
-  function extractAllFileSources(messages) {
+  function extractAllFileSources(messages, dataset = null) {
     const files = [];
+    (dataset?.attachments || []).filter((a) => a.kind === 'file').forEach((a) => {
+      const url = String(a?.sourceUrl || '').trim();
+      if (!url) return;
+      const safeName = String(a?.fileNameSafe || a?.displayName || 'file.bin').replace(/[\/:*?"<>|]+/g, '_') || 'file.bin';
+      files.push({ url, name: safeName });
+    });
+
     const fileRegex = /\[\[FILE:([^|\]]+)\|([^\]]+)\]\]/g;
     for (const m of messages || []) {
       let match;

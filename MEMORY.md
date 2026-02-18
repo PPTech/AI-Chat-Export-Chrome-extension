@@ -51,3 +51,5 @@
 - v0.11.6: Diagnostics bundle generator now emits required schema-aligned fields in export path.
 
 - v0.12.0: Added measurable agent payload context (redacted DOM snapshot + goals), media proxy safeguards, and intelligence scorecard governance.
+
+- v0.12.0: Threat model and premium local agent console design documented for security and product continuation.

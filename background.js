@@ -26,6 +26,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
+// نویسنده دکتر بابک سرخپور با کمک ابزار چت جی پی تی.
 // background.js - State & Log Manager v0.12.0
 
 console.log('[LOCAL-ONLY] AI engine network disabled; offline models only.');
@@ -332,6 +333,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       case 'LOCAL_DETECT_ARTIFACTS': {
         routeToOffscreen('OFFSCREEN_DETECT_ARTIFACTS', message.payload || {}, sendResponse);
+        return true;
+      }
+
+      case 'LOCAL_VERIFY_MODEL': {
+        routeToOffscreen('OFFSCREEN_VERIFY_MODEL', message.payload || {}, sendResponse);
         return true;
       }
 

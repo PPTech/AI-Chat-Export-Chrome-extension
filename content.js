@@ -26,6 +26,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
+// نویسنده دکتر بابک سرخپور با کمک ابزار چت جی پی تی.
 // content.js - Platform Engine Orchestrator v0.10.26
 
 (() => {
@@ -1914,7 +1915,8 @@
           pageUrl: location.href,
           candidatesFeatures: items,
           domSnapshot: buildRedactedDomSnapshot(40000),
-          extractionGoals: { includeMessages: true, includeImages: true, includeFiles: true }
+          extractionGoals: { includeMessages: true, includeImages: true, includeFiles: true },
+          requireModel: options?.requireModel !== false
         }
       });
       const learnedItems = agentRun?.bestExtraction?.items || [];
