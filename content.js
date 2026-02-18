@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// content.js - Platform Engine Orchestrator v0.10.16
+// content.js - Platform Engine Orchestrator v0.10.17
 
 (() => {
   if (window.hasRunContent) return;
@@ -248,27 +248,25 @@
       ];
     }
 
-    deepTraverse(root = document) {
-      const nodes = [];
-      const stack = [root];
-      while (stack.length) {
-        const cur = stack.pop();
-        if (!cur || !cur.querySelectorAll) continue;
-        nodes.push(cur);
-        const children = Array.from(cur.querySelectorAll('*'));
-        children.forEach((el) => {
-          if (el.shadowRoot) stack.push(el.shadowRoot);
-        });
+    findAllElements(root, selector) {
+      if (!root || !selector) return [];
+      let results = [];
+      if (root.querySelectorAll) {
+        results.push(...Array.from(root.querySelectorAll(selector)));
       }
-      return nodes;
+      const doc = root.ownerDocument || document;
+      const walker = doc.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+      while (walker.nextNode()) {
+        const node = walker.currentNode;
+        if (node && node.shadowRoot) {
+          results.push(...this.findAllElements(node.shadowRoot, selector));
+        }
+      }
+      return results;
     }
 
     queryDeep(selector, root = document) {
-      const out = [];
-      this.deepTraverse(root).forEach((r) => {
-        if (r.querySelectorAll) out.push(...Array.from(r.querySelectorAll(selector)));
-      });
-      return out;
+      return this.findAllElements(root, selector);
     }
 
     async waitForDom(timeoutMs = 7000) {
@@ -343,14 +341,31 @@
       const textarea = turnNode.querySelector('textarea');
       if (textarea?.value?.trim()) return textarea.value.trim();
 
+      const cmLines = this.queryDeep('.cm-content .cm-line, .cm-line', turnNode)
+        .map((line) => (line.textContent || '').replace(/\u00a0/g, ' ').trimEnd());
+      const cmText = cmLines.join('\n').trim();
+      if (cmText) return cmText;
+
       const editor = turnNode.querySelector('.ProseMirror,.cm-content,div[role="textbox"],[contenteditable="true"]');
       if (editor) {
-        const lines = Array.from(editor.querySelectorAll('p,div')).map((n) => (n.textContent || '').trim()).filter(Boolean);
+        const lines = this.queryDeep('p,div', editor).map((n) => (n.textContent || '').trimEnd()).filter((v) => v.length > 0);
         const joined = lines.join('\n').trim();
         if (joined) return joined;
-        const raw = (editor.textContent || '').trim();
+        const raw = (editor.innerText || editor.textContent || '').trim();
         if (raw) return raw;
       }
+
+      if (turnNode.shadowRoot) {
+        const shadowSlots = this.queryDeep('slot,div,p,span', turnNode.shadowRoot)
+          .map((n) => (n.textContent || '').trim())
+          .filter(Boolean)
+          .join('\n')
+          .trim();
+        if (shadowSlots) return shadowSlots;
+      }
+
+      const dataValue = turnNode.getAttribute('data-value') || turnNode.dataset?.value || '';
+      if (String(dataValue).trim()) return String(dataValue).trim();
 
       const staticRender = turnNode.querySelector('[class*="markdown" i],article,section') || turnNode;
       return (staticRender.innerText || staticRender.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
@@ -387,6 +402,7 @@
 
     async scrape() {
       await this.waitForDom();
+      await new Promise((resolve) => setTimeout(resolve, 3000));
       const root = this.detectRootContainer();
       let turnNodes = [];
       for (const selector of this.turnSelectors) {
@@ -432,7 +448,7 @@
       async extract(options, utils) {
         const analysis = await runChatGptDomAnalysis(options.fullLoad ? 'full' : 'visible', options, utils);
         let messages = analysis.messages.map((m) => ({
-          role: m.inferredRole.role === 'assistant' ? 'Assistant' : (m.inferredRole.role === 'user' ? 'User' : 'Unknown'),
+          role: m.inferredRole.role === 'assistant' ? (location.hostname.includes('chatgpt.com') && /chatgpt\.com\/codex/i.test(location.href) ? 'ChatGPT Codex' : 'ChatGPT') : (m.inferredRole.role === 'user' ? 'User' : 'Unknown'),
           content: composeContentFromBlocks(m.parsed.blocks, options),
           meta: {
             platform: this.name,

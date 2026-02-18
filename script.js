@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// script.js - Main Controller v0.10.16
+// script.js - Main Controller v0.10.17
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
@@ -80,7 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function exportSettingsCfg(settings) {
     const lines = Object.entries(settings).map(([k, v]) => `${k}=${String(v)}`);
-    const cfg = `# AI Chat Exporter Settings\n# version=0.10.16\n${lines.join('\n')}\n`;
+    const cfg = `# AI Chat Exporter Settings\n# version=0.10.17\n${lines.join('\n')}\n`;
     const date = new Date().toISOString().slice(0, 10);
     downloadBlob(new Blob([cfg], { type: 'text/plain' }), `ai_chat_exporter_settings_${date}.cfg`);
   }
@@ -304,7 +304,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!packMode) {
       let idx = 1;
       for (const src of imageList) {
-        const extGuess = src.includes('png') ? 'png' : (src.includes('webp') ? 'webp' : 'jpg');
+        const blob = await fetchFileBlob(src);
+        const extGuess = blob ? sniffImageExtension(blob) : 'jpg';
         const ok = await downloadByUrlOrBlob(src, `ai_chat_exporter/${platformPrefix}_${date}_photo_${String(idx).padStart(3, '0')}.${extGuess}`);
         if (!ok) {
           // continue remaining images even when one image fails
@@ -319,7 +320,7 @@ document.addEventListener('DOMContentLoaded', () => {
     for (const src of imageList) {
       try {
         const b = await fetch(src).then((r) => r.blob());
-        const ext = (b.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+        const ext = sniffImageExtension(b);
         const data = new Uint8Array(await b.arrayBuffer());
         files.push({ name: `photo_${String(idx).padStart(3, '0')}.${ext}`, content: data, mime: b.type || 'application/octet-stream' });
         idx += 1;
@@ -355,7 +356,28 @@ document.addEventListener('DOMContentLoaded', () => {
         // skip failed file
       }
     }
-    if (!packed.length) return showError(new Error('Detected files could not be downloaded from current session.'));
+    if (!packed.length) {
+      let fallbackDownloads = 0;
+      for (const file of filesFound) {
+        if (!/^https?:\/\//i.test(file.url)) continue;
+        try {
+          await new Promise((resolve, reject) => {
+            chrome.downloads.download({ url: sanitizeTokenUrl(file.url), filename: `ai_chat_exporter/${file.name}`, saveAs: false }, (id) => {
+              if (chrome.runtime.lastError || !id) reject(new Error(chrome.runtime.lastError?.message || 'download_failed'));
+              else resolve(id);
+            });
+          });
+          fallbackDownloads += 1;
+        } catch {
+          // keep trying others
+        }
+      }
+      if (fallbackDownloads > 0) {
+        showInfo('Fallback Download', `Downloaded ${fallbackDownloads} file(s) via direct browser download fallback.`);
+        return;
+      }
+      return showError(new Error('Detected files could not be downloaded from current session.'));
+    }
     const zip = await createRobustZip(packed);
     const date = new Date().toISOString().slice(0, 10);
     const platformPrefix = (currentChatData.platform || 'Export').replace(/[^a-zA-Z0-9]/g, '');
@@ -422,9 +444,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function normalizeImageSrc(src) {
     if (!src) return '';
-    if (/^data:image\//i.test(src)) return src;
-    if (/^https?:\/\//i.test(src)) return src;
+    const normalized = sanitizeTokenUrl(src);
+    if (/^data:image\//i.test(normalized)) return normalized;
+    if (/^https?:\/\//i.test(normalized) && isLikelyImageUrl(normalized)) return normalized;
     return '';
+  }
+
+  function sanitizeTokenUrl(url) {
+    return String(url || '').trim().replace(/[\]\)>'"\s]+$/g, '');
+  }
+
+  function isLikelyImageUrl(url) {
+    try {
+      const u = new URL(url);
+      const path = (u.pathname || '').toLowerCase();
+      if (/\.(jpg|jpeg|png|gif|webp|bmp|svg)$/.test(path)) return true;
+      if (/image|img|photo|picture|googleusercontent|gstatic|ggpht/.test(url.toLowerCase())) return true;
+      return false;
+    } catch {
+      return false;
+    }
   }
 
   function stripImageTokens(content) {
@@ -607,7 +646,7 @@ document.addEventListener('DOMContentLoaded', () => {
       for (const src of [...new Set(found)]) {
         if (!cache.has(src)) {
           try {
-            const dataUrl = await tempMediaCache.fetchDataUrl(src);
+            const dataUrl = await tempMediaCache.fetchDataUrl(sanitizeTokenUrl(src));
             cache.set(src, dataUrl);
           } catch {
             cache.set(src, src);
@@ -1007,10 +1046,21 @@ document.addEventListener('DOMContentLoaded', () => {
   async function fetchFileBlob(url) {
     if (!url) return null;
     try {
-      return await tempMediaCache.fetchBlob(url);
+      return await tempMediaCache.fetchBlob(sanitizeTokenUrl(url));
     } catch {
       return null;
     }
+  }
+
+  function sniffImageExtension(blob) {
+    const mime = (blob?.type || '').toLowerCase();
+    if (mime.includes('png')) return 'png';
+    if (mime.includes('webp')) return 'webp';
+    if (mime.includes('gif')) return 'gif';
+    if (mime.includes('bmp')) return 'bmp';
+    if (mime.includes('svg')) return 'svg';
+    if (mime.includes('jpeg') || mime.includes('jpg')) return 'jpg';
+    return 'jpg';
   }
 
   async function downloadByUrlOrBlob(url, filename) {
