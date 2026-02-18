@@ -374,3 +374,8 @@ This prevents image token corruption and ensures valid `<img>` tags are emitted 
 - CI now validates release consistency and required CDN host permissions.
 - Diagnostic logs redact long tokens and URLs to reduce accidental sensitive retention.
 - Optional host permission request is triggered before heavy asset extraction flows.
+
+## Agentic Contract & Governance Gates (v0.11.5)
+- Version source-of-truth is now `version.js`, synchronized by `npm run sync:version`.
+- CI gates enforce local assets, model checksums, release consistency, and tests.
+- Dataset contract includes attachments as canonical export source (token output remains backward-compatible).

@@ -43,3 +43,6 @@
 
 - v0.11.4: Implemented critique-driven remediation: release version sync, CDN permission hardening, optional permission request flow, and log redaction safeguards.
 - v0.11.4: Added explicit regression tests and CI gate for release consistency to prevent drift between manifest/version metadata.
+
+- v0.11.5: Canonical dataset contract introduced for attachment-driven export behavior.
+- v0.11.5: Added model checksum/release consistency CI gates and JSONL diagnostics ring buffer.

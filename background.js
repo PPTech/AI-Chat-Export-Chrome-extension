@@ -26,7 +26,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// background.js - State & Log Manager v0.11.4
+// background.js - State & Log Manager v0.11.5
 
 console.log('[LOCAL-ONLY] AI engine network disabled; offline models only.');
 
@@ -67,6 +67,7 @@ async function downloadMhtmlArtifact(payload = {}) {
 }
 
 const appLogs = [];
+const runtimeJsonlLogs = [];
 const pendingCaptures = new Map();
 let captureSeq = 0;
 
@@ -192,7 +193,9 @@ function log(level, message, details = null) {
     details: redactDetails(details)
   };
   appLogs.push(entry);
+  runtimeJsonlLogs.push(JSON.stringify({ ts: entry.timestamp, level: entry.level, message: entry.message, details: entry.details }));
   if (appLogs.length > 1000) appLogs.shift();
+  if (runtimeJsonlLogs.length > 2000) runtimeJsonlLogs.shift();
   console.log(`[${level}] ${message}`, details || '');
 }
 
@@ -234,6 +237,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       case 'GET_LOGS':
         sendResponse(appLogs);
+        break;
+
+      case 'GET_DIAGNOSTICS_JSONL':
+        sendResponse({ success: true, lines: runtimeJsonlLogs.slice(-1000) });
         break;
 
       case 'START_DOWNLOAD_CAPTURE': {

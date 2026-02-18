@@ -11,6 +11,8 @@ jobs:
         with:
           node-version: 22
       - run: npm ci
+      - run: npm run sync:version
       - run: npm run verify:local-assets
+      - run: npm run verify:model
       - run: npm run verify:release
       - run: npm test

@@ -40,3 +40,8 @@
 - Agentic claims must be tied to default execution paths, not optional buttons.
 - Security controls must be enforced at both code allowlist and manifest permission layers.
 - Diagnostics should preserve engineering utility while redacting sensitive values.
+
+
+## Canonical Export Contract (v0.11.5)
+- Exporters should consume `dataset.messages[].attachments[]` as source of truth.
+- Legacy token markers are treated as compatibility output, not primary contract.

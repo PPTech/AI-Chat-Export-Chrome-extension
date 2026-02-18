@@ -186,21 +186,67 @@ let gestureProofToken = "";
       return;
     }
 
+    const dataset = buildChatExportDatasetFromItems(local.result?.items || [], local.result?.trace || null);
     const normalized = {
       success: true,
       platform: 'LocalAgent',
-      messages: (local.result?.items || [])
-        .filter((i) => i.type === 'USER_TURN' || i.type === 'MODEL_TURN' || i.type === 'CODE_BLOCK')
-        .map((item, idx) => ({
-          role: item.type === 'USER_TURN' ? 'user' : 'assistant',
-          content: String(item.text || ''),
-          order: idx,
-          attachments: []
-        })),
-      diagnostics: local.result?.trace || null
+      dataset,
+      messages: dataset.messages.map((m, idx) => {
+        const parts = [
+          ...(m.contentBlocks || []).map((b) => String(b.text || '')),
+          ...(m.attachments || []).map((a) => a.kind === 'image' ? `[[IMG:${a.sourceUrl || ''}]]` : `[[FILE:${a.sourceUrl || ''}|${a.displayName || 'File'}]]`)
+        ].filter(Boolean);
+        return { role: m.role, content: parts.join('
+'), order: idx, attachments: m.attachments || [] };
+      }),
+      diagnostics: dataset.diagnostics
     };
 
     processData(normalized);
+  }
+
+
+  function buildChatExportDatasetFromItems(items = [], trace = null) {
+    const messages = [];
+    const artifacts = [];
+    let current = null;
+    let messageSeq = 0;
+
+    for (const item of items) {
+      if (item.type === 'USER_TURN' || item.type === 'MODEL_TURN' || item.type === 'CODE_BLOCK') {
+        current = {
+          id: `m_${messageSeq += 1}`,
+          role: item.type === 'USER_TURN' ? 'user' : 'assistant',
+          timestamp: null,
+          contentBlocks: [{ kind: item.type === 'CODE_BLOCK' ? 'code' : 'text', text: String(item.text || '') }],
+          attachments: []
+        };
+        messages.push(current);
+      } else if ((item.type === 'IMAGE_BLOCK' || item.type === 'FILE_CARD') && current) {
+        const kind = item.type === 'IMAGE_BLOCK' ? 'image' : 'file';
+        const sourceUrl = item.src || item.href || '';
+        const attach = {
+          kind,
+          sourceUrl,
+          resolved: { mime: null, bytesSha256: null, byteLength: null, dataUri: null },
+          fileNameSafe: kind === 'image' ? 'image.bin' : 'file.bin',
+          displayName: kind === 'image' ? 'Image' : 'File',
+          caption: '',
+          messageId: current.id
+        };
+        current.attachments.push(attach);
+        artifacts.push({ ...attach });
+      }
+    }
+
+    return {
+      schemaVersion: '0.11.5',
+      messages,
+      attachments: artifacts,
+      artifacts,
+      diagnostics: trace || null,
+      raw: { items }
+    };
   }
 
   function processData(res) {
@@ -446,7 +492,8 @@ let gestureProofToken = "";
     let i = 1;
     for (const f of result.succeeded) {
       const ext = (f.type.split('/')[1] || 'bin').replace('jpeg', 'jpg');
-      const name = (f.fileName || `file_${i}`).includes('.') ? (f.fileName || `file_${i}`) : `${f.fileName || `file_${i}`}.${ext}`;
+      const rawName = (f.fileName || `file_${i}`).includes('.') ? (f.fileName || `file_${i}`) : `${f.fileName || `file_${i}`}.${ext}`;
+      const name = sanitizeZipName(rawName);
       const data = new Uint8Array(await f.blob.arrayBuffer());
       packed.push({ name: `${String(i).padStart(3, '0')}_${name}`, content: data, mime: f.type || 'application/octet-stream' });
       i += 1;
@@ -1083,6 +1130,10 @@ let gestureProofToken = "";
     const ev = new DataView(end.buffer);
     ev.setUint32(0, 0x06054b50, true); ev.setUint16(8, files.length, true); ev.setUint16(10, files.length, true); ev.setUint32(12, cdSize, true); ev.setUint32(16, offset, true);
     return new Blob([...parts, ...cd, end], { type: 'application/zip' });
+  }
+
+  function sanitizeZipName(name = "artifact.bin") {
+    return String(name || "artifact.bin").replace(/\.\.+/g, '.').replace(/[\\/:*?"<>|]/g, "_").slice(0, 120);
   }
 
   function downloadBlob(blob, name) {

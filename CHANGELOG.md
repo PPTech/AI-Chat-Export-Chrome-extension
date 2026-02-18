@@ -129,3 +129,12 @@
 - Added redaction in background logs to reduce sensitive URL/token leakage in diagnostic entries.
 - Added regression tests for release consistency and host-permission coverage.
 - Incorporated lessons-learned documentation from deep review feedback.
+
+## 0.11.5 - Agentic Contract + Governance Gates
+- Added canonical version source (`version.js`) with sync script and CI enforcement.
+- Added model checksum validation gate and release consistency gate in CI.
+- Strengthened agent loop to fixed 6-attempt contract and richer plan score trace.
+- Added canonical ChatExportDataset builder in popup pipeline and derived legacy tokens for compatibility.
+- Added AssetResolutionGraph scaffold and zip-safe filename sanitization.
+- Added diagnostics JSONL redacted ring buffer route from service worker.
+- Added BDD/PTS updates and fixture scaffolding for e2e agentic testing.

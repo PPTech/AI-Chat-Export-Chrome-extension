@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// agent/agent_loop.js - Observe/Plan/Act/Verify/Learn orchestrator v0.11.0
+// agent/agent_loop.js - Observe/Plan/Act/Verify/Learn orchestrator v0.11.5
 
 (function () {
   function mapPredictedType(item, predicted) {
@@ -20,7 +20,8 @@
 
     const features = await self.AgentFeatureExtractor.toVectors(candidates);
     const classes = features.vectors.map((v) => self.AgentOnlineLearner.classify(learnerState, v));
-    const plans = self.AgentPlanSearch.generate(candidates, classes, 8);
+    const MAX_ATTEMPTS = 6;
+    const plans = self.AgentPlanSearch.generate(candidates, classes, MAX_ATTEMPTS);
 
     const attempts = [];
     let best = { score: -1, items: [], plan: null, metrics: null };
@@ -65,11 +66,12 @@
         embeddingsCount: features.embeddingMeta.embeddingsCount,
         embeddingMs: features.embeddingMeta.embeddingMs,
         attempts,
+        bestPlanScore: best.metrics?.score || 0,
         chosenPlanId: best.plan?.id || null,
         elapsedMs: Date.now() - started,
         learned: { updates: training.updates, positives: positives.length, negatives: negatives.length }
       },
-      persistedUpdates: { domainKey: mem.key, recipeSaved: !!best.plan, learnerSaved: true }
+      persistedUpdates: { domainKey: mem.key, recipeSaved: !!best.plan, learnerSaved: true, maxAttempts: MAX_ATTEMPTS }
     };
   }
 

@@ -21,3 +21,11 @@
 - Filename/path sanitization and zip-slip prevention guidance.
 - HTML escaping for exported user content.
 - Local-only model/runtime asset verification gate in CI.
+
+
+## Same-Origin-Only Kill Switch
+- Operational mode: disable optional host permission request and allow only same-origin asset resolution.
+- Recommended for high-security deployments where attachment completeness is secondary to strict isolation.
+
+## Standards Alignment Note (2026)
+- Security controls map to current defensive guidance themes from BSI/NSA/CISA: least privilege, logging minimization/redaction, and explicit trust boundaries for browser extensions.

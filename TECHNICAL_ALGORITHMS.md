@@ -221,3 +221,15 @@
 ### G3. Sensitive Log Redaction
 - Background logger redacts URL-like strings and long token-like fragments before persistence.
 - Bounded log detail length limits accidental high-entropy data retention.
+
+
+## v0.11.5 Delivery Algorithms
+### H1. Version Synchronization Pipeline
+- `version.js` is parsed and propagated to manifest/VERSION/metadata via sync script.
+
+### H2. Export Contract Normalization
+- Build `ChatExportDataset` from extracted items with structured attachments.
+- Emit legacy tokenized content only as compatibility layer.
+
+### H3. Diagnostics Ring Buffer
+- Persist redacted JSONL diagnostics entries in service worker for forensic replay without raw sensitive payload retention.

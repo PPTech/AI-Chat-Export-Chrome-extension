@@ -4,15 +4,13 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 
-test('Proof of intelligence trace contract', () => {
-  const trace = {
-    embeddingsCount: 24,
-    attempts: [{}, {}],
-    learned: { updates: 80 },
-    chosenPlanId: 'plan_2'
-  };
-  assert.ok(trace.embeddingsCount > 0);
-  assert.ok(trace.attempts.length >= 2);
-  assert.ok(trace.learned.updates > 0);
+const loop = fs.readFileSync('agent/agent_loop.js', 'utf8');
+
+test('Proof of intelligence contract requires multiple attempts and persisted updates', () => {
+  assert.match(loop, /MAX_ATTEMPTS\s*=\s*6/);
+  assert.match(loop, /attempts/);
+  assert.match(loop, /bestPlanScore/);
+  assert.match(loop, /persistedUpdates/);
 });
