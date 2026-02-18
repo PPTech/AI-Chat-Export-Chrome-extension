@@ -2,7 +2,7 @@
 # Code generated with support from CODEX and CODEX CLI.
 # Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 
-# Release Process (v0.10.9)
+# Release Process (v0.10.10)
 
 ## Mandatory Artifacts Per Release
 - `VERSION.json`

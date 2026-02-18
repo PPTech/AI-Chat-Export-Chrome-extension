@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// script.js - Main Controller v0.10.9
+// script.js - Main Controller v0.10.10
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
@@ -93,7 +93,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function init() {
     loadSettingsFromStorage();
-    setAnalyzeProgress(10, 'Initializing');
+    setAnalyzeProgress(5, 'Initializing');
+    updateDetectedSummary([]);
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (!tabs[0] || tabs[0].url.startsWith('chrome://')) return;
       activeTabId = tabs[0].id;
@@ -130,6 +131,7 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('msg-count').textContent = res.messages.length;
       document.getElementById('empty-view').style.display = 'none';
       document.getElementById('stats-view').style.display = 'block';
+      updateDetectedSummary(res.messages || []);
       setAnalyzeProgress(100, 'Completed');
       chrome.runtime.sendMessage({ action: 'SET_DATA', tabId: activeTabId, data: res });
       updateExportBtn();
@@ -157,11 +159,34 @@ document.addEventListener('DOMContentLoaded', () => {
     btnExport.textContent = `${label} ${bounded}%`;
   }
 
+
   function setAnalyzeProgress(percent, label = 'Analyzing') {
     const el = document.getElementById('analyze-progress');
     if (!el) return;
     const bounded = Math.max(0, Math.min(100, Math.round(percent)));
     el.textContent = `Analysis Progress: ${bounded}% (${label})`;
+  }
+
+  function computeDetectedCounts(messages = []) {
+    let photos = 0;
+    let files = 0;
+    let others = 0;
+    const imgRegex = /\[\[IMG:[\s\S]*?\]\]|!\[[^\]]*\]\((data:image\/[^)]+|https?:\/\/[^)]+)\)/g;
+    const fileRegex = /\[\[FILE:([^|\]]+)\|([^\]]+)\]\]/g;
+    for (const m of messages) {
+      const content = m.content || '';
+      photos += (content.match(imgRegex) || []).length;
+      files += (content.match(fileRegex) || []).length;
+      others += (content.match(/```/g) || []).length / 2;
+    }
+    return { messages: messages.length, photos: Math.round(photos), files: Math.round(files), others: Math.round(others) };
+  }
+
+  function updateDetectedSummary(messages = []) {
+    const el = document.getElementById('detected-summary');
+    if (!el) return;
+    const c = computeDetectedCounts(messages);
+    el.textContent = `Detected: ${c.messages} messages • ${c.photos} photos • ${c.files} files • ${c.others} others`;
   }
 
   btnExport.onclick = async () => {
@@ -217,6 +242,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('msg-count').textContent = '0';
     document.getElementById('empty-view').style.display = 'block';
     document.getElementById('stats-view').style.display = 'none';
+    updateDetectedSummary([]);
     if (activeTabId) chrome.runtime.sendMessage({ action: 'CLEAR_DATA', tabId: activeTabId });
     updateExportBtn();
   };

@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// content.js - Platform Engine Orchestrator v0.10.9
+// content.js - Platform Engine Orchestrator v0.10.10
 
 (() => {
   if (window.hasRunContent) return;
@@ -419,19 +419,22 @@
     },
 
     async extractFileTokensFromNode(node) {
-      const links = Array.from(node.querySelectorAll('a[href], a[download], button[data-file-url], [data-file-url]'));
+      const links = Array.from(node.querySelectorAll('a[href], a[download], button[data-file-url], [data-file-url], iframe[src], iframe[srcdoc]'));
+      const artifactSelectors = Array.from(node.querySelectorAll('[data-artifact-id], [data-testid*="artifact"], [class*="Artifact" i], [class*="artifact" i], iframe[title*="Artifact" i], [role="region"][aria-label*="Artifact" i]'));
       const tokens = [];
-      for (const link of links) {
-        const href = link.getAttribute('href') || link.getAttribute('data-file-url') || '';
+      for (const link of [...links, ...artifactSelectors]) {
+        const href = link.getAttribute('href') || link.getAttribute('data-file-url') || link.getAttribute('src') || '';
+        const srcdoc = link.getAttribute('srcdoc') || '';
         if (!href) continue;
         const abs = (() => {
           try { return new URL(href, location.href).toString(); } catch { return ''; }
         })();
         if (!abs) continue;
-        const isFileLike = /download|attachment|file|uploads|backend-api\/(files|estuary\/content)|blob:|\/artifact\//i.test(abs)
-          || !!link.getAttribute('download');
+        const isFileLike = /download|attachment|file|uploads|backend-api\/(files|estuary\/content)|blob:|data:|\/artifact\//i.test(abs)
+          || !!link.getAttribute('download')
+          || /artifact|download|file/i.test(`${link.getAttribute('aria-label') || ''} ${link.textContent || ''}`);
         if (!isFileLike) continue;
-        const nameRaw = link.getAttribute('download') || link.textContent || abs.split('/').pop() || 'file.bin';
+        const nameRaw = link.getAttribute('download') || link.getAttribute('data-artifact-id') || link.textContent || abs.split('/').pop() || (srcdoc ? 'artifact.html' : 'file.bin');
         const safeName = nameRaw.replace(/[\/:*?"<>|]+/g, '_').trim() || 'file.bin';
         tokens.push(`[[FILE:${abs}|${safeName}]]`);
       }
