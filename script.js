@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// script.js - Main Controller v0.10.25
+// script.js - Main Controller v0.10.26
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
@@ -120,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function exportSettingsCfg(settings) {
     const lines = Object.entries(settings).map(([k, v]) => `${k}=${String(v)}`);
-    const cfg = `# AI Chat Exporter Settings\n# version=0.10.25\n${lines.join('\n')}\n`;
+    const cfg = `# AI Chat Exporter Settings\n# version=0.10.26\n${lines.join('\n')}\n`;
     const date = new Date().toISOString().slice(0, 10);
     downloadBlob(new Blob([cfg], { type: 'text/plain' }), `ai_chat_exporter_settings_${date}.cfg`);
   }
@@ -340,16 +340,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const packMode = !!checkPhotoZip.checked;
     const date = new Date().toISOString().slice(0, 10);
     const platformPrefix = (currentChatData.platform || 'Export').replace(/[^a-zA-Z0-9]/g, '');
+    const processor = window.DataProcessor ? new window.DataProcessor() : null;
+    const textCorpus = (currentChatData.messages || []).map((m) => m.content || '').join('\n');
 
     if (!packMode) {
       let idx = 1;
       for (const src of imageList) {
+        console.log(`[IMG][${idx}/${imageList.length}] Fetching: ${src.slice(0, 80)}`);
         const blob = await fetchFileBlob(src);
         const extGuess = blob ? sniffImageExtension(blob) : 'jpg';
         const ok = await downloadByUrlOrBlob(src, `ai_chat_exporter/${platformPrefix}_${date}_photo_${String(idx).padStart(3, '0')}.${extGuess}`);
-        if (!ok) {
-          // continue remaining images even when one image fails
-        }
+        if (!ok) console.warn(`[IMG] failed: ${src}`);
         idx += 1;
       }
       return;
@@ -358,16 +359,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const files = [];
     let idx = 1;
     for (const src of imageList) {
-      try {
-        const b = await fetchFileBlob(src);
-        if (!b) continue;
-        const ext = sniffImageExtension(b);
-        const data = new Uint8Array(await b.arrayBuffer());
-        files.push({ name: `photo_${String(idx).padStart(3, '0')}.${ext}`, content: data, mime: b.type || 'application/octet-stream' });
+      const b = processor ? await processor.fetchWithRetry(src, fetchFileBlob) : await fetchFileBlob(src);
+      if (!b) {
+        console.warn(`[IMG] failed: ${src}`);
         idx += 1;
-      } catch {
-        // skip failed image
+        continue;
       }
+      const ext = sniffImageExtension(b);
+      const data = new Uint8Array(await b.arrayBuffer());
+      files.push({ name: `photo_${String(idx).padStart(3, '0')}.${ext}`, content: data, mime: b.type || 'application/octet-stream' });
+      console.log(`[IMG] embedded ${idx}/${imageList.length}: ${files[files.length - 1].name} (${b.size} bytes)`);
+      idx += 1;
     }
 
     if (files.length) {
@@ -379,50 +381,45 @@ document.addEventListener('DOMContentLoaded', () => {
   btnExportFiles.onclick = async () => {
     if (!currentChatData) return;
     if (!checkExportFiles.checked) return showInfo('Files Export Disabled', 'Enable "Extract and ZIP Chat Files" in Settings first.');
-    const filesFound = extractAllFileSources(currentChatData.messages);
+
+    const processor = window.DataProcessor ? new window.DataProcessor() : null;
+    const textCorpus = (currentChatData.messages || []).map((m) => m.content || '').join('\n');
+    const metaFiles = processor ? processor.extractDownloadMetadata(textCorpus) : [];
+    const legacyFiles = extractAllFileSources(currentChatData.messages).map((f) => ({ fileName: f.name, url: f.url, type: /^sandbox:/i.test(f.url) ? 'sandbox' : 'text_reference', needsResolution: /^sandbox:/i.test(f.url) }));
+    const filesFound = processor ? processor.deduplicateFiles([...legacyFiles, ...metaFiles]) : legacyFiles;
+
     if (!filesFound.length) return showError(new Error('No chat-generated file links were detected.'));
+    console.log(`[FILES] Found ${filesFound.length} references`);
+
+    const result = processor
+      ? await processor.downloadAllFiles(filesFound, fetchFileBlob, async (path) => {
+        const resolved = await sendToActiveTab({ action: 'fetch_blob_page', url: path });
+        return resolved?.sourceUrl || resolved?.download_url || null;
+      }, (progress) => {
+        if (progress.status === 'ok') console.log(`[FILES][${progress.index}/${progress.total}] ✓ ${progress.fileName}`);
+        else console.warn(`[FILES][${progress.index}/${progress.total}] ✗ ${progress.fileName}: ${progress.error || 'failed'}`);
+      })
+      : { succeeded: [], failed: filesFound, total: filesFound.length };
+
+    if (!result.succeeded.length) {
+      return showError(new Error('Detected files could not be downloaded from current session.'));
+    }
 
     const packed = [];
     let i = 1;
-    for (const file of filesFound) {
-      try {
-        const blob = await fetchFileBlob(file.url);
-        if (!blob) continue;
-        const ext = (blob.type.split('/')[1] || 'bin').replace('jpeg', 'jpg');
-        const name = file.name.includes('.') ? file.name : `${file.name}.${ext}`;
-        const data = new Uint8Array(await blob.arrayBuffer());
-        packed.push({ name: `${String(i).padStart(3, '0')}_${name}`, content: data, mime: blob.type || 'application/octet-stream' });
-        i += 1;
-      } catch {
-        // skip failed file
-      }
+    for (const f of result.succeeded) {
+      const ext = (f.type.split('/')[1] || 'bin').replace('jpeg', 'jpg');
+      const name = (f.fileName || `file_${i}`).includes('.') ? (f.fileName || `file_${i}`) : `${f.fileName || `file_${i}`}.${ext}`;
+      const data = new Uint8Array(await f.blob.arrayBuffer());
+      packed.push({ name: `${String(i).padStart(3, '0')}_${name}`, content: data, mime: f.type || 'application/octet-stream' });
+      i += 1;
     }
-    if (!packed.length) {
-      let fallbackDownloads = 0;
-      for (const file of filesFound) {
-        if (!/^https?:\/\//i.test(file.url)) continue;
-        try {
-          await new Promise((resolve, reject) => {
-            chrome.downloads.download({ url: sanitizeTokenUrl(file.url), filename: `ai_chat_exporter/${file.name}`, saveAs: false }, (id) => {
-              if (chrome.runtime.lastError || !id) reject(new Error(chrome.runtime.lastError?.message || 'download_failed'));
-              else resolve(id);
-            });
-          });
-          fallbackDownloads += 1;
-        } catch {
-          // keep trying others
-        }
-      }
-      if (fallbackDownloads > 0) {
-        showInfo('Fallback Download', `Downloaded ${fallbackDownloads} file(s) via direct browser download fallback.`);
-        return;
-      }
-      return showError(new Error('Detected files could not be downloaded from current session.'));
-    }
+
     const zip = await createRobustZip(packed);
     const date = new Date().toISOString().slice(0, 10);
     const platformPrefix = (currentChatData.platform || 'Export').replace(/[^a-zA-Z0-9]/g, '');
     downloadBlob(zip, `${platformPrefix}_${date}_chat_files.zip`);
+    showInfo('Files Export Summary', `Total: ${result.total}, Succeeded: ${result.succeeded.length}, Failed: ${result.failed.length}`);
   };
 
   btnScanFiles.onclick = async () => {

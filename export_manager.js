@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// export_manager.js - ExportManager v0.10.25
+// export_manager.js - ExportManager v0.10.26
 
 (() => {
   if (window.ExportManager) return;

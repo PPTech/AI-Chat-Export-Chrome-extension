@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// content.js - Platform Engine Orchestrator v0.10.25
+// content.js - Platform Engine Orchestrator v0.10.26
 
 (() => {
   if (window.hasRunContent) return;
@@ -2012,6 +2012,20 @@
     }
   }
 
+  async function runImageExtractionDiagnostic() {
+    if (!window.DataProcessor) return { success: false, error: 'DataProcessor unavailable' };
+    const processor = new window.DataProcessor();
+    const images = processor.extractAllImages(document.body);
+    return { success: true, count: images.length, images };
+  }
+
+  async function runFileDetectionDiagnostic() {
+    if (!window.DataProcessor) return { success: false, error: 'DataProcessor unavailable' };
+    const processor = new window.DataProcessor();
+    const files = processor.detectAllFileReferences(document.body);
+    return { success: true, count: files.length, files };
+  }
+
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'ping_content') {
       sendResponse({ injected: true, href: location.href, domain: location.hostname });
@@ -2069,6 +2083,14 @@
     }
     if (request.action === 'fetch_blob_page') {
       fetchBlobFromPage(request.url).then(sendResponse);
+      return true;
+    }
+    if (request.action === 'test_image_extraction') {
+      runImageExtractionDiagnostic().then(sendResponse);
+      return true;
+    }
+    if (request.action === 'test_file_detection') {
+      runFileDetectionDiagnostic().then(sendResponse);
       return true;
     }
     return false;

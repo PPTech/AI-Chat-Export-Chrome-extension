@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// visual_walker.js - VisualDOMWalker v0.10.25
+// visual_walker.js - VisualDOMWalker v0.10.26
 
 (() => {
   if (window.VisualDOMWalker) return;

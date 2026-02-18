@@ -4,6 +4,13 @@
 
 # Changelog
 
+## 0.10.26 - 2026-02-18
+- Implemented comprehensive image extraction in `DataProcessor.extractAllImages()` including regular `<img>`, background images, and Shadow DOM traversal.
+- Implemented comprehensive file detection in `DataProcessor.detectAllFileReferences()` covering download attributes, blob links, sandbox paths, extension patterns, and present-file markers.
+- Added robust `downloadAllFiles()` with retry/error summary and sandbox resolution hook, integrated into popup `Export Files` flow with detailed progress logs.
+- Added content-script diagnostics actions: `test_image_extraction` and `test_file_detection` for direct runtime validation.
+- Updated export flows to preserve Base64 embedding fallback (`[Image Load Failed]`) and synced metadata/docs to `0.10.26`.
+
 ## 0.10.25 - 2026-02-18
 - Added `visual_walker.js` with DOM-agnostic `VisualDOMWalker` (viewport-visible div scan + alignment/mono heuristics for USER/MODEL/CODE tagging).
 - Added `asset_processor.js` (`DataProcessor`) for Base64 embedding with resilient fallback (`[Image Load Failed]`) and download metadata extraction.
