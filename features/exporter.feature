@@ -35,3 +35,9 @@ Feature: Multi-platform chat export reliability
     Given extraction is running for the active tab
     When data processing advances
     Then Analysis Progress displays percentage updates
+
+
+  Scenario: Multilingual PDF wraps RTL and CJK text
+    Given extracted messages contain Arabic and CJK content
+    When the user exports as pdf
+    Then PDF text blocks are rendered with script-aware wrapping and direction

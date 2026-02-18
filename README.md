@@ -1,6 +1,6 @@
 # 🚀 AI Chat Exporter Ultimate
 
-**Version**: 0.10.6  
+**Version**: 0.10.7  
 **License**: MIT (Ultimate Edition)  
 **Code Source**: Generated with support from CODEX and CODEX CLI.  
 **Owner / Management**: Dr. Babak Sorkhpour ([@Drbabakskr](https://x.com/Drbabakskr))  
@@ -213,3 +213,17 @@ All engines normalize output into the same shared contract for exporters.
 
 The export renderer now uses `renderRichMessageHtml()` to split text and image tokens before escaping text.
 This prevents image token corruption and ensures valid `<img>` tags are emitted in full standalone HTML/Word output.
+
+
+## 🌍 Multilingual PDF Strategy (Current)
+
+- PDF export uses a browser-canvas rendering path that preserves image embedding and avoids missing glyph errors from basic PDF fonts.
+- The renderer now applies script-aware wrapping:
+  - RTL-aware line composition for Arabic/Persian/Hebrew blocks.
+  - CJK character-based wrapping for Chinese/Japanese/Korean blocks.
+- Text direction is switched per block (`rtl`/`ltr`) before drawing on canvas.
+
+### Limitations
+- PDF remains image-backed pages for robust multilingual glyph rendering.
+- Text selection in PDF is limited compared to pure text-PDF output.
+

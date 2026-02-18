@@ -1,6 +1,6 @@
 {
   "name": "AI Chat Exporter (Dev)",
   "description": "Professional multi-platform chat extraction tool with advanced formatting and privacy controls. Developer preview.",
-  "version": "0.10.6",
+  "version": "0.10.7",
   "requestFramePermissions": []
 }

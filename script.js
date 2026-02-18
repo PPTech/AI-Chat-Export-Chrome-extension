@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// script.js - Main Controller v0.10.6
+// script.js - Main Controller v0.10.7
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function exportSettingsCfg(settings) {
     const lines = Object.entries(settings).map(([k, v]) => `${k}=${String(v)}`);
-    const cfg = `# AI Chat Exporter Settings\n# version=0.10.6\n${lines.join('\n')}\n`;
+    const cfg = `# AI Chat Exporter Settings\n# version=0.10.7\n${lines.join('\n')}\n`;
     const date = new Date().toISOString().slice(0, 10);
     downloadBlob(new Blob([cfg], { type: 'text/plain' }), `ai_chat_exporter_settings_${date}.cfg`);
   }
@@ -400,26 +400,34 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const drawTextBlock = (text, font, color = '#111111', lineHeight = 28, maxChars = 90) => {
+    const normalized = String(text || '').replace(/\r/g, '').trim();
+      if (!normalized) return;
+      const profile = detectScriptProfile(normalized);
+      const lines = wrapLineSmart(normalized, maxChars, profile);
       ctx.font = font;
       ctx.fillStyle = color;
-      const lines = wrapLine(text, maxChars);
+      ctx.direction = profile.isRtl ? 'rtl' : 'ltr';
+      ctx.textAlign = profile.isRtl ? 'right' : 'left';
+      const x = profile.isRtl ? pageWidth - margin : margin;
       for (const line of lines) {
         ensureSpace(lineHeight + 4);
-        ctx.fillText(line, margin, y);
+        ctx.fillText(line, x, y);
         y += lineHeight;
       }
+      ctx.direction = 'ltr';
+      ctx.textAlign = 'left';
     };
 
     resetPage();
-    drawTextBlock(title, 'bold 36px Arial, Tahoma, sans-serif', '#111827', 40, 64);
+    drawTextBlock(title, 'bold 36px "Noto Sans", "Segoe UI", "Arial Unicode MS", Tahoma, Arial, sans-serif', '#111827', 40, 64);
     y += 8;
 
     for (const message of messages) {
-      drawTextBlock(`[${message.role}]`, 'bold 26px Arial, Tahoma, sans-serif', '#1D4ED8', 32, 64);
+      drawTextBlock(`[${message.role}]`, 'bold 26px "Noto Sans", "Segoe UI", Arial, sans-serif', '#1D4ED8', 32, 64);
       const parts = splitContentAndImages(message.content);
       for (const part of parts) {
         if (part.type === 'text') {
-          drawTextBlock(stripImageTokens(part.value), '24px Arial, Tahoma, sans-serif', '#111111', 30, 88);
+          drawTextBlock(stripImageTokens(part.value), '24px "Noto Sans Arabic", "Noto Sans CJK SC", "Noto Sans", "Arial Unicode MS", Tahoma, Arial, sans-serif', '#111111', 30, 88);
           continue;
         }
         const src = normalizeImageSrc((part.value || '').trim());
@@ -438,6 +446,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     pageDataUrls.push(canvas.toDataURL('image/jpeg', 0.92));
     return buildPdfFromJpegPages(pageDataUrls, pageWidth, pageHeight);
+  }
+
+  function detectScriptProfile(text) {
+    const s = String(text || '');
+    const isRtl = /[֐-ࣿיִ-﷽ﹰ-ﻼ]/.test(s);
+    const isCjk = /[぀-ヿ㐀-鿿豈-﫿]/.test(s);
+    return { isRtl, isCjk };
   }
 
   function splitContentAndImages(content) {
@@ -543,20 +558,56 @@ document.addEventListener('DOMContentLoaded', () => {
     return out;
   }
 
-  function wrapLine(text, max) {
-    const words = String(text || '').replace(/\s+/g, ' ').trim().split(' ');
-    const lines = [];
+  function wrapLineSmart(text, max, profile = { isRtl: false, isCjk: false }) {
+    const normalized = String(text || '').replace(/\r/g, '').trim();
+    if (!normalized) return [''];
+
+    if (profile.isCjk) {
+      const chars = Array.from(normalized.replace(/\s+/g, ''));
+      const out = [];
+      let line = '';
+      for (const ch of chars) {
+        if ((line + ch).length > max) {
+          out.push(line);
+          line = ch;
+        } else {
+          line += ch;
+        }
+      }
+      if (line) out.push(line);
+      return out;
+    }
+
+    if (profile.isRtl) {
+      const tokens = normalized.split(/\s+/).filter(Boolean);
+      const out = [];
+      let line = '';
+      for (const tok of tokens) {
+        const candidate = line ? `${tok} ${line}` : tok;
+        if (candidate.length > max && line) {
+          out.push(line);
+          line = tok;
+        } else {
+          line = candidate;
+        }
+      }
+      if (line) out.push(line);
+      return out;
+    }
+
+    const words = normalized.replace(/\s+/g, ' ').split(' ');
+    const linesOut = [];
     let line = '';
     for (const w of words) {
       if ((line + ' ' + w).trim().length > max) {
-        if (line.trim()) lines.push(line.trim());
+        if (line.trim()) linesOut.push(line.trim());
         line = w;
       } else {
         line += ` ${w}`;
       }
     }
-    if (line.trim()) lines.push(line.trim());
-    return lines.length ? lines : [''];
+    if (line.trim()) linesOut.push(line.trim());
+    return linesOut.length ? linesOut : [''];
   }
 
   const crcTable = new Int32Array(256);

@@ -2,7 +2,7 @@
 # Code generated with support from CODEX and CODEX CLI.
 # Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 
-# Technical Algorithms (v0.10.6)
+# Technical Algorithms (v0.10.7)
 
 ## A) Extraction Algorithms (`content.js`)
 
@@ -64,6 +64,17 @@
 - Builds page canvas, draws role/text/images.
 - Encodes pages to JPEG.
 - Builds valid PDF object graph + xref table.
+
+
+### B3.1 Multilingual Text Strategy
+- Detect script profile per block (`RTL`, `CJK`, default Latin).
+- Wrap logic:
+  - RTL: prepend-token line composition for right-to-left readability.
+  - CJK: character-level wrapping without whitespace dependency.
+  - Latin: word-level wrapping.
+- Draw logic:
+  - Set `ctx.direction` and `ctx.textAlign` per block.
+- Keep image rendering in same page flow.
 
 ### B4. Photo Export Mode
 - Controlled by settings checkbox (`Pack Photos as ZIP`).
