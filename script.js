@@ -2,7 +2,7 @@
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
-// script.js - Main Controller v0.12.16
+// script.js - Main Controller v0.12.17
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
@@ -283,7 +283,7 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('msg-count').textContent = res.messages.length;
       document.getElementById('empty-view').style.display = 'none';
       document.getElementById('stats-view').style.display = 'block';
-      updateDetectedSummary(res.messages || []);
+      updateDetectedSummary(res.messages || [], res.dataset || null);
       setAnalyzeProgress(100, 'Completed');
       chrome.runtime.sendMessage({ action: 'SET_DATA', tabId: activeTabId, data: res });
       updateExportBtn();
@@ -335,7 +335,7 @@ document.addEventListener('DOMContentLoaded', () => {
     el.textContent = `Analysis Progress (messages/images/files): ${bounded}% (${label})`;
   }
 
-  function computeDetectedCounts(messages = []) {
+  function computeDetectedCounts(messages = [], dataset = null) {
     let photos = 0;
     let files = 0;
     let others = 0;
@@ -357,6 +357,9 @@ document.addEventListener('DOMContentLoaded', () => {
       otherLinks += Math.max(0, (content.match(linkRegex) || []).length - (content.match(fileRegex) || []).length);
       otherQuotes += (content.match(/^>\s+/gm) || []).length;
     }
+    const attachments = dataset?.attachments || [];
+    photos += attachments.filter((a) => a.kind === 'image').length;
+    files += attachments.filter((a) => a.kind === 'file').length;
     others = Math.round(otherCodeBlocks + otherLinks + otherQuotes);
     return {
       messages: messages.length,
@@ -369,10 +372,10 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
-  function updateDetectedSummary(messages = []) {
+  function updateDetectedSummary(messages = [], dataset = null) {
     const el = document.getElementById('detected-summary');
     if (!el) return;
-    const c = computeDetectedCounts(messages);
+    const c = computeDetectedCounts(messages, dataset);
     el.textContent = `Detected: ${c.messages} messages • ${c.photos} photos • ${c.files} files • ${c.others} others (code:${c.otherCodeBlocks}, links:${c.otherLinks}, quotes:${c.otherQuotes})`;
   }
 
@@ -432,7 +435,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('msg-count').textContent = '0';
     document.getElementById('empty-view').style.display = 'block';
     document.getElementById('stats-view').style.display = 'none';
-    updateDetectedSummary([]);
+    updateDetectedSummary([], null);
     if (activeTabId) chrome.runtime.sendMessage({ action: 'CLEAR_DATA', tabId: activeTabId });
     updateExportBtn();
   };

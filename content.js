@@ -27,7 +27,7 @@
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
-// content.js - Platform Engine Orchestrator v0.12.16
+// content.js - Platform Engine Orchestrator v0.12.17
 
 (() => {
   if (window.hasRunContent) return;
@@ -209,11 +209,21 @@
       const blocks = [];
       const diagnostics = [];
       const walker = document.createTreeWalker(el, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+      const seenText = new Set();
       while (walker.nextNode()) {
         const node = walker.currentNode;
         if (node.nodeType === Node.TEXT_NODE) {
-          const cleaned = (node.textContent || '').replace(/\[(\d+)\]/g, '').replace(/\s+/g, ' ').trim();
-          if (cleaned) blocks.push({ type: 'text', text: cleaned });
+          const parentTag = node.parentElement?.tagName?.toLowerCase?.() || '';
+          if (!/^(p|span|div|li|h1|h2|h3|h4)$/.test(parentTag)) continue;
+          if (node.parentElement?.querySelector?.('img,pre,code,a')) continue;
+          let cleaned = (node.textContent || '').replace(/\[(\d+)\]/g, '').replace(/\s+/g, ' ').trim();
+          cleaned = cleaned.replace(/^You said\s+/i, '').trim();
+          if (!cleaned) continue;
+          if (/^(update location|based on your places|nothing to see here)/i.test(cleaned)) continue;
+          const canonical = cleaned.toLowerCase();
+          if (seenText.has(canonical)) continue;
+          seenText.add(canonical);
+          blocks.push({ type: 'text', text: cleaned });
           continue;
         }
         const tag = node.tagName ? node.tagName.toLowerCase() : '';
@@ -536,15 +546,24 @@
         window.GEMINI_DOM_ANALYSIS = analysis;
 
         const messages = [];
+        const seenCanonical = new Set();
         for (const m of analysis.messages) {
           const role = m.inferredRole.role === 'assistant' ? 'Gemini' : (m.inferredRole.role === 'user' ? 'User' : 'Unknown');
           const content = composeContentFromBlocks(m.parsed.blocks, options);
           if (content) {
+            const canonical = content
+              .replace(/^You said\s+/gim, '')
+              .replace(/\s+/g, ' ')
+              .trim()
+              .toLowerCase();
+            const key = `${role}|${canonical}`;
+            if (canonical && seenCanonical.has(key)) continue;
+            if (canonical) seenCanonical.add(key);
             messages.push({ role, content, meta: { platform: this.name, sourceSelector: m.signature, confidence: m.inferredRole.confidence, evidence: m.inferredRole.evidence } });
           }
         }
 
-        return { platform: this.name, title: document.title, messages };
+        return { platform: this.name, title: document.title, messages: utils.dedupe(messages) };
       }
     },
 
@@ -1247,7 +1266,12 @@
       prev = scroller.scrollHeight;
       if (stable >= 10 || rounds >= 45) {
         clearInterval(timer);
-        sendResponse({ status: 'done' });
+        try {
+          scroller.scrollTop = scroller.scrollHeight;
+        } catch {
+          // no-op
+        }
+        setTimeout(() => sendResponse({ status: 'done', rounds, stable }), 420);
       }
     }, 1200);
   }

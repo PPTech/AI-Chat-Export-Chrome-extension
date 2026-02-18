@@ -317,7 +317,7 @@
 5. **ensureChatFullyLoaded**: iterative scroll-top stabilization rounds and final scroll-bottom settle pass with growth/stability reporting.
 
 
-## NetworkPolicy + GestureProof (v0.12.16)
+## NetworkPolicy + GestureProof (v0.12.17)
 
 1. Popup issues short-lived gesture token on user action and registers it in service worker memory.
 2. Background validates category + gesture age + allowlisted host + host permission before any asset fetch.

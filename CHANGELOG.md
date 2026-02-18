@@ -4,12 +4,12 @@
 
 # Changelog
 
-## 0.12.16 - NetworkPolicy Asset Broker + Gemini CSP Host Fix
-- Added `network_policy.js` to enforce network categories (`AI_INFERENCE`, `ASSET_FETCH`, `LEGACY_FALLBACK`) and short-lived gesture-proof validation.
-- Added background `ASSET_FETCH`/`REGISTER_GESTURE_PROOF` routes and centralized deny diagnostics (`NETWORK_POLICY_DENY`).
-- Routed popup media fetch to broker action with gesture token; preserved local-only AI inference guard.
-- Added Gemini host coverage for `lh3.google.com` and `*.google.com` in optional permissions and CSP allowlist.
-- Kept Fetch Full waiting/blinking UX and sandbox fallback flow from previous release while hardening policy controls.
+## 0.12.17 - Gemini Full-Fetch Stability + Word Image Rendering Guard
+- Fixed Gemini full-fetch extraction stability by forcing a final scroll-to-bottom settle before extraction response is returned.
+- Reduced duplicate/repeated Gemini messages by canonical de-duplication and tighter text-node parsing (filters UI noise and repeated `You said` prefixes).
+- Updated popup detected counters to include canonical dataset attachments so photo/file counts remain accurate after full-fetch refresh.
+- Updated Word/HTML renderer behavior for `[[IMG:...]]` tokens to render valid `http(s)/blob/data` sources instead of emitting `[Image Load Failed]` placeholders.
+- Kept network-policy/gesture broker controls from previous release and synchronized version surfaces.
 
 ## 0.12.13 - Claude Content Noise Guard + Selector Crash Hardening
 - Hardened Claude content node filtering to avoid invalid `closest()` selector usage at runtime.

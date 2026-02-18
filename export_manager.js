@@ -2,7 +2,7 @@
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
-// export_manager.js - ExportManager v0.12.16
+// export_manager.js - ExportManager v0.12.17
 
 (() => {
   if (window.ExportManager) return;
@@ -31,7 +31,12 @@
     renderMessageContent(content = '') {
       return String(content)
         .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
-        .replace(/\[\[IMG:([\s\S]*?)\]\]/g, (m, src) => /^data:image\//i.test(src) ? `<img src="${src}" alt="embedded image"/>` : '<div>[Image Load Failed]</div>')
+        .replace(/\[\[IMG:([\s\S]*?)\]\]/g, (m, src) => {
+          const safeSrc = String(src || '').trim();
+          if (!safeSrc) return '';
+          if (/^(data:image\/|https?:\/\/|blob:)/i.test(safeSrc)) return `<img src="${safeSrc}" alt="embedded image"/>`;
+          return `<div>[Image skipped: unsupported scheme]</div>`;
+        })
         .replace(/\n/g, '<br>');
     }
 
