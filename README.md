@@ -1,7 +1,7 @@
 # 🚀 AI Chat Exporter Ultimate
 
-**Version**: 0.12.10  
-**License**: MIT (Ultimate Edition)  
+**Version**: 0.12.11  
+**License**: AGPL-3.0 (Ultimate Edition)  
 **Code Source**: Generated with support from CODEX and CODEX CLI.  
 **Owner / Management**: Dr. Babak Sorkhpour ([@Drbabakskr](https://x.com/Drbabakskr))  
 **Author**: Dr. Babak Sorkhpour with support from Gemini, Google AI Studio, ChatGPT, OpenAI Codex and Claude.ai.

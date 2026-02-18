@@ -1,8 +1,8 @@
-// License: MIT
+// License: AGPL-3.0
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
-// export_manager.js - ExportManager v0.12.10
+// export_manager.js - ExportManager v0.12.11
 
 (() => {
   if (window.ExportManager) return;

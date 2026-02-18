@@ -1,7 +1,7 @@
-// License: MIT
+// License: AGPL-3.0
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// version.js - Canonical release version v0.12.10
+// version.js - Canonical release version v0.12.11
 // Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
 
-export const APP_VERSION = '0.12.10';
+export const APP_VERSION = '0.12.11';

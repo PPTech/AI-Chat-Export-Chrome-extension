@@ -1,4 +1,4 @@
-// License: MIT
+// License: AGPL-3.0
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // test_image_embed.js - Runtime image embedding smoke test v0.12.9

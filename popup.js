@@ -1,4 +1,4 @@
-// License: MIT
+// License: AGPL-3.0
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // popup.js - Prometheus Popup Bridge v0.12.8

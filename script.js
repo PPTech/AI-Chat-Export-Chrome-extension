@@ -1,8 +1,8 @@
-// License: MIT
+// License: AGPL-3.0
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
-// script.js - Main Controller v0.12.10
+// script.js - Main Controller v0.12.11
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
@@ -375,19 +375,6 @@ document.addEventListener('DOMContentLoaded', () => {
         setProcessingProgress(percent, `Processing ${fmt.toUpperCase()}`);
       }
 
-
-      const bundleManifest = {
-        generatedAt: new Date().toISOString(),
-        version: '0.12.0',
-        fileCount: files.length,
-        files: files.map((f) => ({ name: f.name, mime: f.mime || 'application/octet-stream', byteLength: (typeof f.content === 'string' ? f.content.length : (f.content?.length || 0)) })),
-        datasetSummary: {
-          messages: currentChatData?.dataset?.messages?.length || currentChatData?.messages?.length || 0,
-          attachments: currentChatData?.dataset?.attachments?.length || 0
-        }
-      };
-      files.push({ name: `${baseName}.diagnostics.json`, content: JSON.stringify(currentChatData?.diagnostics || {}, null, 2), mime: 'application/json' });
-      files.push({ name: `${baseName}.export_bundle_manifest.json`, content: JSON.stringify(bundleManifest, null, 2), mime: 'application/json' });
 
       if (files.length === 1 && !checkZip.checked) {
         setProcessingProgress(95, 'Finalizing');

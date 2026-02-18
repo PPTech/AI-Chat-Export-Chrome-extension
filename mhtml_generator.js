@@ -1,4 +1,4 @@
-// License: MIT
+// License: AGPL-3.0
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // mhtml_generator.js - Prometheus MHTML Generator v0.12.8

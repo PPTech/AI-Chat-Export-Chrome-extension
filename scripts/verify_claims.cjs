@@ -1,4 +1,4 @@
-// License: MIT
+// License: AGPL-3.0
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
@@ -43,8 +43,8 @@ if (metadata.version !== appVersion) claims.push(`metadata.json mismatch: ${meta
 if (packageJson.version !== appVersion) claims.push(`package.json mismatch: ${packageJson.version} != ${appVersion}`);
 
 const scriptSource = fs.readFileSync('script.js', 'utf8');
-for (const token of ['.diagnostics.json', '.export_bundle_manifest.json', 'bundleManifest']) {
-  if (!scriptSource.includes(token)) claims.push(`export forensic artifact hook missing token: ${token}`);
+for (const token of ['.diagnostics.json', '.export_bundle_manifest.json']) {
+  if (scriptSource.includes(token)) claims.push(`internal export token must not be present: ${token}`);
 }
 
 if (!fs.existsSync('FORENSICS/HEAD.txt')) {

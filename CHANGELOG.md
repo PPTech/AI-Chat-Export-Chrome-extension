@@ -1,8 +1,13 @@
-# License: MIT
+# License: AGPL-3.0
 # Code generated with support from CODEX and CODEX CLI.
 # Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 
 # Changelog
+
+## 0.12.11 - CSP Fetch Fix + User-Only Export Artifacts + AGPL Headers
+- Fixed extension CSP fetch violations for user-initiated media proxy by expanding allowed `connect-src` hosts in `manifest.json`.
+- Stopped appending internal diagnostics/manifest JSON files to user export bundles.
+- Updated repository license headers from MIT markers to AGPL-3.0 markers in source and tests.
 
 ## 0.12.10 - Self-Test Media Count Reconciliation
 - Fixed `self_test_local_agent` mismatch where WARN could appear despite visible media in header summary.

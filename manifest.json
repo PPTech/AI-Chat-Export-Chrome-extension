@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AI Chat Exporter (Ultimate)",
-  "version": "0.12.10",
+  "version": "0.12.11",
   "description": "AEGIS-2026 local-only autonomous extractor with self-healing and secure artifact export.",
   "action": {
     "default_popup": "index.html",
@@ -83,7 +83,7 @@
     }
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'"
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self' https://*.googleusercontent.com https://*.gstatic.com https://*.oaistatic.com https://*.oaiusercontent.com https://*.openai.com https://*.anthropic.com; base-uri 'self'; form-action 'self'"
   },
   "optional_host_permissions": [
     "https://*.oaiusercontent.com/*",
