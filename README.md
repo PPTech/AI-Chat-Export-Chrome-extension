@@ -1,6 +1,6 @@
 # 🚀 AI Chat Exporter Ultimate
 
-**Version**: 0.12.15  
+**Version**: 0.12.16  
 **License**: MIT (Ultimate Edition)  
 **Code Source**: Generated with support from CODEX and CODEX CLI.  
 **Owner / Management**: Dr. Babak Sorkhpour ([@Drbabakskr](https://x.com/Drbabakskr))  
@@ -82,6 +82,12 @@ This prevents false WARN messages when the header shows media but the strict ite
 *   **Temporary Media Cache Hygiene**: Downloads media to temporary in-memory cache during export, embeds output, then clears cache at begin/finish/close.
 *   **Security Hardened**: Input sanitization prevents XSS in exported files.
 *   **Local Agent (Air-Gapped Ready)**: Visual + semantic local extraction with self-test and recipe fallback; no external AI API required.
+
+## 🔐 Network Policy split (v0.12.16)
+
+- **AI_INFERENCE**: network denied (local models only).
+- **ASSET_FETCH**: allowed only with gesture-proof token + allowlisted host + permissions.
+- All denied requests are logged with reason in diagnostics (`NETWORK_POLICY_DENY`).
 
 ## 🧠 Prompt & Extraction Strategy by Service (Summary)
 

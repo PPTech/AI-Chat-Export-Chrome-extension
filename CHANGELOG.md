@@ -4,12 +4,12 @@
 
 # Changelog
 
-## 0.12.15 - Fetch-Full Progress UX + Sandbox File Detection Fallback
-- Added explicit content-script injection log marker (`[INJECT] ...`) for fast domain/permission validation in page console.
-- Improved Fetch Full UX in popup with waiting/blinking analysis label and stable progress text while history loading is in-flight.
-- Expanded file/image counting and extraction fallbacks in popup runtime to include `sandbox:/mnt/data/...`, markdown file links, and direct file/image URLs inside message text.
-- Added automatic fallback to `resolve_download_chatgpt_file_links` when regular file metadata extraction finds zero downloadable files.
-- Improved export error guidance text so file failures point users to sandbox scan/resolve actions instead of image-only advice.
+## 0.12.16 - NetworkPolicy Asset Broker + Gemini CSP Host Fix
+- Added `network_policy.js` to enforce network categories (`AI_INFERENCE`, `ASSET_FETCH`, `LEGACY_FALLBACK`) and short-lived gesture-proof validation.
+- Added background `ASSET_FETCH`/`REGISTER_GESTURE_PROOF` routes and centralized deny diagnostics (`NETWORK_POLICY_DENY`).
+- Routed popup media fetch to broker action with gesture token; preserved local-only AI inference guard.
+- Added Gemini host coverage for `lh3.google.com` and `*.google.com` in optional permissions and CSP allowlist.
+- Kept Fetch Full waiting/blinking UX and sandbox fallback flow from previous release while hardening policy controls.
 
 ## 0.12.13 - Claude Content Noise Guard + Selector Crash Hardening
 - Hardened Claude content node filtering to avoid invalid `closest()` selector usage at runtime.

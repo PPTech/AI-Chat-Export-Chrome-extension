@@ -66,4 +66,4 @@
 
 - v0.12.6: Added Neural-Eye evidence-gated extraction contracts, local-only resolver module, and PTS/self-heal testable loop scaffolding.
 
-- v0.12.15: Added ChatGPT DOM discovery analyzer (debug-only) with explainable role inference and snapshot harness workflow.
+- v0.12.16: Added ChatGPT DOM discovery analyzer (debug-only) with explainable role inference and snapshot harness workflow.

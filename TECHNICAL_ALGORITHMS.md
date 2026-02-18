@@ -315,3 +315,11 @@
 3. **inferRole**: assigns `user|assistant|unknown` using explainable evidence (alignment, ARIA labels, regenerate/copy controls, avatar hints) with confidence thresholds.
 4. **parseMessageContent**: TreeWalker traversal preserving DOM order and yielding typed blocks (`text`,`code`,`list`,`quote`,`image`,`link`).
 5. **ensureChatFullyLoaded**: iterative scroll-top stabilization rounds and final scroll-bottom settle pass with growth/stability reporting.
+
+
+## NetworkPolicy + GestureProof (v0.12.16)
+
+1. Popup issues short-lived gesture token on user action and registers it in service worker memory.
+2. Background validates category + gesture age + allowlisted host + host permission before any asset fetch.
+3. Denials emit structured diagnostics (`NETWORK_POLICY_DENY`) with category/reason/host/module.
+4. Asset bytes are fetched via service worker broker (`ASSET_FETCH`) instead of popup direct fetch to avoid extension-page CSP blocks.

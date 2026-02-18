@@ -2,7 +2,7 @@
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
-// script.js - Main Controller v0.12.15
+// script.js - Main Controller v0.12.16
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
@@ -1299,7 +1299,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function ensureGestureProofToken() {
-    if (!gestureProofToken) gestureProofToken = `gesture_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
+    if (!gestureProofToken) {
+      gestureProofToken = `gesture_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
+      chrome.runtime.sendMessage({ action: 'REGISTER_GESTURE_PROOF', token: gestureProofToken }, () => void chrome.runtime.lastError);
+    }
     return gestureProofToken;
   }
 
@@ -1316,6 +1319,8 @@ document.addEventListener('DOMContentLoaded', () => {
       'https://*.openai.com/*',
       'https://*.googleusercontent.com/*',
       'https://*.gstatic.com/*',
+      'https://*.google.com/*',
+      'https://lh3.google.com/*',
       'https://*.anthropic.com/*'
     ];
     return new Promise((resolve) => {
@@ -1330,8 +1335,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function fetchMediaViaBackgroundProxy(url) {
+    const token = ensureGestureProofToken();
     return new Promise((resolve) => {
-      chrome.runtime.sendMessage({ action: "MEDIA_FETCH_PROXY", payload: { url, userInitiated: true } }, (res) => resolve(res || { success: false }));
+      chrome.runtime.sendMessage({ action: "ASSET_FETCH", payload: { url, gestureToken: token, category: 'ASSET_FETCH', userInitiated: true } }, (res) => resolve(res || { success: false }));
     });
   }
 

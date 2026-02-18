@@ -27,41 +27,63 @@
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
-// background.js - State & Log Manager v0.12.15
+// background.js - State & Log Manager v0.12.16
 
+importScripts('network_policy.js');
 console.log('[LOCAL-ONLY] AI engine network disabled; offline models only.');
 const nativeBackgroundFetch = globalThis.fetch?.bind(globalThis);
 
 
 function isAllowedMediaHost(url) {
-  try {
-    const host = new URL(url).hostname;
-    const allow = ['chatgpt.com','chat.openai.com','oaiusercontent.com','oaistatic.com','openai.com','claude.ai','anthropic.com','googleusercontent.com','gstatic.com','google.com'];
-    return allow.some((h) => host === h || host.endsWith(`.${h}`));
-  } catch {
-    return false;
-  }
+  return !!globalThis.NetworkPolicyToolkit?.isAllowedHost?.(url);
+}
+
+function logPolicyDenial(details = {}) {
+  log('ERROR', 'NETWORK_POLICY_DENY', {
+    urlHost: details.urlHost || 'unknown',
+    category: details.category || 'unknown',
+    reason: details.reason || 'unknown',
+    callingModule: details.callingModule || 'unknown'
+  });
 }
 
 async function mediaFetchProxy(payload = {}) {
   const url = String(payload.url || '');
-  const userInitiated = !!payload.userInitiated;
-  if (!userInitiated) return { success: false, error: 'user_initiation_required' };
-  if (!/^https?:\/\//i.test(url)) return { success: false, error: 'unsupported_scheme' };
-  if (!isAllowedMediaHost(url)) return { success: false, error: 'host_not_allowlisted' };
+  const category = payload.category || (globalThis.NetworkPolicyToolkit?.CATEGORIES?.ASSET_FETCH || 'ASSET_FETCH');
+  const policy = await globalThis.NetworkPolicyToolkit.validateAssetRequest({
+    url,
+    category,
+    gestureToken: payload.gestureToken || ''
+  });
+  if (!policy.ok) {
+    const reason = (policy.reason === 'missingGesture' || policy.reason === 'gestureExpired') ? 'user_initiation_required' : policy.reason;
+    logPolicyDenial({ urlHost: (() => { try { return new URL(url).hostname; } catch { return 'invalid'; } })(), category, reason, callingModule: 'mediaFetchProxy' });
+    return { success: false, error: reason };
+  }
   if (!nativeBackgroundFetch) return { success: false, error: 'fetch_unavailable' };
   try {
-    const res = await nativeBackgroundFetch(url, { credentials: 'include' });
+    const res = await nativeBackgroundFetch(url, { credentials: payload.credentials === 'include' ? 'include' : 'omit', redirect: 'follow' });
     if (!res.ok) return { success: false, error: `HTTP_${res.status}` };
     const buf = await res.arrayBuffer();
     const bytes = new Uint8Array(buf);
     const b64 = Buffer.from(bytes).toString('base64');
-    return { success: true, mime: res.headers.get('content-type') || 'application/octet-stream', dataUrl: `data:${res.headers.get('content-type') || 'application/octet-stream'};base64,${b64}`, byteLength: bytes.length };
+    return {
+      success: true,
+      mime: res.headers.get('content-type') || 'application/octet-stream',
+      dataUrl: `data:${res.headers.get('content-type') || 'application/octet-stream'};base64,${b64}`,
+      byteLength: bytes.length,
+      finalUrl: res.url || url,
+      strategy: 'SW_FETCH'
+    };
   } catch (e) {
+    logPolicyDenial({ urlHost: (() => { try { return new URL(url).hostname; } catch { return 'invalid'; } })(), category, reason: e.message || 'fetch_failed', callingModule: 'mediaFetchProxy' });
     return { success: false, error: e.message || 'media_fetch_failed' };
   }
 }
 
+async function assetFetchBroker(payload = {}) {
+  return mediaFetchProxy({ ...payload, category: payload.category || (globalThis.NetworkPolicyToolkit?.CATEGORIES?.ASSET_FETCH || 'ASSET_FETCH') });
+}
 
 
 function buildPrometheusMhtml(messages = [], title = 'Prometheus Export') {
@@ -364,6 +386,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       case 'BUILD_ARTIFACTS_PREVIEW': {
         routeToTabAction(tabId, 'build_artifacts_preview', message.payload || {}, sendResponse);
+        return true;
+      }
+
+      case 'REGISTER_GESTURE_PROOF': {
+        const row = globalThis.NetworkPolicyToolkit.registerGesture(message.token, sender?.url || `tab:${tabId || 'none'}`);
+        sendResponse({ success: !!row.ok, ...row });
+        break;
+      }
+
+      case 'ASSET_FETCH': {
+        assetFetchBroker(message.payload || {}).then(sendResponse);
         return true;
       }
 

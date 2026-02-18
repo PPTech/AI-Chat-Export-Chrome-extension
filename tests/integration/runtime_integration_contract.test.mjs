@@ -31,3 +31,16 @@ test('Claude extractor avoids invalid closest selector usage and uses safe UI ch
   assert.match(contentSource, /isClaudeUiChromeNode\(/);
   assert.doesNotMatch(contentSource, /\.group\/status/);
 });
+
+
+test('Network policy + gesture proof routes asset fetch through broker', () => {
+  const backgroundSource = fs.readFileSync('background.js', 'utf8');
+  const manifestSource = fs.readFileSync('manifest.json', 'utf8');
+  const scriptSource = fs.readFileSync('script.js', 'utf8');
+  assert.match(backgroundSource, /REGISTER_GESTURE_PROOF/);
+  assert.match(backgroundSource, /ASSET_FETCH/);
+  assert.match(backgroundSource, /NetworkPolicyToolkit/);
+  assert.match(scriptSource, /REGISTER_GESTURE_PROOF/);
+  assert.match(scriptSource, /action: "ASSET_FETCH"/);
+  assert.match(manifestSource, /lh3\.google\.com/);
+});
