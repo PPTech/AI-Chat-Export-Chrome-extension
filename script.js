@@ -2,11 +2,12 @@
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
-// script.js - Main Controller v0.12.14
+// script.js - Main Controller v0.12.15
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
   let activeTabId = null;
+  let analyzeBlinkTimer = null;
   let gestureProofToken = "";
 
   const btnExport = document.getElementById('btn-export-main');
@@ -315,6 +316,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const el = document.getElementById('analyze-progress');
     if (!el) return;
     const bounded = Math.max(0, Math.min(100, Math.round(percent)));
+    const waiting = /waiting|fetch full|loading history/i.test(label);
+    if (!waiting && analyzeBlinkTimer) {
+      clearInterval(analyzeBlinkTimer);
+      analyzeBlinkTimer = null;
+    }
+    if (waiting && !analyzeBlinkTimer) {
+      let tick = 0;
+      analyzeBlinkTimer = setInterval(() => {
+        const dots = '.'.repeat((tick % 3) + 1);
+        el.style.opacity = tick % 2 === 0 ? '1' : '0.5';
+        el.textContent = `Analysis Progress (messages/images/files): ${bounded}% (${label}${dots})`;
+        tick += 1;
+      }, 420);
+      return;
+    }
+    el.style.opacity = '1';
     el.textContent = `Analysis Progress (messages/images/files): ${bounded}% (${label})`;
   }
 
@@ -327,11 +344,15 @@ document.addEventListener('DOMContentLoaded', () => {
     let otherQuotes = 0;
     const imgRegex = /\[\[IMG:[\s\S]*?\]\]|!\[[^\]]*\]\((data:image\/[^)]+|https?:\/\/[^)]+)\)/g;
     const fileRegex = /\[\[FILE:([^|\]]+)\|([^\]]+)\]\]/g;
+    const sandboxRegex = /sandbox:(?:\/\/)?\/mnt\/data\/[^\s)\]>"']+/gi;
     const linkRegex = /https?:\/\/[^\s)]+/g;
+    const fileLikeLinkRegex = /https?:\/\/[^\s)]+\.(?:csv|pdf|docx|xlsx|pptx|py|js|ts|json|xml|txt|zip|md)/gi;
     for (const m of messages) {
       const content = m.content || '';
       photos += (content.match(imgRegex) || []).length;
       files += (content.match(fileRegex) || []).length;
+      files += (content.match(sandboxRegex) || []).length;
+      files += (content.match(fileLikeLinkRegex) || []).length;
       otherCodeBlocks += (content.match(/```/g) || []).length / 2;
       otherLinks += Math.max(0, (content.match(linkRegex) || []).length - (content.match(fileRegex) || []).length);
       otherQuotes += (content.match(/^>\s+/gm) || []).length;
@@ -398,9 +419,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!activeTabId) return;
     const ok = window.confirm('Load full chat from the beginning? This may take longer for long chats.');
     if (!ok) return;
-    setAnalyzeProgress(5, 'Preparing full-load scan');
+    setAnalyzeProgress(5, 'Waiting - Fetch Full');
     chrome.tabs.sendMessage(activeTabId, { action: 'scroll_chat' }, () => {
-      setAnalyzeProgress(80, 'Finalizing full-load scan');
+      setAnalyzeProgress(80, 'Waiting - Finalizing full-load scan');
       setTimeout(requestExtraction, 800);
     });
   };
@@ -496,6 +517,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const legacyFiles = extractAllFileSources(currentChatData.messages, currentChatData.dataset).map((f) => ({ fileName: f.name, url: f.url, type: /^sandbox:/i.test(f.url) ? 'sandbox' : 'text_reference', needsResolution: /^sandbox:/i.test(f.url) }));
     const filesFound = processor ? processor.deduplicateFiles([...legacyFiles, ...metaFiles]) : legacyFiles;
 
+    if (!filesFound.length) {
+      const resolved = await sendToActiveTab({ action: 'resolve_download_chatgpt_file_links' });
+      if (resolved?.success) {
+        const stats = resolved.stats || { total: 0, downloaded: 0, failed: 0 };
+        showInfo('Resolve + Download Finished', `[${stats.downloaded === stats.total ? 'PASS' : (stats.downloaded > 0 ? 'WARN' : 'FAIL')}] downloaded ${stats.downloaded}/${stats.total}, failed ${stats.failed}.`);
+        return;
+      }
+    }
     if (!filesFound.length) return showError(new Error('No chat-generated file links were detected.'));
     console.log(`[FILES] Found ${filesFound.length} references`);
 
@@ -601,8 +630,15 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function showError(error) {
-    errorMsg.textContent = error?.message || 'Unknown export error.';
-    errorFix.textContent = 'Use Fetch Full first. If images still missing, enable Include Images and retry.';
+    const message = error?.message || 'Unknown export error.';
+    errorMsg.textContent = message;
+    if (/file/i.test(message)) {
+      errorFix.textContent = 'Use Fetch Full first, then run "Scan Sandbox Links" or "Resolve + Download All" for ChatGPT sandbox:/mnt/data files.';
+    } else if (/image/i.test(message)) {
+      errorFix.textContent = 'Use Fetch Full first. If images still missing, enable Include Images and retry.';
+    } else {
+      errorFix.textContent = 'Retry Fetch Full and run Self-Test. Open page DevTools for [SCAN]/[DL] diagnostics.';
+    }
     errorModal.style.display = 'flex';
   }
 
@@ -678,6 +714,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const tokenRegex = /\[\[IMG:([\s\S]*?)\]\]/g;
     const mdRegex = /!\[[^\]]*\]\((data:image\/[^)]+|https?:\/\/[^)]+)\)/g;
+    const directImgRegex = /https?:\/\/[^\s"')]+\.(?:png|jpe?g|gif|webp|bmp|svg)(?:\?[^\s"')]*)?/gi;
     for (const m of messages || []) {
       let match;
       while ((match = tokenRegex.exec(m.content || '')) !== null) {
@@ -686,6 +723,10 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       while ((match = mdRegex.exec(m.content || '')) !== null) {
         const src = normalizeImageSrc((match[1] || '').trim());
+        if (src) set.add(src);
+      }
+      while ((match = directImgRegex.exec(m.content || '')) !== null) {
+        const src = normalizeImageSrc((match[0] || '').trim());
         if (src) set.add(src);
       }
     }
@@ -702,6 +743,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     const fileRegex = /\[\[FILE:([^|\]]+)\|([^\]]+)\]\]/g;
+    const sandboxRegex = /sandbox:(?:\/\/)?\/mnt\/data\/[^\s)\]>"']+/gi;
+    const markdownFileRegex = /\[[^\]]+\]\((sandbox:(?:\/\/)?\/mnt\/data\/[^)\s]+|https?:\/\/[^)\s]+\.(?:csv|pdf|docx|xlsx|pptx|py|js|ts|json|xml|txt|zip|md))\)/gi;
+    const plainFileRegex = /https?:\/\/[^\s"')]+\.(?:csv|pdf|docx|xlsx|pptx|py|js|ts|json|xml|txt|zip|md)(?:\?[^\s"')]*)?/gi;
     for (const m of messages || []) {
       let match;
       while ((match = fileRegex.exec(m.content || '')) !== null) {
@@ -711,6 +755,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const safeName = fileName.replace(/[\/:*?"<>|]+/g, '_') || 'file.bin';
         files.push({ url: rawUrl, name: safeName });
       }
+      while ((match = sandboxRegex.exec(m.content || '')) !== null) {
+        const rawUrl = (match[0] || '').replace(/^sandbox:\/\//i, 'sandbox:/').trim();
+        const fileName = decodeURIComponent(rawUrl.split('/').pop() || 'file.bin').replace(/[\/:*?"<>|]+/g, '_') || 'file.bin';
+        files.push({ url: rawUrl, name: fileName });
+      }
+      while ((match = markdownFileRegex.exec(m.content || '')) !== null) {
+        const rawUrl = (match[1] || '').trim();
+        const fileName = decodeURIComponent(rawUrl.split('/').pop() || 'file.bin').replace(/[\/:*?"<>|]+/g, '_') || 'file.bin';
+        files.push({ url: rawUrl, name: fileName });
+      }
+      while ((match = plainFileRegex.exec(m.content || '')) !== null) {
+        const rawUrl = (match[0] || '').trim();
+        const fileName = decodeURIComponent(rawUrl.split('/').pop() || 'file.bin').replace(/[\/:*?"<>|]+/g, '_') || 'file.bin';
+        files.push({ url: rawUrl, name: fileName });
+      }
+
     }
     const uniq = new Map();
     files.forEach((f) => { if (!uniq.has(f.url)) uniq.set(f.url, f); });

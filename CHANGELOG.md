@@ -4,11 +4,12 @@
 
 # Changelog
 
-## 0.12.14 - ChatGPT DOM Discovery Analyzer + Snapshot Harness
-- Added `content_script.js` with robust detect/collect/infer/parse pipeline for ChatGPT DOM analysis and explainable role evidence.
-- Added full-load analyzer mode with scroll stabilization report and PASS/WARN/FAIL self-test summary.
-- Added debug popup assets (`popup.html`, `styles.css`) and `service_worker.js` message bridge for visible/full analysis commands.
-- Added `dev_snapshot.js`, fixture snapshot path, and jsdom-ready harness runner (`test/dom_harness_runner.mjs`) with graceful skip when jsdom is unavailable.
+## 0.12.15 - Fetch-Full Progress UX + Sandbox File Detection Fallback
+- Added explicit content-script injection log marker (`[INJECT] ...`) for fast domain/permission validation in page console.
+- Improved Fetch Full UX in popup with waiting/blinking analysis label and stable progress text while history loading is in-flight.
+- Expanded file/image counting and extraction fallbacks in popup runtime to include `sandbox:/mnt/data/...`, markdown file links, and direct file/image URLs inside message text.
+- Added automatic fallback to `resolve_download_chatgpt_file_links` when regular file metadata extraction finds zero downloadable files.
+- Improved export error guidance text so file failures point users to sandbox scan/resolve actions instead of image-only advice.
 
 ## 0.12.13 - Claude Content Noise Guard + Selector Crash Hardening
 - Hardened Claude content node filtering to avoid invalid `closest()` selector usage at runtime.
