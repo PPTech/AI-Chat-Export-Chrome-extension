@@ -99,3 +99,10 @@
 - Added agent loop modules (`/agent`) with local embeddings, multi-plan search, verifier scoring, and online learner persistence.
 - Wired `OFFSCREEN_RUN_AGENT` into extraction critical path and persisted learning artifacts in IndexedDB.
 - Added AssetBroker allowlist controls, gesture proof token flow, and docs/test scaffolding for proof-of-intelligence.
+
+## 0.11.1 - AEGIS-2026 Documentation + Security/Export Hardening
+- Added production modules: `smart_vision.js`, `security_guard.js`, `offline_brain.js`, `export_core.js`, and `logger.js` with explicit local-only and anti-tamper controls.
+- Updated `manifest.json` to include AEGIS modules in content-script pipeline, strict extension CSP, and web-accessible resource declarations.
+- Extended `background.js` with `DOWNLOAD_MHTML_ARTIFACT` action for service-worker download management of generated MHTML artifacts.
+- Added unit tests validating AEGIS security allowlist and local offline classifier code-wrapping behavior.
+- Expanded project documentation and memory baselines for version-control traceability, module responsibilities, and release-readiness handoff.

@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// background.js - State & Log Manager v0.10.26
+// background.js - State & Log Manager v0.11.1
 
 console.log('[LOCAL-ONLY] AI engine network disabled; offline models only.');
 
@@ -25,6 +25,22 @@ function patchLocalOnlyNetworkGuards() {
 patchLocalOnlyNetworkGuards();
 
 const tabStates = {};
+
+async function downloadMhtmlArtifact(payload = {}) {
+  const fileName = payload.fileName || `aegis_export_${new Date().toISOString().slice(0, 10)}.mhtml`;
+  const content = String(payload.content || '');
+  if (!content) return { success: false, error: 'empty_mhtml' };
+  const blob = new Blob([content], { type: 'multipart/related' });
+  const url = URL.createObjectURL(blob);
+  return new Promise((resolve) => {
+    chrome.downloads.download({ url, filename: fileName, saveAs: false }, (downloadId) => {
+      setTimeout(() => URL.revokeObjectURL(url), 12_000);
+      if (chrome.runtime.lastError) resolve({ success: false, error: chrome.runtime.lastError.message });
+      else resolve({ success: true, downloadId });
+    });
+  });
+}
+
 const appLogs = [];
 const pendingCaptures = new Map();
 let captureSeq = 0;
@@ -218,6 +234,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           setTimeout(poll, 160);
         };
         poll();
+        return true;
+      }
+
+
+      case 'DOWNLOAD_MHTML_ARTIFACT': {
+        downloadMhtmlArtifact(message.payload || {}).then(sendResponse);
         return true;
       }
 
