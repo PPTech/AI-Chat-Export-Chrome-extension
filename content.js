@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// content.js - Platform Engine Orchestrator v0.10.12
+// content.js - Platform Engine Orchestrator v0.10.13
 
 (() => {
   if (window.hasRunContent) return;
@@ -1053,6 +1053,321 @@
     return findings;
   }
 
+  function hashString(input) {
+    const str = String(input || '');
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i += 1) {
+      h ^= str.charCodeAt(i);
+      h += (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24);
+    }
+    return `f${(h >>> 0).toString(16)}`;
+  }
+
+  function buildDomPath(el, depth = 5) {
+    if (!el || !(el instanceof Element)) return '';
+    const parts = [];
+    let node = el;
+    let steps = 0;
+    while (node && steps < depth && node !== document.body) {
+      const parent = node.parentElement;
+      const tag = node.tagName.toLowerCase();
+      if (!parent) {
+        parts.unshift(tag);
+        break;
+      }
+      const siblings = Array.from(parent.children).filter((n) => n.tagName === node.tagName);
+      const idx = Math.max(1, siblings.indexOf(node) + 1);
+      parts.unshift(`${tag}:nth-of-type(${idx})`);
+      node = parent;
+      steps += 1;
+    }
+    return parts.join(' > ');
+  }
+
+  function canonicalSandboxPath(input) {
+    const raw = String(input || '').trim();
+    if (!raw) return '';
+    const fixed = raw.replace(/^sandbox:\/\//i, 'sandbox:/');
+    if (/^sandbox:\/mnt\/data\//i.test(fixed)) return fixed;
+    const m = fixed.match(/\/mnt\/data\/[^\s)\]>"']+/i);
+    if (m) return `sandbox:${m[0]}`;
+    return '';
+  }
+
+  function guessFilename(rawHref, displayText, fallbackId) {
+    const path = canonicalSandboxPath(rawHref);
+    const fromPath = path ? decodeURIComponent(path.split('/').pop() || '') : '';
+    if (fromPath) return fromPath;
+    const text = String(displayText || '').trim();
+    const textMatch = text.match(/([\w.-]+\.[A-Za-z0-9]{1,8})/);
+    if (textMatch) return textMatch[1];
+    return `file_${fallbackId}`;
+  }
+
+  function createFileRef({ source, rawHref, displayText, sandboxPath, element, pageUrl }) {
+    const canonical = canonicalSandboxPath(sandboxPath || rawHref || displayText || '');
+    const domPath = element ? buildDomPath(element) : '';
+    const idSeed = `${source}|${canonical || rawHref || ''}|${displayText || ''}|${domPath}`;
+    const id = hashString(idSeed);
+    const filename = guessFilename(rawHref || canonical, displayText, id.slice(-6));
+    const extMatch = filename.match(/\.([A-Za-z0-9]{1,8})$/);
+    return {
+      id,
+      source,
+      rawHref: rawHref || null,
+      displayText: (displayText || '').trim().slice(0, 240),
+      sandboxPath: canonical || null,
+      filename,
+      ext: extMatch ? extMatch[1].toLowerCase() : null,
+      foundAt: {
+        pageUrl,
+        messageIndex: null,
+        domPath
+      },
+      resolved: {
+        status: 'unresolved',
+        finalUrl: null,
+        method: null,
+        evidence: []
+      },
+      download: {
+        status: 'pending',
+        downloadId: null,
+        error: null
+      }
+    };
+  }
+
+  function detectConversationRootForFiles() {
+    const candidates = Array.from(document.querySelectorAll('main,section,div,[role="main"],[role="log"],article'));
+    const scored = candidates.map((el) => {
+      const cs = getComputedStyle(el);
+      const scroll = ['auto', 'scroll', 'overlay'].includes(cs.overflowY) ? 1 : 0;
+      const ratio = el.scrollHeight / Math.max(1, el.clientHeight);
+      const density = ((el.innerText || '').trim().length / Math.max(1, el.querySelectorAll('*').length));
+      const links = el.querySelectorAll('a[href],button,[role="button"]').length;
+      const score = (scroll * 2) + Math.min(3, ratio) + Math.min(3, density / 30) + Math.min(2, links / 15);
+      return { el, score, evidence: [`scroll:${scroll}`, `ratio:${ratio.toFixed(2)}`, `density:${density.toFixed(2)}`, `links:${links}`] };
+    }).filter((c) => c.score >= 2.2).sort((a, b) => b.score - a.score);
+    const top = scored[0];
+    if (!top) {
+      return { rootEl: document.body, confidence: 0.3, method: 'fallback-body', evidence: ['no_candidate_above_threshold'] };
+    }
+    return { rootEl: top.el, confidence: Math.min(0.99, top.score / 8), method: 'score-ranked-root', evidence: top.evidence };
+  }
+
+  function discoverFileLinks(rootEl) {
+    const pageUrl = location.href;
+    const refs = [];
+    const sandboxRegex = /sandbox:(?:\/\/)?\/mnt\/data\/[^\s)\]>"']+/gi;
+
+    Array.from(rootEl.querySelectorAll('a')).forEach((a) => {
+      const href = a.getAttribute('href') || '';
+      const text = (a.textContent || '').trim();
+      const hit = href.startsWith('sandbox:') || /\/mnt\/data\//i.test(href) || /sandbox:(?:\/\/)?\/mnt\/data\//i.test(text);
+      if (!hit) return;
+      const ref = createFileRef({ source: 'anchor', rawHref: href, displayText: text, sandboxPath: href || text, element: a, pageUrl });
+      ref.resolved.evidence.push('anchor_match');
+      if (/^https?:\/\//i.test(href)) {
+        ref.resolved.status = 'direct';
+        ref.resolved.finalUrl = href;
+        ref.resolved.method = 'direct_href';
+        ref.resolved.evidence.push('href_is_http(s)');
+      }
+      refs.push(ref);
+    });
+
+    const walker = document.createTreeWalker(rootEl, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      const text = node.textContent || '';
+      const matches = text.match(sandboxRegex) || [];
+      matches.forEach((match) => {
+        const parent = node.parentElement;
+        const ref = createFileRef({ source: 'text', rawHref: match, displayText: match, sandboxPath: match, element: parent, pageUrl });
+        ref.resolved.evidence.push('text_regex_match');
+        refs.push(ref);
+      });
+    }
+
+    const buttonCandidates = Array.from(rootEl.querySelectorAll('button,[role="button"],div[tabindex]')).filter((el) => {
+      const txt = (el.textContent || '').trim();
+      return /download|mnt\/data|\.(pdf|xlsx|pptx|zip|png|jpe?g|txt|csv|json|py|md)\b/i.test(txt);
+    });
+    buttonCandidates.forEach((el) => {
+      const nestedAnchor = el.querySelector('a[href]');
+      const rawHref = nestedAnchor?.getAttribute('href') || '';
+      const text = (el.textContent || '').trim();
+      const match = text.match(sandboxRegex)?.[0] || rawHref;
+      if (!match) return;
+      const ref = createFileRef({ source: 'button', rawHref, displayText: text, sandboxPath: match, element: nestedAnchor || el, pageUrl });
+      ref.resolved.evidence.push('button_widget_match');
+      refs.push(ref);
+    });
+
+    const dedupe = new Map();
+    refs.forEach((ref) => {
+      const key = ref.sandboxPath || `${ref.rawHref}|${ref.filename}`;
+      if (!dedupe.has(key)) dedupe.set(key, ref);
+    });
+    return Array.from(dedupe.values());
+  }
+
+  function findElementForRef(ref, rootEl) {
+    if (ref?.foundAt?.domPath) {
+      const path = ref.foundAt.domPath;
+      try {
+        const byPath = rootEl.querySelector(path);
+        if (byPath) return byPath;
+      } catch {
+        // ignore invalid selector path
+      }
+    }
+    const text = `${ref.sandboxPath || ''} ${ref.filename || ''}`.trim();
+    if (!text) return null;
+    return Array.from(rootEl.querySelectorAll('a,button,[role="button"]')).find((el) => {
+      const t = (el.textContent || '').trim();
+      const href = el.getAttribute('href') || '';
+      return t.includes(ref.filename) || href.includes(ref.filename) || href.includes(ref.sandboxPath || '');
+    }) || null;
+  }
+
+  async function wait(ms) {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  function sendRuntime(message) {
+    return new Promise((resolve) => {
+      chrome.runtime.sendMessage(message, (response) => {
+        resolve(response || { success: false, error: chrome.runtime.lastError?.message || 'No response' });
+      });
+    });
+  }
+
+  async function resolveFileRef(fileRef, tabId, rootEl) {
+    const ref = JSON.parse(JSON.stringify(fileRef));
+    const href = String(ref.rawHref || '').trim();
+    if (/^https?:\/\//i.test(href)) {
+      ref.resolved.status = 'direct';
+      ref.resolved.finalUrl = href;
+      ref.resolved.method = 'direct_href';
+      ref.resolved.evidence.push('href_is_http(s)');
+      return ref;
+    }
+
+    const element = findElementForRef(ref, rootEl);
+    if (!element) {
+      ref.resolved.status = 'failed';
+      ref.resolved.method = 'ui_click_only';
+      ref.resolved.evidence.push('click_target_not_found');
+      return ref;
+    }
+
+    const armed = await sendRuntime({ action: 'START_DOWNLOAD_CAPTURE', tabId, expectedFilename: ref.filename, timeoutMs: 9000 });
+    ref.resolved.evidence.push('capture_armed');
+    element.click();
+    await wait(180);
+    const captured = await sendRuntime({ action: 'WAIT_DOWNLOAD_CAPTURE', captureId: armed.captureId });
+    if (captured?.success && captured.finalUrl) {
+      ref.resolved.status = 'dynamic';
+      ref.resolved.finalUrl = captured.finalUrl;
+      ref.resolved.method = captured.method || 'downloads_api';
+      ref.resolved.evidence.push(captured.method === 'webrequest' ? 'webrequest_captured' : 'downloads_api_captured');
+      return ref;
+    }
+
+    ref.resolved.status = 'failed';
+    ref.resolved.method = 'ui_click_only';
+    ref.resolved.evidence.push('dynamic_resolution_failed');
+    return ref;
+  }
+
+  async function downloadResolvedFile(fileRef) {
+    const ref = JSON.parse(JSON.stringify(fileRef));
+    if (!ref.resolved?.finalUrl) {
+      ref.download.status = 'failed';
+      ref.download.error = 'No resolved finalUrl';
+      return ref;
+    }
+    try {
+      const downloadId = await new Promise((resolve, reject) => {
+        chrome.downloads.download({
+          url: ref.resolved.finalUrl,
+          filename: `ai_chat_exporter/${(ref.filename || 'file').replace(/[\/:*?"<>|]+/g, '_')}`,
+          saveAs: false
+        }, (id) => {
+          if (chrome.runtime.lastError || !id) reject(new Error(chrome.runtime.lastError?.message || 'downloads_api_failed'));
+          else resolve(id);
+        });
+      });
+      ref.download.status = 'ok';
+      ref.download.downloadId = downloadId;
+      return ref;
+    } catch (error) {
+      try {
+        const blob = await fetch(ref.resolved.finalUrl, { credentials: 'include' }).then((r) => r.blob());
+        const objectUrl = URL.createObjectURL(blob);
+        const downloadId = await new Promise((resolve, reject) => {
+          chrome.downloads.download({
+            url: objectUrl,
+            filename: `ai_chat_exporter/${(ref.filename || 'file').replace(/[\/:*?"<>|]+/g, '_')}`,
+            saveAs: false
+          }, (id) => {
+            if (chrome.runtime.lastError || !id) reject(new Error(chrome.runtime.lastError?.message || 'fetch_blob_failed'));
+            else resolve(id);
+          });
+        });
+        ref.download.status = 'ok';
+        ref.download.downloadId = downloadId;
+        ref.resolved.evidence.push('fetch_blob_fallback');
+      } catch (err2) {
+        ref.download.status = 'failed';
+        ref.download.error = err2.message || error.message;
+      }
+      return ref;
+    }
+  }
+
+  async function scanChatGptFileLinks() {
+    if (!/(chatgpt\.com|chat\.openai\.com)$/i.test(location.hostname)) {
+      return { success: false, error: 'This scanner supports ChatGPT domains only.' };
+    }
+    const root = detectConversationRootForFiles();
+    const refs = discoverFileLinks(root.rootEl);
+    window.__CHATGPT_FILE_LINKS__ = refs;
+    const summary = {
+      total: refs.length,
+      sandbox: refs.filter((r) => !!r.sandboxPath).length,
+      direct: refs.filter((r) => /^https?:\/\//i.test(r.rawHref || '')).length
+    };
+    console.log('[FileScan] root:', root.method, root.confidence, root.evidence);
+    console.table(refs.map((r) => ({ filename: r.filename, sandboxPath: r.sandboxPath, rawHref: r.rawHref, source: r.source })));
+    return { success: true, root, refs, summary };
+  }
+
+  async function resolveAndDownloadChatGptFileLinks(tabId) {
+    const scan = await scanChatGptFileLinks();
+    if (!scan.success) return scan;
+    const rootEl = scan.root.rootEl || document.body;
+    const out = [];
+    for (const ref of scan.refs) {
+      const resolved = await resolveFileRef(ref, tabId, rootEl);
+      const downloaded = await downloadResolvedFile(resolved);
+      out.push(downloaded);
+      console.log(`[FileJob] ${downloaded.filename} | ${downloaded.resolved.status} | ${downloaded.resolved.method || 'n/a'} | ${downloaded.download.status}`);
+      await wait(1200);
+    }
+    const stats = {
+      total: out.length,
+      downloaded: out.filter((r) => r.download.status === 'ok').length,
+      failed: out.filter((r) => r.download.status === 'failed').length
+    };
+    const tag = stats.downloaded === stats.total ? 'PASS' : (stats.downloaded > 0 ? 'WARN' : 'FAIL');
+    console.log(`[${tag}] downloaded ${stats.downloaded}/${stats.total}`);
+    window.__CHATGPT_FILE_LINKS__ = out;
+    return { success: true, refs: out, stats };
+  }
+
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'extract_chat') {
       extractChatData(request.options || {}).then(sendResponse);
@@ -1071,6 +1386,15 @@
     if (request.action === 'discover_claude_structure') {
       const findings = discoverClaudeStructure();
       sendResponse({ success: true, findings });
+      return true;
+    }
+    if (request.action === 'scan_chatgpt_file_links') {
+      scanChatGptFileLinks().then(sendResponse);
+      return true;
+    }
+    if (request.action === 'resolve_download_chatgpt_file_links') {
+      const tabId = sender?.tab?.id || null;
+      resolveAndDownloadChatGptFileLinks(tabId).then(sendResponse);
       return true;
     }
     return false;

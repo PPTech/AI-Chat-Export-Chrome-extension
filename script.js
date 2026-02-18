@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// script.js - Main Controller v0.10.12
+// script.js - Main Controller v0.10.13
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
@@ -13,6 +13,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnPreview = document.getElementById('btn-preview');
   const btnExportImages = document.getElementById('btn-export-images');
   const btnExportFiles = document.getElementById('btn-export-files');
+  const btnScanFiles = document.getElementById('btn-scan-files');
+  const btnResolveDownload = document.getElementById('btn-resolve-download');
   const btnLogs = document.getElementById('btn-download-logs');
   const btnExportConfig = document.getElementById('btn-export-config');
   const checkImages = document.getElementById('check-images');
@@ -76,7 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function exportSettingsCfg(settings) {
     const lines = Object.entries(settings).map(([k, v]) => `${k}=${String(v)}`);
-    const cfg = `# AI Chat Exporter Settings\n# version=0.10.12\n${lines.join('\n')}\n`;
+    const cfg = `# AI Chat Exporter Settings\n# version=0.10.13\n${lines.join('\n')}\n`;
     const date = new Date().toISOString().slice(0, 10);
     downloadBlob(new Blob([cfg], { type: 'text/plain' }), `ai_chat_exporter_settings_${date}.cfg`);
   }
@@ -338,6 +340,34 @@ document.addEventListener('DOMContentLoaded', () => {
     const date = new Date().toISOString().slice(0, 10);
     const platformPrefix = (currentChatData.platform || 'Export').replace(/[^a-zA-Z0-9]/g, '');
     downloadBlob(zip, `${platformPrefix}_${date}_chat_files.zip`);
+  };
+
+  btnScanFiles.onclick = async () => {
+    if (!activeTabId) return;
+    setAnalyzeProgress(35, 'Scanning file links');
+    const response = await sendToActiveTab({ action: 'scan_chatgpt_file_links' });
+    if (!response?.success) {
+      showError(new Error(response?.error || 'Scan failed for current page.'));
+      setAnalyzeProgress(100, 'Completed');
+      return;
+    }
+    const summary = response.summary || { total: 0, sandbox: 0, direct: 0 };
+    showInfo('Scan Complete', `Detected ${summary.total} file link(s). sandbox=${summary.sandbox}, direct=${summary.direct}. Open page DevTools console for detailed table.`);
+    setAnalyzeProgress(100, 'Completed');
+  };
+
+  btnResolveDownload.onclick = async () => {
+    if (!activeTabId) return;
+    setAnalyzeProgress(40, 'Resolving file links');
+    const response = await sendToActiveTab({ action: 'resolve_download_chatgpt_file_links' });
+    if (!response?.success) {
+      showError(new Error(response?.error || 'Resolve + Download failed.'));
+      setAnalyzeProgress(100, 'Completed');
+      return;
+    }
+    const stats = response.stats || { total: 0, downloaded: 0, failed: 0 };
+    showInfo('Resolve + Download Finished', `[${stats.downloaded === stats.total ? 'PASS' : (stats.downloaded > 0 ? 'WARN' : 'FAIL')}] downloaded ${stats.downloaded}/${stats.total}, failed ${stats.failed}.`);
+    setAnalyzeProgress(100, 'Completed');
   };
 
   document.getElementById('link-legal').onclick = () => showInfo('Legal', 'This is a local-processing developer version. Users remain responsible for lawful and compliant use in their jurisdiction.');
@@ -893,6 +923,18 @@ document.addEventListener('DOMContentLoaded', () => {
     a.download = name;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  }
+
+  function sendToActiveTab(payload) {
+    return new Promise((resolve) => {
+      chrome.tabs.sendMessage(activeTabId, payload, (res) => {
+        if (chrome.runtime.lastError) {
+          resolve({ success: false, error: chrome.runtime.lastError.message });
+          return;
+        }
+        resolve(res || { success: false, error: 'No response from content script.' });
+      });
+    });
   }
 
   async function fetchFileBlob(url) {

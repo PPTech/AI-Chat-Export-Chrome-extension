@@ -1,6 +1,6 @@
 # 🚀 AI Chat Exporter Ultimate
 
-**Version**: 0.10.12  
+**Version**: 0.10.13  
 **License**: MIT (Ultimate Edition)  
 **Code Source**: Generated with support from CODEX and CODEX CLI.  
 **Owner / Management**: Dr. Babak Sorkhpour ([@Drbabakskr](https://x.com/Drbabakskr))  
@@ -80,7 +80,11 @@ To install the developer preview directly from GitHub:
 7. Click **Generate Package**.
 8. To export only images, click **Export Photos**.
 9. To export chat-generated files, click **Export Files** (ZIP output).
-10. If needed, download logs from Settings for troubleshooting.
+10. For ChatGPT sandbox files (`sandbox:/mnt/data/...`):
+   - Click **Scan File Links** to detect file references and print diagnostic tables in page console.
+   - Click **Resolve + Download All** to dynamically resolve sandbox URLs and download each file sequentially.
+   - Inspect `window.__CHATGPT_FILE_LINKS__` in page DevTools for full explainable `FileRef` objects.
+11. If needed, download logs from Settings for troubleshooting.
 
 ## 🔬 Manual Engineering Commands
 
@@ -235,4 +239,3 @@ This prevents image token corruption and ensures valid `<img>` tags are emitted 
 - Enable **Extract and ZIP Chat Files** in Settings.
 - Extraction records file references as `[[FILE:url|name]]` tokens.
 - Click **Export Files** to download all detected files as a single ZIP package.
-

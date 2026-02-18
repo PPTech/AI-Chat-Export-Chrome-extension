@@ -4,14 +4,13 @@
 
 # Changelog
 
-## 0.10.12 - 2026-02-18
-- Fixed rich HTML/Word export image embedding by converting remote image links to Base64 for all platforms before rendering export documents.
-- Fixed Word generation for Gemini exports by producing a valid full HTML-as-Word payload instead of nesting a Blob object in Word markup.
-- Improved file export reliability by broadening file token detection (including markdown links and URL-like data attributes) and adding credential-aware file fetch fallbacks.
-- Added `AIStudioScraper` to extract system instructions, visible model parameters, and prompt turns from AI Studio editor-like DOM structures.
-- Improved full-history fetch by ranking scroll containers and using the highest-confidence chat scroller.
-- Kept safe initialization guardrails in popup extraction flow to avoid startup regressions when content script reinjection is unavailable.
-- Synced runtime/docs metadata to `0.10.12`.
+## 0.10.13 - 2026-02-18
+- Added dedicated ChatGPT sandbox file workflow with popup actions: **Scan File Links** and **Resolve + Download All**.
+- Implemented explainable `FileRef` discovery in content script across anchor/text/button sources with canonical `sandbox:/mnt/data/...` normalization, deduplication, and `window.__CHATGPT_FILE_LINKS__` diagnostics.
+- Implemented dynamic sandbox link resolution pipeline using service-worker download capture and webRequest fallback capture windows.
+- Added sequential resolve/download execution with per-file logs and final PASS/WARN/FAIL summary for ChatGPT file extraction jobs.
+- Added webRequest permission in manifest for non-blocking request-capture fallback during dynamic link resolution.
+- Synced runtime/docs metadata to `0.10.13`.
 
 ## 0.10.10 - 2026-02-18
 - Fixed popup startup flow so top menus remain usable while active tab analysis is running.
