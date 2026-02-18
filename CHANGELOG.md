@@ -4,6 +4,13 @@
 
 # Changelog
 
+## 0.10.19 - 2026-02-18
+- Fixed `SmartAgent not loaded` runtime failure by injecting `smart_miner.js` + `smart_agent.js` together with `content.js` in fallback reinjection path.
+- Added new DOM-agnostic visual mining engine `smart_miner.js` with `VisualCandidate`, geometry scan, main-column filtering, role heuristics, and `window.extractVisualSnapshot()` diagnostics.
+- Integrated SmartMiner fallback into local extraction when SmartAgent is unavailable, so Extract/Self-Test still produce useful outputs.
+- Improved extraction diagnostics using structured console logs/tables for candidate and result debugging.
+- Synced runtime metadata and popup version to `0.10.19`.
+
 ## 0.10.18 - 2026-02-18
 - Added an offline-first local agent foundation:
   - `smart_agent.js` (visual candidate miner + semantic scorer + clustering),

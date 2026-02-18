@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// script.js - Main Controller v0.10.18
+// script.js - Main Controller v0.10.19
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
@@ -120,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function exportSettingsCfg(settings) {
     const lines = Object.entries(settings).map(([k, v]) => `${k}=${String(v)}`);
-    const cfg = `# AI Chat Exporter Settings\n# version=0.10.18\n${lines.join('\n')}\n`;
+    const cfg = `# AI Chat Exporter Settings\n# version=0.10.19\n${lines.join('\n')}\n`;
     const date = new Date().toISOString().slice(0, 10);
     downloadBlob(new Blob([cfg], { type: 'text/plain' }), `ai_chat_exporter_settings_${date}.cfg`);
   }
@@ -156,7 +156,7 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.tabs.sendMessage(activeTabId, { action: 'extract_chat', options }, (res) => {
       if (chrome.runtime.lastError) {
         if (chrome.scripting?.executeScript) {
-          chrome.scripting.executeScript({ target: { tabId: activeTabId }, files: ['content.js'] }, () => {
+          chrome.scripting.executeScript({ target: { tabId: activeTabId }, files: ['smart_miner.js', 'smart_agent.js', 'content.js'] }, () => {
             setTimeout(() => chrome.tabs.sendMessage(activeTabId, { action: 'extract_chat', options }, processData), 600);
           });
         } else {
@@ -466,7 +466,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!activeTabId) return;
     const response = await sendToActiveTab({ action: 'extract_local_agent', options: { debug: !!checkDebugOverlay?.checked } });
     if (!response?.success) {
-      showError(new Error(response?.error || 'Local extract failed.'));
+      showError(new Error(response?.error || 'Local extract failed. Check Ping + Self-Test and open page console for [SmartMiner]/[SCAN]/[DL] diagnostics.'));
       return;
     }
     const summary = response.summary || { messages: 0, images: 0, files: 0 };

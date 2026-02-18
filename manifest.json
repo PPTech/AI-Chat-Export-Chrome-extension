@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AI Chat Exporter (Ultimate)",
-  "version": "0.10.18",
+  "version": "0.10.19",
   "description": "Industrial-grade multi-platform chat extraction. Secure local-first architecture. Powered by Gemini 2.0 Flash.",
   "action": {
     "default_popup": "index.html",
@@ -11,7 +11,15 @@
   "background": {
     "service_worker": "background.js"
   },
-  "permissions": ["activeTab", "scripting", "storage", "tabs", "downloads", "webRequest", "offscreen"],
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "tabs",
+    "downloads",
+    "webRequest",
+    "offscreen"
+  ],
   "host_permissions": [
     "https://chatgpt.com/*",
     "https://chat.openai.com/*",
@@ -22,19 +30,31 @@
   "content_scripts": [
     {
       "matches": [
-        "*://chatgpt.com/*", 
+        "*://chatgpt.com/*",
         "*://chat.openai.com/*",
-        "*://gemini.google.com/*", 
+        "*://gemini.google.com/*",
         "*://claude.ai/*",
         "*://aistudio.google.com/*"
       ],
-      "js": ["smart_agent.js", "content.js"]
+      "js": [
+        "smart_miner.js",
+        "smart_agent.js",
+        "content.js"
+      ]
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["offscreen.html", "offscreen.js", "ai_engine.js", "recipes_store.js", "models/*"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "offscreen.html",
+        "offscreen.js",
+        "ai_engine.js",
+        "recipes_store.js",
+        "models/*"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ],
   "content_security_policy": {

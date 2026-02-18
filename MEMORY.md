@@ -13,7 +13,9 @@
   3. Stable multi-tab isolation with clear logs.
 
 
-## Platform Engine Orchestrator (v0.10.18)
+## Platform Engine Orchestrator
+- v0.10.19: Added SmartMiner fallback path to avoid extraction hard-failure when SmartAgent injection is missing.
+ (v0.10.18)
 - Dedicated engine per platform for selectors and role mapping.
 - Standardized message contract for export compatibility.
 - Image tokens captured before node cleanup to preserve media in rich exports.

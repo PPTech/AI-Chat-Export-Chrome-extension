@@ -1,6 +1,6 @@
 # 🚀 AI Chat Exporter Ultimate
 
-**Version**: 0.10.18  
+**Version**: 0.10.19  
 **License**: MIT (Ultimate Edition)  
 **Code Source**: Generated with support from CODEX and CODEX CLI.  
 **Owner / Management**: Dr. Babak Sorkhpour ([@Drbabakskr](https://x.com/Drbabakskr))  
@@ -79,6 +79,7 @@ console.log(result.system_instruction, result.turns.length);
 
 ## 🧩 Local Agent Runtime (Offline)
 
+- `smart_miner.js`: DOM-agnostic visual mining (geometry + style + alignment heuristics) and `extractVisualSnapshot()` diagnostics.
 - `smart_agent.js`: visual candidate mining + semantic scoring + clustering.
 - `ai_engine.js` + `offscreen.js`: hidden local planner bridge.
 - `recipes_store.js`: local IndexedDB recipe memory.

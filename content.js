@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// content.js - Platform Engine Orchestrator v0.10.18
+// content.js - Platform Engine Orchestrator v0.10.19
 
 (() => {
   if (window.hasRunContent) return;
@@ -1644,11 +1644,32 @@
   }
 
   async function runLocalAgentExtract(options = {}) {
-    if (!window.SmartAgent) return { success: false, error: 'SmartAgent not loaded.' };
-    const root = window.SmartAgent.detectMainScrollableRoot();
-    const candidates = window.SmartAgent.getVisualCandidates(root.rootEl, { maxScan: 8000 });
-    const clusters = window.SmartAgent.clusterCandidatesVertically(candidates);
-    const items = window.SmartAgent.extractFromCandidates(candidates);
+    let items = [];
+    let root = { method: 'miner_fallback', evidence: [] };
+    let candidates = [];
+    let clusters = [];
+
+    if (window.SmartAgent) {
+      root = window.SmartAgent.detectMainScrollableRoot();
+      candidates = window.SmartAgent.getVisualCandidates(root.rootEl, { maxScan: 8000 });
+      clusters = window.SmartAgent.clusterCandidatesVertically(candidates);
+      items = window.SmartAgent.extractFromCandidates(candidates);
+    } else if (window.SmartMiner) {
+      const snap = window.SmartMiner.scanVisiblePage();
+      items = (snap.snapshot || []).map((entry) => ({
+        type: entry.role_guess === 'user' ? 'USER_TURN' : (entry.role_guess === 'model' ? 'MODEL_TURN' : (entry.role_guess === 'code' ? 'CODE_BLOCK' : 'NOISE')),
+        roleGuess: entry.role_guess,
+        confidence: entry.confidence,
+        bbox: entry.geometry,
+        text: entry.text,
+        href: null,
+        src: null,
+        evidence: ['smart_miner_fallback']
+      })).filter((i) => i.type !== 'NOISE');
+      root = { method: 'smart_miner_scan', evidence: [`total=${snap.returned}`] };
+    } else {
+      return { success: false, error: 'SmartAgent not loaded and SmartMiner fallback unavailable.' };
+    }
 
     const messages = items.filter((i) => i.type === 'USER_TURN' || i.type === 'MODEL_TURN');
     const images = items.filter((i) => i.type === 'IMAGE_BLOCK');
@@ -1672,6 +1693,19 @@
       diagnostics: root.evidence
     };
     window.__LOCAL_AGENT_RESULT__ = result;
+
+    const diag = {
+      url: location.href,
+      method: root.method,
+      candidates: candidates.length,
+      clusters: clusters.length,
+      items: items.length,
+      messages: messages.length,
+      images: images.length,
+      files: files.length
+    };
+    console.log('[LOCAL_AGENT][EXTRACT]', diag);
+    console.table(items.slice(0, 80).map((i) => ({ type: i.type, role: i.roleGuess, confidence: i.confidence, text: String(i.text || '').slice(0, 80) })));
 
     setDebugOverlay(items, !!options.debug);
     return {
@@ -1763,6 +1797,15 @@
     }
     if (request.action === 'self_test_local_agent') {
       runLocalAgentSelfTest(request.options || {}).then(sendResponse);
+      return true;
+    }
+    if (request.action === 'extract_visual_snapshot') {
+      if (!window.extractVisualSnapshot) {
+        sendResponse({ success: false, error: 'SmartMiner not loaded.' });
+      } else {
+        const snapshot = window.extractVisualSnapshot();
+        sendResponse({ success: true, count: snapshot.length, snapshot });
+      }
       return true;
     }
     if (request.action === 'fetch_blob_page') {
