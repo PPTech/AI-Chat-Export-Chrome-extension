@@ -2,7 +2,7 @@
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
-// asset_processor.js - DataProcessor v0.12.17
+// asset_processor.js - DataProcessor v0.12.18
 
 (() => {
   if (window.DataProcessor) return;
@@ -46,15 +46,34 @@
       return (direct || fallback).replace(/[\/:*?"<>|]+/g, '_').trim();
     }
 
+
+    isIgnoredAttachmentUrl(url = '') {
+      const clean = String(url || '').toLowerCase();
+      if (!clean) return true;
+      if (clean.startsWith('chrome-extension://')) return true;
+      if (/\.(?:m?js|cjs|map)(?:$|\?)/i.test(clean)) return true;
+      if (/\.(?:css|ico)(?:$|\?)/i.test(clean)) return true;
+      if (/react(?:-dom)?\.production\.min\.js/i.test(clean)) return true;
+      return false;
+    }
+
+    isLikelyUserDownload(url = '', fileName = '') {
+      const probe = `${url} ${fileName}`.toLowerCase();
+      if (/sandbox:\/mnt\/data\//i.test(probe) || /blob:/i.test(probe)) return true;
+      return /\.(pdf|docx|xlsx|pptx|zip|png|jpe?g|webp|txt|csv|json|py|md)(?:$|\?)/i.test(probe);
+    }
+
     extractDownloadMetadata(text = '') {
       const links = [];
-      const regex = /(blob:https?:\/\/[^\s"')]+|sandbox:\/\/[^\s"')]+|sandbox:\/[^\s"')]+|https?:\/\/[^\s"')]+\.(?:csv|pdf|docx|xlsx|pptx|zip|png|jpe?g|webp|md|txt|json))/gi;
+      const regex = /(blob:https?:\/\/[^\s"')]+|sandbox:\/\/[^\s"')]+|sandbox:\/[^\s"')]+|https?:\/\/[^\s"')]+\.(?:csv|pdf|docx|xlsx|pptx|zip|png|jpe?g|webp|txt|json|py|md))/gi;
       let m;
       while ((m = regex.exec(String(text || ''))) !== null) {
         const u = this.sanitizeUrl(m[1]);
+        const fileName = decodeURIComponent(u.split('/').pop() || 'file.bin');
+        if (!this.isLikelyUserDownload(u, fileName) || this.isIgnoredAttachmentUrl(u)) continue;
         links.push({
           type: /^sandbox:/i.test(u) ? 'sandbox' : (/^blob:/i.test(u) ? 'blob_url' : 'text_reference'),
-          fileName: u.split('/').pop() || 'file.bin',
+          fileName,
           url: u,
           download_url: u,
           needsResolution: /^sandbox:/i.test(u)
@@ -146,7 +165,7 @@
         });
       });
 
-      const fileExtRegex = /([\w\-.]+\.(pdf|docx|xlsx|pptx|py|js|json|csv|txt|md|zip))/gi;
+      const fileExtRegex = /([\w\-.]+\.(pdf|docx|xlsx|pptx|py|json|csv|txt|md|zip))/gi;
       const fileMatches = bodyText.match(fileExtRegex) || [];
       fileMatches.forEach((fileName) => {
         const link = Array.from(container.querySelectorAll('a, button')).find((el) => (el.textContent || '').includes(fileName));
@@ -166,7 +185,11 @@
         if (fileName && url) files.push({ type: 'present_files', fileName, url, element: el });
       });
 
-      return this.deduplicateFiles(files);
+      return this.deduplicateFiles(files).filter((f) => {
+        const u = this.sanitizeUrl(f.url || f.path || "");
+        const n = String(f.fileName || "");
+        return !!u && !this.isIgnoredAttachmentUrl(u) && this.isLikelyUserDownload(u, n);
+      });
     }
 
     async resolveSandboxFile(path, clickResolver) {

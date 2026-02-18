@@ -2,7 +2,7 @@
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
-// script.js - Main Controller v0.12.17
+// script.js - Main Controller v0.12.18
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
@@ -155,7 +155,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function requestExtraction() {
     const options = { convertImages: checkImages.checked, rawHtml: checkRawHtml.checked, highlightCode: checkCode.checked, extractFiles: checkExportFiles.checked };
-    await ensureAssetPermissions();
     setAnalyzeProgress(25, 'Agent self-test');
 
     const runLegacyFallback = () => {
@@ -464,13 +463,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   btnExportImages.onclick = async () => {
     if (!currentChatData) return;
+    const permPromise = requestAssetPermissionsFromGesture();
     const imageList = extractAllImageSources(currentChatData.messages, currentChatData.dataset);
     if (!imageList.length) return showError(new Error('No images found in extracted chat data.'));
+    await permPromise;
 
     const packMode = !!checkPhotoZip.checked;
     const date = new Date().toISOString().slice(0, 10);
     const platformPrefix = (currentChatData.platform || 'Export').replace(/[^a-zA-Z0-9]/g, '');
-    await ensureAssetPermissions();
     const processor = window.DataProcessor ? new window.DataProcessor() : null;
     const textCorpus = (currentChatData.messages || []).map((m) => m.content || '').join('\n');
 
@@ -513,14 +513,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!currentChatData) return;
     if (!checkExportFiles.checked) return showInfo('Files Export Disabled', 'Enable "Extract and ZIP Chat Files" in Settings first.');
 
-    await ensureAssetPermissions();
+    const permPromise = requestAssetPermissionsFromGesture();
     const processor = window.DataProcessor ? new window.DataProcessor() : null;
     const textCorpus = (currentChatData.messages || []).map((m) => m.content || '').join('\n');
     const metaFiles = processor ? processor.extractDownloadMetadata(textCorpus) : [];
     const legacyFiles = extractAllFileSources(currentChatData.messages, currentChatData.dataset).map((f) => ({ fileName: f.name, url: f.url, type: /^sandbox:/i.test(f.url) ? 'sandbox' : 'text_reference', needsResolution: /^sandbox:/i.test(f.url) }));
     const filesFound = processor ? processor.deduplicateFiles([...legacyFiles, ...metaFiles]) : legacyFiles;
+    await permPromise;
 
-    if (!filesFound.length) {
+    if (!filesFound.length && /(chatgpt\.com|chat\.openai\.com)/i.test(location.hostname)) {
       const resolved = await sendToActiveTab({ action: 'resolve_download_chatgpt_file_links' });
       if (resolved?.success) {
         const stats = resolved.stats || { total: 0, downloaded: 0, failed: 0 };
@@ -636,7 +637,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const message = error?.message || 'Unknown export error.';
     errorMsg.textContent = message;
     if (/file/i.test(message)) {
-      errorFix.textContent = 'Use Fetch Full first, then run "Scan Sandbox Links" or "Resolve + Download All" for ChatGPT sandbox:/mnt/data files.';
+      if (/claude\.ai/i.test(location.hostname)) {
+        errorFix.textContent = 'On Claude, only clickable attachment links can be downloaded. Run Fetch Full, then use Export Files again. Plain filenames without URLs are not downloadable.';
+      } else {
+        errorFix.textContent = 'Use Fetch Full first, then run "Scan Sandbox Links" or "Resolve + Download All" for ChatGPT sandbox:/mnt/data files.';
+      }
     } else if (/image/i.test(message)) {
       errorFix.textContent = 'Use Fetch Full first. If images still missing, enable Include Images and retry.';
     } else {
@@ -1309,6 +1314,30 @@ document.addEventListener('DOMContentLoaded', () => {
     return gestureProofToken;
   }
 
+
+  function requestAssetPermissionsFromGesture() {
+    const origins = [
+      'https://*.oaiusercontent.com/*',
+      'https://*.oaistatic.com/*',
+      'https://*.openai.com/*',
+      'https://*.googleusercontent.com/*',
+      'https://lh3.googleusercontent.com/*',
+      'https://*.gstatic.com/*',
+      'https://*.google.com/*',
+      'https://lh3.google.com/*',
+      'https://*.anthropic.com/*'
+    ];
+    return new Promise((resolve) => {
+      chrome.permissions.request({ origins }, (granted) => {
+        if (chrome.runtime.lastError) {
+          resolve(false);
+          return;
+        }
+        resolve(!!granted);
+      });
+    });
+  }
+
   async function resolveAssetViaBroker(url) {
     const token = ensureGestureProofToken();
     return sendToActiveTab({ action: "fetch_blob_page", url, gestureToken: token });
@@ -1321,6 +1350,7 @@ document.addEventListener('DOMContentLoaded', () => {
       'https://*.oaistatic.com/*',
       'https://*.openai.com/*',
       'https://*.googleusercontent.com/*',
+      'https://lh3.googleusercontent.com/*',
       'https://*.gstatic.com/*',
       'https://*.google.com/*',
       'https://lh3.google.com/*',

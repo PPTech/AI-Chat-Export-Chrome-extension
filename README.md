@@ -1,6 +1,6 @@
 # 🚀 AI Chat Exporter Ultimate
 
-**Version**: 0.12.17  
+**Version**: 0.12.18  
 **License**: MIT (Ultimate Edition)  
 **Code Source**: Generated with support from CODEX and CODEX CLI.  
 **Owner / Management**: Dr. Babak Sorkhpour ([@Drbabakskr](https://x.com/Drbabakskr))  
@@ -83,7 +83,7 @@ This prevents false WARN messages when the header shows media but the strict ite
 *   **Security Hardened**: Input sanitization prevents XSS in exported files.
 *   **Local Agent (Air-Gapped Ready)**: Visual + semantic local extraction with self-test and recipe fallback; no external AI API required.
 
-## 🔐 Network Policy split (v0.12.17)
+## 🔐 Network Policy split (v0.12.18)
 
 - **AI_INFERENCE**: network denied (local models only).
 - **ASSET_FETCH**: allowed only with gesture-proof token + allowlisted host + permissions.
@@ -452,7 +452,8 @@ This prevents image token corruption and ensures valid `<img>` tags are emitted 
 
 ## Evidence-Gated Version Governance (v0.12.1)
 - `version.js` is SSOT for release version; run `npm run sync:version` to align manifest metadata.
-- `npm run verify:claims` enforces release-script presence, version consistency, and forensic export hooks.
+- `npm run verify:claims`
+- `npm run verify:gesture` enforces release-script presence, version consistency, and forensic export hooks.
 - For each change window, `FORENSICS/HEAD.txt` captures branch/head/toolchain evidence.
 
 

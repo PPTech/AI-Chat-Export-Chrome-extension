@@ -2,7 +2,7 @@
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
-// ai_engine.js - Agent Loop Bridge v0.12.17
+// ai_engine.js - Agent Loop Bridge v0.12.18
 
 (function () {
   const STRICT_ALLOWLIST = ['chrome-extension:', 'data:', 'blob:'];

@@ -44,3 +44,18 @@ test('Network policy + gesture proof routes asset fetch through broker', () => {
   assert.match(scriptSource, /action: "ASSET_FETCH"/);
   assert.match(manifestSource, /lh3\.google\.com/);
 });
+
+
+test('Gesture path guard keeps permissions request before await in export handlers', () => {
+  const scriptSource = fs.readFileSync('script.js', 'utf8');
+  assert.match(scriptSource, /function requestAssetPermissionsFromGesture\(/);
+  assert.match(scriptSource, /btnExportImages\.onclick = async \(\) => \{[\s\S]*requestAssetPermissionsFromGesture\(\)[\s\S]*await/);
+  assert.match(scriptSource, /btnExportFiles\.onclick = async \(\) => \{[\s\S]*requestAssetPermissionsFromGesture\(\)[\s\S]*await/);
+});
+
+test('Attachment classifier ignores script bundle resources', () => {
+  const assetSource = fs.readFileSync('asset_processor.js', 'utf8');
+  assert.match(assetSource, /isIgnoredAttachmentUrl\(/);
+  assert.match(assetSource, /react\(\?:-dom\)\?\\.production\\.min\\.js/);
+  assert.match(assetSource, /\\.\(\?:m\?js\|cjs\|map\)/);
+});

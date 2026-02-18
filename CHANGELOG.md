@@ -4,12 +4,14 @@
 
 # Changelog
 
-## 0.12.17 - Gemini Full-Fetch Stability + Word Image Rendering Guard
-- Fixed Gemini full-fetch extraction stability by forcing a final scroll-to-bottom settle before extraction response is returned.
-- Reduced duplicate/repeated Gemini messages by canonical de-duplication and tighter text-node parsing (filters UI noise and repeated `You said` prefixes).
-- Updated popup detected counters to include canonical dataset attachments so photo/file counts remain accurate after full-fetch refresh.
-- Updated Word/HTML renderer behavior for `[[IMG:...]]` tokens to render valid `http(s)/blob/data` sources instead of emitting `[Image Load Failed]` placeholders.
-- Kept network-policy/gesture broker controls from previous release and synchronized version surfaces.
+## 0.12.18 - Gesture-Safe Permissions + Attachment Ignore Classifier + Claude UX Fix
+- Added direct gesture-path permission request helper in popup export handlers so permission prompts are initiated before first `await`.
+- Added `scripts/verify_gesture_path.cjs` and `npm run verify:gesture` to enforce the no-await-before-permission rule.
+- Added attachment ignore classifier rules in `asset_processor.js` to reject script/framework assets and non-download noise links (e.g., React bundles).
+- Improved Claude file-export error guidance for filename-only messages that do not include downloadable URLs.
+- Improved image token sanitization in Word/HTML rendering to prevent false `[Image skipped: unsupported scheme]` due to trailing token punctuation.
+- Added optional host permission coverage for `lh3.googleusercontent.com` and kept policy controls for asset broker path.
+
 
 ## 0.12.13 - Claude Content Noise Guard + Selector Crash Hardening
 - Hardened Claude content node filtering to avoid invalid `closest()` selector usage at runtime.

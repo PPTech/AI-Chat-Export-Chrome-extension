@@ -317,9 +317,16 @@
 5. **ensureChatFullyLoaded**: iterative scroll-top stabilization rounds and final scroll-bottom settle pass with growth/stability reporting.
 
 
-## NetworkPolicy + GestureProof (v0.12.17)
+## NetworkPolicy + GestureProof (v0.12.18)
 
 1. Popup issues short-lived gesture token on user action and registers it in service worker memory.
 2. Background validates category + gesture age + allowlisted host + host permission before any asset fetch.
 3. Denials emit structured diagnostics (`NETWORK_POLICY_DENY`) with category/reason/host/module.
 4. Asset bytes are fetched via service worker broker (`ASSET_FETCH`) instead of popup direct fetch to avoid extension-page CSP blocks.
+
+
+## Attachment Ignore Classifier (v0.12.18)
+
+1. Classifier rejects framework/script assets (`.js/.mjs/.cjs/.map`, react bundle names, extension resources).
+2. Only keeps likely user-download assets (`sandbox`, `blob`, or user-file extensions).
+3. Gesture-path guard verifies permission request placement before first async await in export click handlers.
