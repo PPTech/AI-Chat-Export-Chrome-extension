@@ -4,6 +4,12 @@
 
 # Changelog
 
+## 0.10.14 - 2026-02-18
+- Added temporary media cache lifecycle for export jobs: clear on popup init, clear at export start, clear on export completion/failure, and clear on popup close.
+- Updated HTML/DOC image embedding pipeline to load remote images through temporary cache before embedding as Base64, then remove cache artifacts.
+- Added Claude file discovery utility (`discover_claude_files`) to inspect download/file presentation from live DOM and expose diagnostics via `window.CLAUDE_FILE_DISCOVERY`.
+- Synced runtime/docs metadata to `0.10.14`.
+
 ## 0.10.13 - 2026-02-18
 - Added dedicated ChatGPT sandbox file workflow with popup actions: **Scan File Links** and **Resolve + Download All**.
 - Implemented explainable `FileRef` discovery in content script across anchor/text/button sources with canonical `sandbox:/mnt/data/...` normalization, deduplication, and `window.__CHATGPT_FILE_LINKS__` diagnostics.

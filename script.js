@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// script.js - Main Controller v0.10.13
+// script.js - Main Controller v0.10.14
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
@@ -32,6 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const errorFix = document.getElementById('error-fix');
 
   const SETTINGS_KEY = 'ai_exporter_settings_v1';
+  const tempMediaCache = createTempMediaCache();
 
   function getDefaultSettings() {
     return {
@@ -78,7 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function exportSettingsCfg(settings) {
     const lines = Object.entries(settings).map(([k, v]) => `${k}=${String(v)}`);
-    const cfg = `# AI Chat Exporter Settings\n# version=0.10.13\n${lines.join('\n')}\n`;
+    const cfg = `# AI Chat Exporter Settings\n# version=0.10.14\n${lines.join('\n')}\n`;
     const date = new Date().toISOString().slice(0, 10);
     downloadBlob(new Blob([cfg], { type: 'text/plain' }), `ai_chat_exporter_settings_${date}.cfg`);
   }
@@ -94,6 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function init() {
+    tempMediaCache.clear('popup-init');
     loadSettingsFromStorage();
     setAnalyzeProgress(5, 'Initializing');
     updateDetectedSummary([]);
@@ -202,6 +204,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setProcessingProgress(2);
 
     try {
+      tempMediaCache.clear('export-begin');
       const date = new Date().toISOString().slice(0, 10);
       const baseName = `${(currentChatData.platform || 'Export').replace(/[^a-zA-Z0-9]/g, '')}_${date}`;
       const files = [];
@@ -227,6 +230,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (error) {
       showError(error);
     } finally {
+      tempMediaCache.clear('export-finish');
       updateExportBtn();
     }
   };
@@ -577,12 +581,7 @@ document.addEventListener('DOMContentLoaded', () => {
       for (const src of [...new Set(found)]) {
         if (!cache.has(src)) {
           try {
-            const blob = await fetch(src).then((r) => r.blob());
-            const dataUrl = await new Promise((resolve) => {
-              const reader = new FileReader();
-              reader.onloadend = () => resolve(String(reader.result || src));
-              reader.readAsDataURL(blob);
-            });
+            const dataUrl = await tempMediaCache.fetchDataUrl(src);
             cache.set(src, dataUrl);
           } catch {
             cache.set(src, src);
@@ -925,6 +924,48 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
   }
 
+  function createTempMediaCache() {
+    const blobCache = new Map();
+    const objectUrls = new Set();
+    return {
+      async fetchBlob(url) {
+        if (!url) return null;
+        if (blobCache.has(url)) return blobCache.get(url);
+        try {
+          const blob = await fetch(url, { credentials: 'include' }).then((r) => (r.ok ? r.blob() : null));
+          if (blob) blobCache.set(url, blob);
+          return blob;
+        } catch {
+          return null;
+        }
+      },
+      async fetchDataUrl(url) {
+        if (!url) return '';
+        if (/^data:/i.test(url)) return url;
+        const blob = await this.fetchBlob(url);
+        if (!blob) return url;
+        return await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(String(reader.result || url));
+          reader.readAsDataURL(blob);
+        });
+      },
+      async fetchObjectUrl(url) {
+        const blob = await this.fetchBlob(url);
+        if (!blob) return url;
+        const objectUrl = URL.createObjectURL(blob);
+        objectUrls.add(objectUrl);
+        return objectUrl;
+      },
+      clear(reason = 'cleanup') {
+        blobCache.clear();
+        objectUrls.forEach((u) => URL.revokeObjectURL(u));
+        objectUrls.clear();
+        console.log(`[TempMediaCache] cleared (${reason})`);
+      }
+    };
+  }
+
   function sendToActiveTab(payload) {
     return new Promise((resolve) => {
       chrome.tabs.sendMessage(activeTabId, payload, (res) => {
@@ -940,7 +981,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function fetchFileBlob(url) {
     if (!url) return null;
     try {
-      return await fetch(url, { credentials: 'include' }).then((r) => (r.ok ? r.blob() : null));
+      return await tempMediaCache.fetchBlob(url);
     } catch {
       return null;
     }
@@ -980,6 +1021,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-close-about').onclick = document.getElementById('btn-ack-about').onclick = () => closeModal(aboutModal);
   document.getElementById('btn-close-error').onclick = () => closeModal(errorModal);
   document.getElementById('btn-close-preview').onclick = () => closeModal(document.getElementById('preview-modal'));
+  window.addEventListener('beforeunload', () => tempMediaCache.clear('popup-close'));
 
   safeInit();
 });

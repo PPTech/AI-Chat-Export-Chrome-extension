@@ -1,6 +1,6 @@
 # 🚀 AI Chat Exporter Ultimate
 
-**Version**: 0.10.13  
+**Version**: 0.10.14  
 **License**: MIT (Ultimate Edition)  
 **Code Source**: Generated with support from CODEX and CODEX CLI.  
 **Owner / Management**: Dr. Babak Sorkhpour ([@Drbabakskr](https://x.com/Drbabakskr))  
@@ -26,6 +26,7 @@
 *   **Zero-Dependency**: Operates entirely locally without external API calls.
 *   **Industrial Archiving**: CRC32 validated ZIP archives.
 *   **Embedded Media**: Automatically converts remote images to Base64 for fully offline Word and HTML documents.
+*   **Temporary Media Cache Hygiene**: Downloads media to temporary in-memory cache during export, embeds output, then clears cache at begin/finish/close.
 *   **Security Hardened**: Input sanitization prevents XSS in exported files.
 
 ## 🚀 One-Click Installation
@@ -85,6 +86,7 @@ To install the developer preview directly from GitHub:
    - Click **Resolve + Download All** to dynamically resolve sandbox URLs and download each file sequentially.
    - Inspect `window.__CHATGPT_FILE_LINKS__` in page DevTools for full explainable `FileRef` objects.
 11. If needed, download logs from Settings for troubleshooting.
+12. For Claude live diagnostics, run the extension message action `discover_claude_files` to inspect detected file/download elements in `window.CLAUDE_FILE_DISCOVERY`.
 
 ## 🔬 Manual Engineering Commands
 

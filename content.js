@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// content.js - Platform Engine Orchestrator v0.10.13
+// content.js - Platform Engine Orchestrator v0.10.14
 
 (() => {
   if (window.hasRunContent) return;
@@ -1053,6 +1053,66 @@
     return findings;
   }
 
+  function discoverClaudeFilePresentation() {
+    const findings = {
+      timestamp: new Date().toISOString(),
+      url: location.href,
+      selectorsHit: [],
+      foundElements: [],
+      summary: { total: 0, linkLike: 0, buttonLike: 0 }
+    };
+
+    const add = (source, el, extra = {}) => {
+      findings.foundElements.push({
+        source,
+        tag: el.tagName,
+        text: (el.textContent || '').trim().slice(0, 140),
+        href: el.getAttribute('href') || '',
+        download: el.getAttribute('download') || '',
+        ariaLabel: el.getAttribute('aria-label') || '',
+        className: String(el.className || '').slice(0, 240),
+        domPath: buildDomPath(el),
+        ...extra
+      });
+    };
+
+    const selectors = [
+      'a[download]',
+      'a[href^="blob:"]',
+      'a[href*="outputs"]',
+      'button[aria-label*="download" i]',
+      '[data-download]',
+      '[data-file]',
+      '[class*="file" i]',
+      '[class*="download" i]'
+    ];
+
+    selectors.forEach((sel) => {
+      const nodes = Array.from(document.querySelectorAll(sel));
+      if (!nodes.length) return;
+      findings.selectorsHit.push({ selector: sel, count: nodes.length });
+      nodes.slice(0, 40).forEach((el) => add('selector-scan', el));
+    });
+
+    const root = document.querySelector('main,[role="main"]') || document.body;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const regex = /sandbox:(?:\/\/)?\/mnt\/data\/[^\s)\]>"']+/gi;
+    while (walker.nextNode()) {
+      const textNode = walker.currentNode;
+      const txt = textNode.textContent || '';
+      const matches = txt.match(regex) || [];
+      matches.forEach((match) => {
+        add('text-regex', textNode.parentElement || root, { matchedSandboxPath: match });
+      });
+    }
+
+    findings.summary.total = findings.foundElements.length;
+    findings.summary.linkLike = findings.foundElements.filter((e) => !!e.href).length;
+    findings.summary.buttonLike = findings.foundElements.filter((e) => e.tag === 'BUTTON').length;
+    window.CLAUDE_FILE_DISCOVERY = findings;
+    return findings;
+  }
+
   function hashString(input) {
     const str = String(input || '');
     let h = 2166136261;
@@ -1385,6 +1445,11 @@
     }
     if (request.action === 'discover_claude_structure') {
       const findings = discoverClaudeStructure();
+      sendResponse({ success: true, findings });
+      return true;
+    }
+    if (request.action === 'discover_claude_files') {
+      const findings = discoverClaudeFilePresentation();
       sendResponse({ success: true, findings });
       return true;
     }
