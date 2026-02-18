@@ -2,7 +2,7 @@
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
-// options.js - Extension Options v0.12.18
+// options.js - Extension Options v0.12.19
 
 const KEY = 'local_agent_options_v1';
 const plannerEnabled = document.getElementById('planner-enabled');

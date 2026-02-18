@@ -27,7 +27,7 @@
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
-// content.js - Platform Engine Orchestrator v0.12.18
+// content.js - Platform Engine Orchestrator v0.12.19
 
 (() => {
   if (window.hasRunContent) return;
@@ -1201,9 +1201,216 @@
     return analysis;
   }
 
+
+  function getChatGptBackendUtils() {
+    return window.ChatGPTBackendUtils || null;
+  }
+
+  async function getChatGPTAccessToken() {
+    const response = await fetch('https://chatgpt.com/api/auth/session', {
+      method: 'GET',
+      credentials: 'include',
+      headers: { accept: 'application/json' }
+    });
+    if (!response.ok) throw new Error(`auth_session_failed:${response.status}`);
+    const payload = await response.json();
+    const token = payload?.accessToken || payload?.access_token;
+    if (!token || typeof token !== 'string') throw new Error('auth_session_missing_access_token');
+    return token;
+  }
+
+  async function fetchConversationJSON(conversationId, accessToken) {
+    const url = `https://chatgpt.com/backend-api/conversation/${encodeURIComponent(conversationId)}`;
+    const response = await fetch(url, {
+      method: 'GET',
+      credentials: 'include',
+      headers: {
+        accept: 'application/json',
+        authorization: `Bearer ${accessToken}`
+      }
+    });
+    if (!response.ok) throw new Error(`conversation_fetch_failed:${response.status}`);
+    return response.json();
+  }
+
+  function extractTextBlocksFromMessage(message = {}) {
+    const blocks = [];
+    const content = message?.content || {};
+    const parts = Array.isArray(content?.parts) ? content.parts : [];
+    for (const part of parts) {
+      const text = typeof part === 'string' ? part : (part?.text || '');
+      if (!text || !String(text).trim()) continue;
+      blocks.push({ type: 'text', text: String(text).trim() });
+    }
+    if (!blocks.length && typeof content?.text === 'string' && content.text.trim()) {
+      blocks.push({ type: 'text', text: content.text.trim() });
+    }
+    return blocks;
+  }
+
+  function buildChatGptDatasetFromConversation(conversation = {}, mode = 'chat') {
+    const backend = getChatGptBackendUtils();
+    if (!backend) throw new Error('chatgpt_backend_utils_missing');
+    const orderedNodes = backend.orderedNodesFromCurrent(conversation);
+
+    const turns = [];
+    const attachments = [];
+    const attachmentByUrl = new Map();
+
+    const pushAttachment = (url, role, turnId, nodeId) => {
+      const classify = backend.classifyChatGptAssetUrl(url);
+      if (!classify.accepted) return null;
+      if (attachmentByUrl.has(url)) return attachmentByUrl.get(url);
+      const id = `att_${attachments.length + 1}`;
+      const urlObj = new URL(url);
+      const guessedName = decodeURIComponent((urlObj.pathname.split('/').pop() || '').split('?')[0] || `${id}.bin`);
+      const attachment = {
+        id,
+        kind: classify.kind,
+        name: guessedName || `${id}.bin`,
+        mime: null,
+        byteLength: null,
+        sha256: null,
+        source: {
+          scheme: urlObj.protocol.replace(':', '') || 'https',
+          url,
+          resolvedVia: null,
+          redirectChain: []
+        },
+        status: 'unresolved',
+        failureReason: null,
+        role,
+        turnId,
+        nodeId
+      };
+      attachments.push(attachment);
+      attachmentByUrl.set(url, attachment);
+      return attachment;
+    };
+
+    orderedNodes.forEach((node, index) => {
+      const message = node?.message || {};
+      const role = String(message?.author?.role || 'unknown').toLowerCase();
+      const turnId = message?.id || node?.id || `turn_${index + 1}`;
+      const textBlocks = extractTextBlocksFromMessage(message);
+      const urls = backend.collectUrlsDeep({ content: message?.content, metadata: message?.metadata, attachments: message?.attachments });
+      const turnAttachmentIds = [];
+      for (const url of urls) {
+        const attachment = pushAttachment(url, role, turnId, node?.id || turnId);
+        if (attachment) turnAttachmentIds.push(attachment.id);
+      }
+
+      const blocks = [...textBlocks];
+      for (const attachmentId of turnAttachmentIds) {
+        const asset = attachments.find((a) => a.id === attachmentId);
+        if (!asset) continue;
+        blocks.push({ type: asset.kind, attachmentId });
+      }
+
+      if (!blocks.length) return;
+
+      turns.push({
+        id: turnId,
+        role,
+        role_confidence: role === 'unknown' ? 0.2 : 0.92,
+        time: message?.create_time || null,
+        nodeId: node?.id || null,
+        blocks
+      });
+    });
+
+    const messageExports = turns.map((turn, idx) => {
+      const lines = [];
+      for (const block of turn.blocks) {
+        if (block.type === 'text') lines.push(block.text);
+        if (block.type === 'image') {
+          const att = attachments.find((a) => a.id === block.attachmentId);
+          if (att?.source?.url) lines.push(`[[IMG:${att.source.url}]]`);
+        }
+        if (block.type === 'file') {
+          const att = attachments.find((a) => a.id === block.attachmentId);
+          if (att?.source?.url) lines.push(`[[FILE:${att.source.url}|${att.name || 'File'}]]`);
+        }
+      }
+      return {
+        id: turn.id,
+        index: idx,
+        role: turn.role,
+        timestamp: turn.time,
+        content: lines.join('\n').trim(),
+        attachments: attachments.filter((a) => turn.blocks.some((b) => b.attachmentId === a.id))
+      };
+    }).filter((m) => !!m.content);
+
+    return {
+      mode,
+      dataset: {
+        meta: {
+          host: location.hostname,
+          url: location.href,
+          platform: 'ChatGPT',
+          exportedAt: new Date().toISOString(),
+          appVersion: '0.12.19',
+          buildSha: null
+        },
+        turns,
+        attachments,
+        forensics: {
+          traceId: `chatgpt_${Date.now()}`,
+          agentAttempts: 1,
+          scorecard: { messageCoverage: turns.length > 0 ? 100 : 0 },
+          warnings: []
+        }
+      },
+      messages: messageExports,
+      diagnostics: {
+        extraction: {
+          mode: 'backend_api',
+          mappingNodeCount: Object.keys(conversation?.mapping || {}).length,
+          turnsCount: turns.length,
+          coverage: Object.keys(conversation?.mapping || {}).length ? (turns.length / Object.keys(conversation.mapping).length) : 0,
+          firstTurnTime: turns[0]?.time || null,
+          lastTurnTime: turns[turns.length - 1]?.time || null
+        }
+      }
+    };
+  }
+
+  async function extractChatGptFullData() {
+    const backend = getChatGptBackendUtils();
+    if (!backend) return { success: false, error: 'chatgpt_backend_utils_missing' };
+
+    const detected = backend.detectChatGPTConversationIdFromUrl(location.href);
+    if (!detected?.id || detected.mode !== 'chat') {
+      return { success: false, error: 'chatgpt_conversation_id_not_found', mode: detected?.mode || 'unknown' };
+    }
+
+    const token = await getChatGPTAccessToken();
+    const conversation = await fetchConversationJSON(detected.id, token);
+    const built = buildChatGptDatasetFromConversation(conversation, detected.mode);
+
+    return {
+      success: built.messages.length > 0,
+      platform: 'ChatGPT',
+      title: conversation?.title || document.title || 'ChatGPT conversation',
+      messages: built.messages,
+      dataset: built.dataset,
+      diagnostics: built.diagnostics
+    };
+  }
+
   async function extractChatData(options) {
     const engine = Object.values(PlatformEngines).find((e) => e.matches());
     if (!engine) return { success: false, platform: 'Unsupported', messages: [] };
+
+    if (/chatgpt\.com|chat\.openai\.com/i.test(location.hostname) && options?.preferBackend !== false) {
+      try {
+        const full = await extractChatGptFullData();
+        if (full?.success) return full;
+      } catch (error) {
+        console.warn('[CHATGPT_FULL] fallback to dom extractor', error?.message || error);
+      }
+    }
 
     const extracted = await engine.extract(options, utils);
     let messages = utils.dedupe(extracted.messages || []);
@@ -2369,6 +2576,10 @@
     }
     if (request.action === 'extract_chat') {
       extractChatData(request.options || {}).then(sendResponse);
+      return true;
+    }
+    if (request.action === 'extract_chatgpt_full') {
+      extractChatGptFullData().then(sendResponse).catch((error) => sendResponse({ success: false, error: error?.message || 'extract_chatgpt_full_failed' }));
       return true;
     }
     if (request.action === 'scroll_chat') {

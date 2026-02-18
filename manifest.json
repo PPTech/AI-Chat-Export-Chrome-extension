@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AI Chat Exporter (Ultimate)",
-  "version": "0.12.18",
+  "version": "0.12.19",
   "description": "AEGIS-2026 local-only autonomous extractor with self-healing and secure artifact export.",
   "action": {
     "default_popup": "index.html",
@@ -50,6 +50,7 @@
         "smart_agent.js",
         "visual_engine.js",
         "artifact_builder.js",
+        "chatgpt_backend_utils.js",
         "content.js"
       ]
     }
@@ -71,7 +72,8 @@
         "logger.js",
         "visual_engine.js",
         "artifact_builder.js",
-        "network_policy.js"
+        "network_policy.js",
+        "chatgpt_backend_utils.js"
       ],
       "matches": [
         "https://chatgpt.com/*",

@@ -1,0 +1,1439 @@
+{
+  "title": "Fixture Conversation",
+  "current_node": "node-55",
+  "mapping": {
+    "node-0": {
+      "id": "node-0",
+      "parent": null,
+      "message": null
+    },
+    "node-1": {
+      "id": "node-1",
+      "parent": "node-0",
+      "children": [
+        "node-2"
+      ],
+      "message": {
+        "id": "msg-1",
+        "author": {
+          "role": "user"
+        },
+        "create_time": 1700000001,
+        "content": {
+          "parts": [
+            "Message 1 text",
+            "https://cdn.example.com/assets/1.js",
+            "https://files.example.com/image_1.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_1.pdf"
+          ]
+        }
+      }
+    },
+    "node-2": {
+      "id": "node-2",
+      "parent": "node-1",
+      "children": [
+        "node-3"
+      ],
+      "message": {
+        "id": "msg-2",
+        "author": {
+          "role": "assistant"
+        },
+        "create_time": 1700000002,
+        "content": {
+          "parts": [
+            "Message 2 text",
+            "https://cdn.example.com/assets/2.js",
+            "https://files.example.com/image_2.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_2.pdf"
+          ]
+        }
+      }
+    },
+    "node-3": {
+      "id": "node-3",
+      "parent": "node-2",
+      "children": [
+        "node-4"
+      ],
+      "message": {
+        "id": "msg-3",
+        "author": {
+          "role": "user"
+        },
+        "create_time": 1700000003,
+        "content": {
+          "parts": [
+            "Message 3 text",
+            "https://cdn.example.com/assets/3.js",
+            "https://files.example.com/image_3.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_3.pdf"
+          ]
+        }
+      }
+    },
+    "node-4": {
+      "id": "node-4",
+      "parent": "node-3",
+      "children": [
+        "node-5"
+      ],
+      "message": {
+        "id": "msg-4",
+        "author": {
+          "role": "assistant"
+        },
+        "create_time": 1700000004,
+        "content": {
+          "parts": [
+            "Message 4 text",
+            "https://cdn.example.com/assets/4.js",
+            "https://files.example.com/image_4.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_4.pdf"
+          ]
+        }
+      }
+    },
+    "node-5": {
+      "id": "node-5",
+      "parent": "node-4",
+      "children": [
+        "node-6"
+      ],
+      "message": {
+        "id": "msg-5",
+        "author": {
+          "role": "user"
+        },
+        "create_time": 1700000005,
+        "content": {
+          "parts": [
+            "Message 5 text",
+            "https://cdn.example.com/assets/5.js",
+            "https://files.example.com/image_5.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_5.pdf"
+          ]
+        }
+      }
+    },
+    "node-6": {
+      "id": "node-6",
+      "parent": "node-5",
+      "children": [
+        "node-7"
+      ],
+      "message": {
+        "id": "msg-6",
+        "author": {
+          "role": "assistant"
+        },
+        "create_time": 1700000006,
+        "content": {
+          "parts": [
+            "Message 6 text",
+            "https://cdn.example.com/assets/6.js",
+            "https://files.example.com/image_6.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_6.pdf"
+          ]
+        }
+      }
+    },
+    "node-7": {
+      "id": "node-7",
+      "parent": "node-6",
+      "children": [
+        "node-8"
+      ],
+      "message": {
+        "id": "msg-7",
+        "author": {
+          "role": "user"
+        },
+        "create_time": 1700000007,
+        "content": {
+          "parts": [
+            "Message 7 text",
+            "https://cdn.example.com/assets/7.js",
+            "https://files.example.com/image_7.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_7.pdf"
+          ]
+        }
+      }
+    },
+    "node-8": {
+      "id": "node-8",
+      "parent": "node-7",
+      "children": [
+        "node-9"
+      ],
+      "message": {
+        "id": "msg-8",
+        "author": {
+          "role": "assistant"
+        },
+        "create_time": 1700000008,
+        "content": {
+          "parts": [
+            "Message 8 text",
+            "https://cdn.example.com/assets/8.js",
+            "https://files.example.com/image_8.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_8.pdf"
+          ]
+        }
+      }
+    },
+    "node-9": {
+      "id": "node-9",
+      "parent": "node-8",
+      "children": [
+        "node-10"
+      ],
+      "message": {
+        "id": "msg-9",
+        "author": {
+          "role": "user"
+        },
+        "create_time": 1700000009,
+        "content": {
+          "parts": [
+            "Message 9 text",
+            "https://cdn.example.com/assets/9.js",
+            "https://files.example.com/image_9.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_9.pdf"
+          ]
+        }
+      }
+    },
+    "node-10": {
+      "id": "node-10",
+      "parent": "node-9",
+      "children": [
+        "node-11"
+      ],
+      "message": {
+        "id": "msg-10",
+        "author": {
+          "role": "assistant"
+        },
+        "create_time": 1700000010,
+        "content": {
+          "parts": [
+            "Message 10 text",
+            "https://cdn.example.com/assets/10.js",
+            "https://files.example.com/image_10.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_10.pdf"
+          ]
+        }
+      }
+    },
+    "node-11": {
+      "id": "node-11",
+      "parent": "node-10",
+      "children": [
+        "node-12"
+      ],
+      "message": {
+        "id": "msg-11",
+        "author": {
+          "role": "user"
+        },
+        "create_time": 1700000011,
+        "content": {
+          "parts": [
+            "Message 11 text",
+            "https://cdn.example.com/assets/11.js",
+            "https://files.example.com/image_11.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_11.pdf"
+          ]
+        }
+      }
+    },
+    "node-12": {
+      "id": "node-12",
+      "parent": "node-11",
+      "children": [
+        "node-13"
+      ],
+      "message": {
+        "id": "msg-12",
+        "author": {
+          "role": "assistant"
+        },
+        "create_time": 1700000012,
+        "content": {
+          "parts": [
+            "Message 12 text",
+            "https://cdn.example.com/assets/12.js",
+            "https://files.example.com/image_12.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_12.pdf"
+          ]
+        }
+      }
+    },
+    "node-13": {
+      "id": "node-13",
+      "parent": "node-12",
+      "children": [
+        "node-14"
+      ],
+      "message": {
+        "id": "msg-13",
+        "author": {
+          "role": "user"
+        },
+        "create_time": 1700000013,
+        "content": {
+          "parts": [
+            "Message 13 text",
+            "https://cdn.example.com/assets/13.js",
+            "https://files.example.com/image_13.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_13.pdf"
+          ]
+        }
+      }
+    },
+    "node-14": {
+      "id": "node-14",
+      "parent": "node-13",
+      "children": [
+        "node-15"
+      ],
+      "message": {
+        "id": "msg-14",
+        "author": {
+          "role": "assistant"
+        },
+        "create_time": 1700000014,
+        "content": {
+          "parts": [
+            "Message 14 text",
+            "https://cdn.example.com/assets/14.js",
+            "https://files.example.com/image_14.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_14.pdf"
+          ]
+        }
+      }
+    },
+    "node-15": {
+      "id": "node-15",
+      "parent": "node-14",
+      "children": [
+        "node-16"
+      ],
+      "message": {
+        "id": "msg-15",
+        "author": {
+          "role": "user"
+        },
+        "create_time": 1700000015,
+        "content": {
+          "parts": [
+            "Message 15 text",
+            "https://cdn.example.com/assets/15.js",
+            "https://files.example.com/image_15.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_15.pdf"
+          ]
+        }
+      }
+    },
+    "node-16": {
+      "id": "node-16",
+      "parent": "node-15",
+      "children": [
+        "node-17"
+      ],
+      "message": {
+        "id": "msg-16",
+        "author": {
+          "role": "assistant"
+        },
+        "create_time": 1700000016,
+        "content": {
+          "parts": [
+            "Message 16 text",
+            "https://cdn.example.com/assets/16.js",
+            "https://files.example.com/image_16.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_16.pdf"
+          ]
+        }
+      }
+    },
+    "node-17": {
+      "id": "node-17",
+      "parent": "node-16",
+      "children": [
+        "node-18"
+      ],
+      "message": {
+        "id": "msg-17",
+        "author": {
+          "role": "user"
+        },
+        "create_time": 1700000017,
+        "content": {
+          "parts": [
+            "Message 17 text",
+            "https://cdn.example.com/assets/17.js",
+            "https://files.example.com/image_17.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_17.pdf"
+          ]
+        }
+      }
+    },
+    "node-18": {
+      "id": "node-18",
+      "parent": "node-17",
+      "children": [
+        "node-19"
+      ],
+      "message": {
+        "id": "msg-18",
+        "author": {
+          "role": "assistant"
+        },
+        "create_time": 1700000018,
+        "content": {
+          "parts": [
+            "Message 18 text",
+            "https://cdn.example.com/assets/18.js",
+            "https://files.example.com/image_18.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_18.pdf"
+          ]
+        }
+      }
+    },
+    "node-19": {
+      "id": "node-19",
+      "parent": "node-18",
+      "children": [
+        "node-20"
+      ],
+      "message": {
+        "id": "msg-19",
+        "author": {
+          "role": "user"
+        },
+        "create_time": 1700000019,
+        "content": {
+          "parts": [
+            "Message 19 text",
+            "https://cdn.example.com/assets/19.js",
+            "https://files.example.com/image_19.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_19.pdf"
+          ]
+        }
+      }
+    },
+    "node-20": {
+      "id": "node-20",
+      "parent": "node-19",
+      "children": [
+        "node-21"
+      ],
+      "message": {
+        "id": "msg-20",
+        "author": {
+          "role": "assistant"
+        },
+        "create_time": 1700000020,
+        "content": {
+          "parts": [
+            "Message 20 text",
+            "https://cdn.example.com/assets/20.js",
+            "https://files.example.com/image_20.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_20.pdf"
+          ]
+        }
+      }
+    },
+    "node-21": {
+      "id": "node-21",
+      "parent": "node-20",
+      "children": [
+        "node-22"
+      ],
+      "message": {
+        "id": "msg-21",
+        "author": {
+          "role": "user"
+        },
+        "create_time": 1700000021,
+        "content": {
+          "parts": [
+            "Message 21 text",
+            "https://cdn.example.com/assets/21.js",
+            "https://files.example.com/image_21.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_21.pdf"
+          ]
+        }
+      }
+    },
+    "node-22": {
+      "id": "node-22",
+      "parent": "node-21",
+      "children": [
+        "node-23"
+      ],
+      "message": {
+        "id": "msg-22",
+        "author": {
+          "role": "assistant"
+        },
+        "create_time": 1700000022,
+        "content": {
+          "parts": [
+            "Message 22 text",
+            "https://cdn.example.com/assets/22.js",
+            "https://files.example.com/image_22.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_22.pdf"
+          ]
+        }
+      }
+    },
+    "node-23": {
+      "id": "node-23",
+      "parent": "node-22",
+      "children": [
+        "node-24"
+      ],
+      "message": {
+        "id": "msg-23",
+        "author": {
+          "role": "user"
+        },
+        "create_time": 1700000023,
+        "content": {
+          "parts": [
+            "Message 23 text",
+            "https://cdn.example.com/assets/23.js",
+            "https://files.example.com/image_23.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_23.pdf"
+          ]
+        }
+      }
+    },
+    "node-24": {
+      "id": "node-24",
+      "parent": "node-23",
+      "children": [
+        "node-25"
+      ],
+      "message": {
+        "id": "msg-24",
+        "author": {
+          "role": "assistant"
+        },
+        "create_time": 1700000024,
+        "content": {
+          "parts": [
+            "Message 24 text",
+            "https://cdn.example.com/assets/24.js",
+            "https://files.example.com/image_24.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_24.pdf"
+          ]
+        }
+      }
+    },
+    "node-25": {
+      "id": "node-25",
+      "parent": "node-24",
+      "children": [
+        "node-26"
+      ],
+      "message": {
+        "id": "msg-25",
+        "author": {
+          "role": "user"
+        },
+        "create_time": 1700000025,
+        "content": {
+          "parts": [
+            "Message 25 text",
+            "https://cdn.example.com/assets/25.js",
+            "https://files.example.com/image_25.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_25.pdf"
+          ]
+        }
+      }
+    },
+    "node-26": {
+      "id": "node-26",
+      "parent": "node-25",
+      "children": [
+        "node-27"
+      ],
+      "message": {
+        "id": "msg-26",
+        "author": {
+          "role": "assistant"
+        },
+        "create_time": 1700000026,
+        "content": {
+          "parts": [
+            "Message 26 text",
+            "https://cdn.example.com/assets/26.js",
+            "https://files.example.com/image_26.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_26.pdf"
+          ]
+        }
+      }
+    },
+    "node-27": {
+      "id": "node-27",
+      "parent": "node-26",
+      "children": [
+        "node-28"
+      ],
+      "message": {
+        "id": "msg-27",
+        "author": {
+          "role": "user"
+        },
+        "create_time": 1700000027,
+        "content": {
+          "parts": [
+            "Message 27 text",
+            "https://cdn.example.com/assets/27.js",
+            "https://files.example.com/image_27.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_27.pdf"
+          ]
+        }
+      }
+    },
+    "node-28": {
+      "id": "node-28",
+      "parent": "node-27",
+      "children": [
+        "node-29"
+      ],
+      "message": {
+        "id": "msg-28",
+        "author": {
+          "role": "assistant"
+        },
+        "create_time": 1700000028,
+        "content": {
+          "parts": [
+            "Message 28 text",
+            "https://cdn.example.com/assets/28.js",
+            "https://files.example.com/image_28.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_28.pdf"
+          ]
+        }
+      }
+    },
+    "node-29": {
+      "id": "node-29",
+      "parent": "node-28",
+      "children": [
+        "node-30"
+      ],
+      "message": {
+        "id": "msg-29",
+        "author": {
+          "role": "user"
+        },
+        "create_time": 1700000029,
+        "content": {
+          "parts": [
+            "Message 29 text",
+            "https://cdn.example.com/assets/29.js",
+            "https://files.example.com/image_29.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_29.pdf"
+          ]
+        }
+      }
+    },
+    "node-30": {
+      "id": "node-30",
+      "parent": "node-29",
+      "children": [
+        "node-31"
+      ],
+      "message": {
+        "id": "msg-30",
+        "author": {
+          "role": "assistant"
+        },
+        "create_time": 1700000030,
+        "content": {
+          "parts": [
+            "Message 30 text",
+            "https://cdn.example.com/assets/30.js",
+            "https://files.example.com/image_30.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_30.pdf"
+          ]
+        }
+      }
+    },
+    "node-31": {
+      "id": "node-31",
+      "parent": "node-30",
+      "children": [
+        "node-32"
+      ],
+      "message": {
+        "id": "msg-31",
+        "author": {
+          "role": "user"
+        },
+        "create_time": 1700000031,
+        "content": {
+          "parts": [
+            "Message 31 text",
+            "https://cdn.example.com/assets/31.js",
+            "https://files.example.com/image_31.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_31.pdf"
+          ]
+        }
+      }
+    },
+    "node-32": {
+      "id": "node-32",
+      "parent": "node-31",
+      "children": [
+        "node-33"
+      ],
+      "message": {
+        "id": "msg-32",
+        "author": {
+          "role": "assistant"
+        },
+        "create_time": 1700000032,
+        "content": {
+          "parts": [
+            "Message 32 text",
+            "https://cdn.example.com/assets/32.js",
+            "https://files.example.com/image_32.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_32.pdf"
+          ]
+        }
+      }
+    },
+    "node-33": {
+      "id": "node-33",
+      "parent": "node-32",
+      "children": [
+        "node-34"
+      ],
+      "message": {
+        "id": "msg-33",
+        "author": {
+          "role": "user"
+        },
+        "create_time": 1700000033,
+        "content": {
+          "parts": [
+            "Message 33 text",
+            "https://cdn.example.com/assets/33.js",
+            "https://files.example.com/image_33.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_33.pdf"
+          ]
+        }
+      }
+    },
+    "node-34": {
+      "id": "node-34",
+      "parent": "node-33",
+      "children": [
+        "node-35"
+      ],
+      "message": {
+        "id": "msg-34",
+        "author": {
+          "role": "assistant"
+        },
+        "create_time": 1700000034,
+        "content": {
+          "parts": [
+            "Message 34 text",
+            "https://cdn.example.com/assets/34.js",
+            "https://files.example.com/image_34.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_34.pdf"
+          ]
+        }
+      }
+    },
+    "node-35": {
+      "id": "node-35",
+      "parent": "node-34",
+      "children": [
+        "node-36"
+      ],
+      "message": {
+        "id": "msg-35",
+        "author": {
+          "role": "user"
+        },
+        "create_time": 1700000035,
+        "content": {
+          "parts": [
+            "Message 35 text",
+            "https://cdn.example.com/assets/35.js",
+            "https://files.example.com/image_35.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_35.pdf"
+          ]
+        }
+      }
+    },
+    "node-36": {
+      "id": "node-36",
+      "parent": "node-35",
+      "children": [
+        "node-37"
+      ],
+      "message": {
+        "id": "msg-36",
+        "author": {
+          "role": "assistant"
+        },
+        "create_time": 1700000036,
+        "content": {
+          "parts": [
+            "Message 36 text",
+            "https://cdn.example.com/assets/36.js",
+            "https://files.example.com/image_36.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_36.pdf"
+          ]
+        }
+      }
+    },
+    "node-37": {
+      "id": "node-37",
+      "parent": "node-36",
+      "children": [
+        "node-38"
+      ],
+      "message": {
+        "id": "msg-37",
+        "author": {
+          "role": "user"
+        },
+        "create_time": 1700000037,
+        "content": {
+          "parts": [
+            "Message 37 text",
+            "https://cdn.example.com/assets/37.js",
+            "https://files.example.com/image_37.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_37.pdf"
+          ]
+        }
+      }
+    },
+    "node-38": {
+      "id": "node-38",
+      "parent": "node-37",
+      "children": [
+        "node-39"
+      ],
+      "message": {
+        "id": "msg-38",
+        "author": {
+          "role": "assistant"
+        },
+        "create_time": 1700000038,
+        "content": {
+          "parts": [
+            "Message 38 text",
+            "https://cdn.example.com/assets/38.js",
+            "https://files.example.com/image_38.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_38.pdf"
+          ]
+        }
+      }
+    },
+    "node-39": {
+      "id": "node-39",
+      "parent": "node-38",
+      "children": [
+        "node-40"
+      ],
+      "message": {
+        "id": "msg-39",
+        "author": {
+          "role": "user"
+        },
+        "create_time": 1700000039,
+        "content": {
+          "parts": [
+            "Message 39 text",
+            "https://cdn.example.com/assets/39.js",
+            "https://files.example.com/image_39.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_39.pdf"
+          ]
+        }
+      }
+    },
+    "node-40": {
+      "id": "node-40",
+      "parent": "node-39",
+      "children": [
+        "node-41"
+      ],
+      "message": {
+        "id": "msg-40",
+        "author": {
+          "role": "assistant"
+        },
+        "create_time": 1700000040,
+        "content": {
+          "parts": [
+            "Message 40 text",
+            "https://cdn.example.com/assets/40.js",
+            "https://files.example.com/image_40.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_40.pdf"
+          ]
+        }
+      }
+    },
+    "node-41": {
+      "id": "node-41",
+      "parent": "node-40",
+      "children": [
+        "node-42"
+      ],
+      "message": {
+        "id": "msg-41",
+        "author": {
+          "role": "user"
+        },
+        "create_time": 1700000041,
+        "content": {
+          "parts": [
+            "Message 41 text",
+            "https://cdn.example.com/assets/41.js",
+            "https://files.example.com/image_41.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_41.pdf"
+          ]
+        }
+      }
+    },
+    "node-42": {
+      "id": "node-42",
+      "parent": "node-41",
+      "children": [
+        "node-43"
+      ],
+      "message": {
+        "id": "msg-42",
+        "author": {
+          "role": "assistant"
+        },
+        "create_time": 1700000042,
+        "content": {
+          "parts": [
+            "Message 42 text",
+            "https://cdn.example.com/assets/42.js",
+            "https://files.example.com/image_42.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_42.pdf"
+          ]
+        }
+      }
+    },
+    "node-43": {
+      "id": "node-43",
+      "parent": "node-42",
+      "children": [
+        "node-44"
+      ],
+      "message": {
+        "id": "msg-43",
+        "author": {
+          "role": "user"
+        },
+        "create_time": 1700000043,
+        "content": {
+          "parts": [
+            "Message 43 text",
+            "https://cdn.example.com/assets/43.js",
+            "https://files.example.com/image_43.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_43.pdf"
+          ]
+        }
+      }
+    },
+    "node-44": {
+      "id": "node-44",
+      "parent": "node-43",
+      "children": [
+        "node-45"
+      ],
+      "message": {
+        "id": "msg-44",
+        "author": {
+          "role": "assistant"
+        },
+        "create_time": 1700000044,
+        "content": {
+          "parts": [
+            "Message 44 text",
+            "https://cdn.example.com/assets/44.js",
+            "https://files.example.com/image_44.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_44.pdf"
+          ]
+        }
+      }
+    },
+    "node-45": {
+      "id": "node-45",
+      "parent": "node-44",
+      "children": [
+        "node-46"
+      ],
+      "message": {
+        "id": "msg-45",
+        "author": {
+          "role": "user"
+        },
+        "create_time": 1700000045,
+        "content": {
+          "parts": [
+            "Message 45 text",
+            "https://cdn.example.com/assets/45.js",
+            "https://files.example.com/image_45.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_45.pdf"
+          ]
+        }
+      }
+    },
+    "node-46": {
+      "id": "node-46",
+      "parent": "node-45",
+      "children": [
+        "node-47"
+      ],
+      "message": {
+        "id": "msg-46",
+        "author": {
+          "role": "assistant"
+        },
+        "create_time": 1700000046,
+        "content": {
+          "parts": [
+            "Message 46 text",
+            "https://cdn.example.com/assets/46.js",
+            "https://files.example.com/image_46.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_46.pdf"
+          ]
+        }
+      }
+    },
+    "node-47": {
+      "id": "node-47",
+      "parent": "node-46",
+      "children": [
+        "node-48"
+      ],
+      "message": {
+        "id": "msg-47",
+        "author": {
+          "role": "user"
+        },
+        "create_time": 1700000047,
+        "content": {
+          "parts": [
+            "Message 47 text",
+            "https://cdn.example.com/assets/47.js",
+            "https://files.example.com/image_47.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_47.pdf"
+          ]
+        }
+      }
+    },
+    "node-48": {
+      "id": "node-48",
+      "parent": "node-47",
+      "children": [
+        "node-49"
+      ],
+      "message": {
+        "id": "msg-48",
+        "author": {
+          "role": "assistant"
+        },
+        "create_time": 1700000048,
+        "content": {
+          "parts": [
+            "Message 48 text",
+            "https://cdn.example.com/assets/48.js",
+            "https://files.example.com/image_48.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_48.pdf"
+          ]
+        }
+      }
+    },
+    "node-49": {
+      "id": "node-49",
+      "parent": "node-48",
+      "children": [
+        "node-50"
+      ],
+      "message": {
+        "id": "msg-49",
+        "author": {
+          "role": "user"
+        },
+        "create_time": 1700000049,
+        "content": {
+          "parts": [
+            "Message 49 text",
+            "https://cdn.example.com/assets/49.js",
+            "https://files.example.com/image_49.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_49.pdf"
+          ]
+        }
+      }
+    },
+    "node-50": {
+      "id": "node-50",
+      "parent": "node-49",
+      "children": [
+        "node-51"
+      ],
+      "message": {
+        "id": "msg-50",
+        "author": {
+          "role": "assistant"
+        },
+        "create_time": 1700000050,
+        "content": {
+          "parts": [
+            "Message 50 text",
+            "https://cdn.example.com/assets/50.js",
+            "https://files.example.com/image_50.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_50.pdf"
+          ]
+        }
+      }
+    },
+    "node-51": {
+      "id": "node-51",
+      "parent": "node-50",
+      "children": [
+        "node-52"
+      ],
+      "message": {
+        "id": "msg-51",
+        "author": {
+          "role": "user"
+        },
+        "create_time": 1700000051,
+        "content": {
+          "parts": [
+            "Message 51 text",
+            "https://cdn.example.com/assets/51.js",
+            "https://files.example.com/image_51.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_51.pdf"
+          ]
+        }
+      }
+    },
+    "node-52": {
+      "id": "node-52",
+      "parent": "node-51",
+      "children": [
+        "node-53"
+      ],
+      "message": {
+        "id": "msg-52",
+        "author": {
+          "role": "assistant"
+        },
+        "create_time": 1700000052,
+        "content": {
+          "parts": [
+            "Message 52 text",
+            "https://cdn.example.com/assets/52.js",
+            "https://files.example.com/image_52.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_52.pdf"
+          ]
+        }
+      }
+    },
+    "node-53": {
+      "id": "node-53",
+      "parent": "node-52",
+      "children": [
+        "node-54"
+      ],
+      "message": {
+        "id": "msg-53",
+        "author": {
+          "role": "user"
+        },
+        "create_time": 1700000053,
+        "content": {
+          "parts": [
+            "Message 53 text",
+            "https://cdn.example.com/assets/53.js",
+            "https://files.example.com/image_53.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_53.pdf"
+          ]
+        }
+      }
+    },
+    "node-54": {
+      "id": "node-54",
+      "parent": "node-53",
+      "children": [
+        "node-55"
+      ],
+      "message": {
+        "id": "msg-54",
+        "author": {
+          "role": "assistant"
+        },
+        "create_time": 1700000054,
+        "content": {
+          "parts": [
+            "Message 54 text",
+            "https://cdn.example.com/assets/54.js",
+            "https://files.example.com/image_54.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_54.pdf"
+          ]
+        }
+      }
+    },
+    "node-55": {
+      "id": "node-55",
+      "parent": "node-54",
+      "children": [],
+      "message": {
+        "id": "msg-55",
+        "author": {
+          "role": "user"
+        },
+        "create_time": 1700000055,
+        "content": {
+          "parts": [
+            "Message 55 text",
+            "https://cdn.example.com/assets/55.js",
+            "https://files.example.com/image_55.png"
+          ]
+        },
+        "metadata": {
+          "links": [
+            "https://files.example.com/file_55.pdf"
+          ]
+        }
+      }
+    }
+  }
+}

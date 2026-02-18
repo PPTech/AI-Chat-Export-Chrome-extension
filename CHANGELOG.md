@@ -1,3 +1,11 @@
+
+## 0.12.19 - 2026-02-18
+- Added ChatGPT full-history extraction path using backend conversation mapping (`/backend-api/conversation/<id>`) and canonical turn reconstruction.
+- Added reusable ChatGPT backend helpers (`chatgpt_backend_utils.js`) for conversation id detection, node ordering, deep URL extraction, and attachment URL classification.
+- Added content runtime action `extract_chatgpt_full` and backend-preferred extraction fallback in `extractChatData` for ChatGPT hosts.
+- Added mapping fixture and unit contracts to validate full-path reconstruction and script-asset ignore behavior.
+- Replaced debug overlay usage with debug logging controls in settings/options and background command ingress logging.
+
 # License: MIT
 # Code generated with support from CODEX and CODEX CLI.
 # Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)

@@ -83,6 +83,11 @@ This prevents false WARN messages when the header shows media but the strict ite
 *   **Security Hardened**: Input sanitization prevents XSS in exported files.
 *   **Local Agent (Air-Gapped Ready)**: Visual + semantic local extraction with self-test and recipe fallback; no external AI API required.
 
+## ChatGPT Full Conversation Extraction (v0.12.19)
+- Primary mode for ChatGPT now uses conversation backend mapping (`/backend-api/conversation/<id>`) to reconstruct the full current path instead of relying only on visible DOM nodes.
+- Export data for ChatGPT is built from canonical turns and attachment candidates extracted from message content/metadata.
+- DOM extraction remains as fallback when backend mapping is unavailable.
+
 ## 🔐 Network Policy split (v0.12.18)
 
 - **AI_INFERENCE**: network denied (local models only).
