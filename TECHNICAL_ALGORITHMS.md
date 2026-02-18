@@ -154,3 +154,33 @@
 - Extract file links from message nodes (`a[href]`, `download`, `data-file-url`).
 - Normalize to `[[FILE:url|name]]` tokens.
 - On Export Files action, fetch each file in current session and pack with ZIP writer.
+
+## Agent Loop v0.11.0
+1. Observe: collect candidate blocks from SmartAgent/SmartMiner.
+2. Plan: generate up to 8 plan hypotheses ranked by online learner logits.
+3. Act: apply selectors + predicted labels to construct extraction sets.
+4. Verify: compute score from message count, role sanity, monotonic order, duplication, attachment coverage.
+5. Learn: update linear classifier weights and persist recipe/failure diagnostics in IndexedDB.
+
+## AEGIS-2026 Module Algorithms (v0.11.1)
+### D1. Visual Cortex (`smart_vision.js`)
+- Iterate all visible nodes and score likely message bubbles using text-length + geometry constraints.
+- Role classifier uses right/left alignment and style/icon evidence.
+- Self-healing branch enters Shadow DOM DeepScan when primary scan returns zero messages.
+
+### D2. Security Guard (`security_guard.js`)
+- Monkey-patches `fetch` + `XMLHttpRequest.open` in content context.
+- Blocks any non-local scheme and increments security block metrics.
+- Freezes extraction object for anti-tamper integrity.
+
+### D3. Offline Brain (`offline_brain.js`)
+- Deterministic lightweight local classifier for Code/Table/Prose/SystemInstruction.
+- Applies markdown auto-wrap when code-like text is outside `<pre>` boundaries.
+
+### D4. Export Core (`export_core.js`)
+- Resolves image blobs to DataURL then injects inline base64 sources.
+- Builds RFC-compliant MHTML multipart payload for Word-compatible offline artifacts.
+
+### D5. Black Box Logger (`logger.js`)
+- Computes SHA-256 integrity hash for exported payload.
+- Emits warning when node-detection variance exceeds 10%.

@@ -321,3 +321,36 @@ This prevents image token corruption and ensures valid `<img>` tags are emitted 
 - Enable **Extract and ZIP Chat Files** in Settings.
 - Extraction records file references as `[[FILE:url|name]]` tokens.
 - Click **Export Files** to download all detected files as a single ZIP package.
+
+## Local AI Proof (v0.11.0)
+- Runs a local-only agent loop: observe -> plan -> act -> verify -> learn.
+- Embeddings and learner weights are persisted locally per `{host, domainFingerprint}`.
+- No chat text is sent to external AI APIs; network for assets is allowlisted and user-gesture gated.
+
+## AEGIS-2026 Architecture (Detailed)
+### 1) Visual Cortex (`smart_vision.js`)
+- Geometry-first chat bubble detection (visibility, width, alignment, role signals).
+- Zero-dependency fallback to Shadow DOM DeepScan for resilience against SPA rendering changes.
+- Selector-agnostic extraction by design (no fragile class-name dependency).
+
+### 2) Iron Dome (`security_guard.js`)
+- Runtime network kill-switch for content-context fetch/XHR.
+- Strict allowlist (`blob:`, `data:`, `chrome-extension://`) with block metrics.
+- Anti-tamper freeze utility for extracted payloads before export.
+
+### 3) Local AI Engine (`offline_brain.js`)
+- Local text labeling (`Code`, `Table`, `Prose`, `SystemInstruction`) without external APIs.
+- Auto markdown code wrapping when code-like text appears outside `<pre>`.
+
+### 4) Artifact Factory (`export_core.js`)
+- In-place image base64 embedding for offline portability.
+- Word-compatible MHTML generation with required Office namespaces.
+
+### 5) Black Box Logger (`logger.js`)
+- Session JSON log contract with integrity hash (SHA-256).
+- Data-loss warning heuristic: mismatch between node-detection and visual-element counts.
+
+## Version-Control & Documentation Standard
+- Every release must update: `CHANGELOG.md`, `README.md`, `TECHNICAL_ALGORITHMS.md`, and `MEMORY.md`.
+- Every algorithmic module must document version + rationale + test path.
+- BDD artifacts are maintained in `features/` and regenerated via `npm run gherkin:generate`.
