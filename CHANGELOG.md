@@ -4,13 +4,14 @@
 
 # Changelog
 
-## 0.10.11 - 2026-02-18
-- Added `GeminiArtifactGenerator` class with image-to-Base64 processing, file link scanning, static HTML generation, and Word generation helpers.
-- Integrated Gemini HTML/Word export path to pre-process expiring image URLs into offline-safe Base64 content.
-- Fixed startup flow issue causing `SETTINGS_KEY` access-before-initialization regressions by preserving safe init ordering.
-- Extended Claude file extraction for artifact/iframe content and srcdoc-based artifact capture.
-- Added detection summary counters in UI and updated About text with supported platforms and requested Author/Engineering wording.
-- Synced runtime/docs metadata to `0.10.11`.
+## 0.10.12 - 2026-02-18
+- Fixed rich HTML/Word export image embedding by converting remote image links to Base64 for all platforms before rendering export documents.
+- Fixed Word generation for Gemini exports by producing a valid full HTML-as-Word payload instead of nesting a Blob object in Word markup.
+- Improved file export reliability by broadening file token detection (including markdown links and URL-like data attributes) and adding credential-aware file fetch fallbacks.
+- Added `AIStudioScraper` to extract system instructions, visible model parameters, and prompt turns from AI Studio editor-like DOM structures.
+- Improved full-history fetch by ranking scroll containers and using the highest-confidence chat scroller.
+- Kept safe initialization guardrails in popup extraction flow to avoid startup regressions when content script reinjection is unavailable.
+- Synced runtime/docs metadata to `0.10.12`.
 
 ## 0.10.10 - 2026-02-18
 - Fixed popup startup flow so top menus remain usable while active tab analysis is running.

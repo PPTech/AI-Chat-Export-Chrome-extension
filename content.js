@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// content.js - Platform Engine Orchestrator v0.10.11
+// content.js - Platform Engine Orchestrator v0.10.12
 
 (() => {
   if (window.hasRunContent) return;
@@ -233,6 +233,99 @@
     }
   }
 
+  class AIStudioScraper {
+    constructor(utilsRef, options = {}) {
+      this.utils = utilsRef;
+      this.options = options;
+    }
+
+    async waitForDom(timeoutMs = 7000) {
+      const started = Date.now();
+      while (Date.now() - started < timeoutMs) {
+        const hasTurnLike = document.querySelector('[class*="turn" i], [class*="chat" i], [data-turn-id], ms-chat-turn, user-query-item, model-response-item');
+        if (hasTurnLike) return true;
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+      return false;
+    }
+
+    findSystemInstruction() {
+      const labels = Array.from(document.querySelectorAll('h1,h2,h3,label,span,div')).filter((el) => /system instructions?/i.test((el.textContent || '').trim()));
+      for (const label of labels) {
+        const host = label.closest('section,div,article') || label.parentElement;
+        if (!host) continue;
+        const editor = host.querySelector('textarea,.ProseMirror,.cm-content,[contenteditable="true"],pre,code,div');
+        const text = (editor?.innerText || editor?.textContent || '').trim();
+        if (text && !/system instructions?/i.test(text)) return text;
+      }
+      return '';
+    }
+
+    extractParameters() {
+      const params = {};
+      const aside = document.querySelector('aside,[role="complementary"],section[aria-label*="settings" i]') || document.body;
+      const labels = Array.from(aside.querySelectorAll('label,span,div')).map((el) => (el.textContent || '').trim()).filter(Boolean);
+      const pickValue = (key) => {
+        const row = Array.from(aside.querySelectorAll('label,div,li')).find((el) => new RegExp(`^${key}`, 'i').test((el.textContent || '').trim()));
+        if (!row) return null;
+        const text = (row.textContent || '').replace(/\s+/g, ' ').trim();
+        const m = text.match(/(-?\d+(?:\.\d+)?)/);
+        return m ? Number(m[1]) : text;
+      };
+      if (labels.some((t) => /temperature/i.test(t))) params.temperature = pickValue('Temperature');
+      if (labels.some((t) => /top\s*k/i.test(t))) params.topK = pickValue('Top K');
+      if (labels.some((t) => /top\s*p/i.test(t))) params.topP = pickValue('Top P');
+      if (labels.some((t) => /max output tokens/i.test(t))) params.maxOutputTokens = pickValue('Max output tokens');
+      return params;
+    }
+
+    extractTurnText(turnNode) {
+      const editor = turnNode.querySelector('.ProseMirror,.cm-content,[contenteditable="true"],textarea,pre,code') || turnNode;
+      const text = (editor.innerText || editor.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
+      return text;
+    }
+
+    inferTurnRole(turnNode) {
+      const header = (turnNode.querySelector('h1,h2,h3,strong,[class*="role" i],[class*="author" i]')?.textContent || turnNode.getAttribute('aria-label') || '').toLowerCase();
+      if (/^user|\buser\b|prompt|query/.test(header)) return 'user';
+      if (/^model|\bmodel\b|assistant|gemini/.test(header)) return 'model';
+      const marker = `${turnNode.className || ''} ${turnNode.tagName}`.toLowerCase();
+      if (/user|query/.test(marker)) return 'user';
+      if (/model|response|assistant/.test(marker)) return 'model';
+      return 'model';
+    }
+
+    async scrape() {
+      await this.waitForDom();
+      const selectors = [
+        'ms-chat-turn',
+        'user-query-item, model-response-item',
+        '[data-turn-id]',
+        '[class*="turn" i]',
+        '[class*="chat" i] > article'
+      ];
+      let turnNodes = [];
+      for (const selector of selectors) {
+        const nodes = Array.from(document.querySelectorAll(selector)).filter((n) => this.utils.hasMeaningfulContent(n));
+        if (nodes.length > 1) {
+          turnNodes = nodes;
+          break;
+        }
+      }
+
+      const turns = turnNodes.map((node) => ({
+        role: this.inferTurnRole(node),
+        text: this.extractTurnText(node)
+      })).filter((t) => t.text.length > 0);
+
+      return {
+        system_instruction: this.findSystemInstruction(),
+        parameters: this.extractParameters(),
+        turns
+      };
+    }
+  }
+
   const PlatformEngines = {
     chatgpt: {
       name: 'ChatGPT',
@@ -309,15 +402,27 @@
     aistudio: {
       name: 'AI Studio',
       matches: () => location.hostname.includes('aistudio.google.com'),
-      selectors: ['ms-chat-turn', 'ms-chat-bubble', 'user-query-item', 'model-response-item', '.chat-turn', '.query-container', '.response-container', '.chat-bubble'],
       async extract(options, utils) {
-        const nodes = utils.adaptiveQuery(this.selectors.join(','), 1).filter((n) => utils.hasMeaningfulContent(n));
-        const messages = [];
-        for (const node of nodes) {
-          const marker = `${node.tagName} ${node.className} ${node.getAttribute('is-user') || ''}`.toLowerCase();
-          const isUser = marker.includes('true') || marker.includes('user') || marker.includes('query');
-          const content = await utils.extractNodeContent(node, options, isUser, this.name, 'aistudio-node');
-          if (content) messages.push({ role: isUser ? 'User' : 'Model', content, meta: { platform: this.name, sourceSelector: 'aistudio-node' } });
+        const scraper = new AIStudioScraper(utils, options);
+        const scraped = await scraper.scrape();
+        const messages = scraped.turns.map((turn, idx) => ({
+          role: turn.role === 'user' ? 'User' : 'Model',
+          content: turn.text,
+          meta: { platform: this.name, sourceSelector: 'aistudio-scraper', turnIndex: idx }
+        }));
+        if (scraped.system_instruction) {
+          messages.unshift({
+            role: 'System',
+            content: scraped.system_instruction,
+            meta: { platform: this.name, sourceSelector: 'aistudio-system-instruction' }
+          });
+        }
+        if (Object.keys(scraped.parameters || {}).length) {
+          messages.unshift({
+            role: 'System',
+            content: `AI Studio Parameters:\n${JSON.stringify(scraped.parameters, null, 2)}`,
+            meta: { platform: this.name, sourceSelector: 'aistudio-parameters' }
+          });
         }
         return { platform: this.name, title: document.title || 'AI Studio Export', messages };
       }
@@ -423,10 +528,16 @@
       const artifactSelectors = Array.from(node.querySelectorAll('[data-artifact-id], [data-testid*="artifact"], [class*="Artifact" i], [class*="artifact" i], iframe[title*="Artifact" i], [role="region"][aria-label*="Artifact" i]'));
       const tokens = [];
       for (const link of [...links, ...artifactSelectors]) {
-        const href = link.getAttribute('href') || link.getAttribute('data-file-url') || link.getAttribute('src') || '';
+        const attrs = link.getAttributeNames ? link.getAttributeNames() : [];
+        const urlHints = attrs
+          .filter((name) => /url|href|src|download|file/i.test(name))
+          .map((name) => link.getAttribute(name))
+          .filter(Boolean);
+        const href = link.getAttribute('href') || link.getAttribute('data-file-url') || link.getAttribute('src') || urlHints[0] || '';
         const srcdoc = link.getAttribute('srcdoc') || '';
         const abs = href ? (() => {
-          try { return new URL(href, location.href).toString(); } catch { return ''; }
+          if (/^sandbox:\/\//i.test(href) || /^sandbox:\//i.test(href)) return href;
+          try { return new URL(href, location.href).toString(); } catch { return href || ''; }
         })() : '';
         const inlineDocUrl = srcdoc ? `data:text/html;base64,${btoa(unescape(encodeURIComponent(srcdoc)))}` : '';
         const finalUrl = abs || inlineDocUrl;
@@ -435,10 +546,19 @@
           || !!link.getAttribute('download')
           || /artifact|download|file/i.test(`${link.getAttribute('aria-label') || ''} ${link.textContent || ''}`);
         if (!isFileLike) continue;
-        const nameRaw = link.getAttribute('download') || link.getAttribute('data-artifact-id') || link.textContent || abs.split('/').pop() || (srcdoc ? 'artifact.html' : 'file.bin');
+        const nameRaw = link.getAttribute('download') || link.getAttribute('data-artifact-id') || link.getAttribute('data-file-name') || link.textContent || abs.split('/').pop() || (srcdoc ? 'artifact.html' : 'file.bin');
         const safeName = nameRaw.replace(/[\/:*?"<>|]+/g, '_').trim() || 'file.bin';
         tokens.push(`[[FILE:${finalUrl}|${safeName}]]`);
       }
+
+      const markdownLinks = (node.innerText || '').match(/\[[^\]]+\]\((sandbox:\/\/[^)]+|https?:\/\/[^)]+)\)/g) || [];
+      markdownLinks.forEach((chunk, idx) => {
+        const m = chunk.match(/\[([^\]]+)\]\(([^)]+)\)/);
+        if (!m) return;
+        const safeName = (m[1] || `file_${idx + 1}`).replace(/[\/:*?"<>|]+/g, '_').trim() || `file_${idx + 1}`;
+        tokens.push(`[[FILE:${m[2]}|${safeName}]]`);
+      });
+
       return [...new Set(tokens)];
     },
 
@@ -837,8 +957,15 @@
   }
 
   function findScrollContainer() {
-    const candidates = Array.from(document.querySelectorAll('main,section,div')).filter((el) => el.scrollHeight > el.clientHeight + 120);
-    return candidates[0] || document.scrollingElement || document.documentElement;
+    const candidates = Array.from(document.querySelectorAll('main,section,div,[role="main"],[role="log"]')).filter((el) => el.scrollHeight > el.clientHeight + 120);
+    if (!candidates.length) return document.scrollingElement || document.documentElement;
+    const scored = candidates.map((el) => {
+      const rect = el.getBoundingClientRect();
+      const area = Math.max(1, rect.width * rect.height);
+      const score = (el.scrollHeight / Math.max(1, el.clientHeight)) + Math.min(2, area / (window.innerWidth * window.innerHeight));
+      return { el, score };
+    }).sort((a, b) => b.score - a.score);
+    return scored[0].el;
   }
 
   function loadFullHistory(sendResponse) {

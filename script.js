@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// script.js - Main Controller v0.10.11
+// script.js - Main Controller v0.10.12
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
@@ -76,7 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function exportSettingsCfg(settings) {
     const lines = Object.entries(settings).map(([k, v]) => `${k}=${String(v)}`);
-    const cfg = `# AI Chat Exporter Settings\n# version=0.10.11\n${lines.join('\n')}\n`;
+    const cfg = `# AI Chat Exporter Settings\n# version=0.10.12\n${lines.join('\n')}\n`;
     const date = new Date().toISOString().slice(0, 10);
     downloadBlob(new Blob([cfg], { type: 'text/plain' }), `ai_chat_exporter_settings_${date}.cfg`);
   }
@@ -110,9 +110,13 @@ document.addEventListener('DOMContentLoaded', () => {
     setAnalyzeProgress(30, 'Extracting');
     chrome.tabs.sendMessage(activeTabId, { action: 'extract_chat', options }, (res) => {
       if (chrome.runtime.lastError) {
-        chrome.scripting.executeScript({ target: { tabId: activeTabId }, files: ['content.js'] }, () => {
-          setTimeout(() => chrome.tabs.sendMessage(activeTabId, { action: 'extract_chat', options }, processData), 600);
-        });
+        if (chrome.scripting?.executeScript) {
+          chrome.scripting.executeScript({ target: { tabId: activeTabId }, files: ['content.js'] }, () => {
+            setTimeout(() => chrome.tabs.sendMessage(activeTabId, { action: 'extract_chat', options }, processData), 600);
+          });
+        } else {
+          setAnalyzeProgress(0, 'Content script unavailable');
+        }
         return;
       }
       processData(res);
@@ -279,7 +283,10 @@ document.addEventListener('DOMContentLoaded', () => {
       let idx = 1;
       for (const src of imageList) {
         const extGuess = src.includes('png') ? 'png' : (src.includes('webp') ? 'webp' : 'jpg');
-        chrome.downloads.download({ url: src, filename: `ai_chat_exporter/${platformPrefix}_${date}_photo_${String(idx).padStart(3, '0')}.${extGuess}`, saveAs: false });
+        const ok = await downloadByUrlOrBlob(src, `ai_chat_exporter/${platformPrefix}_${date}_photo_${String(idx).padStart(3, '0')}.${extGuess}`);
+        if (!ok) {
+          // continue remaining images even when one image fails
+        }
         idx += 1;
       }
       return;
@@ -315,7 +322,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let i = 1;
     for (const file of filesFound) {
       try {
-        const blob = await fetch(file.url).then((r) => r.blob());
+        const blob = await fetchFileBlob(file.url);
+        if (!blob) continue;
         const ext = (blob.type.split('/')[1] || 'bin').replace('jpeg', 'jpg');
         const name = file.name.includes('.') ? file.name : `${file.name}.${ext}`;
         const data = new Uint8Array(await blob.arrayBuffer());
@@ -494,7 +502,7 @@ document.addEventListener('DOMContentLoaded', () => {
         .replace(/\n/g, '<br>');
     }
 
-    generateStaticHTML() {
+    generateStaticHTMLString() {
       const style = `
         body{background:#1f1f1f;color:#ececec;font-family:Arial,sans-serif;padding:20px}
         .wrap{max-width:980px;margin:auto}
@@ -505,8 +513,11 @@ document.addEventListener('DOMContentLoaded', () => {
         img{max-width:100%;height:auto;border-radius:8px}
       `;
       const body = (this.data.messages || []).map((m) => `<div class="msg"><div class="role">${escapeHtml(m.role)}</div><div>${this.markdownToHtml(m.content)}</div></div>`).join('');
-      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${style}</style></head><body><div class="wrap">${body}</div></body></html>`;
-      return new Blob([html], { type: 'text/html' });
+      return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${style}</style></head><body><div class="wrap">${body}</div></body></html>`;
+    }
+
+    generateStaticHTML() {
+      return new Blob([this.generateStaticHTMLString()], { type: 'text/html' });
     }
 
     generateHTML() {
@@ -514,10 +525,44 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     generateWord() {
-      const htmlBlob = this.generateStaticHTML();
-      const html = `<!DOCTYPE html><html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><style>img{max-width:100%;height:auto} pre{background:#111;color:#fff;padding:8px}</style></head><body>`;
-      return new Blob([html, htmlBlob, '</body></html>'], { type: 'application/msword' });
+      const inner = this.generateStaticHTMLString();
+      const body = inner.replace(/^[\s\S]*<body[^>]*>/i, '').replace(/<\/body>[\s\S]*$/i, '');
+      const doc = `<!DOCTYPE html><html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><style>img{max-width:100%;height:auto} pre{background:#111;color:#fff;padding:8px} .msg{page-break-inside:avoid}</style></head><body>${body}</body></html>`;
+      return new Blob([doc], { type: 'application/msword' });
     }
+  }
+
+  async function embedImagesAsDataUris(messages = []) {
+    const cache = new Map();
+    const tokenRegex = /\[\[IMG:([\s\S]*?)\]\]|!\[[^\]]*\]\((data:image\/[^)]+|https?:\/\/[^)]+)\)/g;
+    return Promise.all((messages || []).map(async (message) => {
+      const msg = { ...message };
+      let content = String(msg.content || '');
+      const found = [];
+      let match;
+      while ((match = tokenRegex.exec(content)) !== null) {
+        const src = (match[1] || match[2] || '').trim();
+        if (src && /^https?:\/\//i.test(src)) found.push(src);
+      }
+      for (const src of [...new Set(found)]) {
+        if (!cache.has(src)) {
+          try {
+            const blob = await fetch(src).then((r) => r.blob());
+            const dataUrl = await new Promise((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(String(reader.result || src));
+              reader.readAsDataURL(blob);
+            });
+            cache.set(src, dataUrl);
+          } catch {
+            cache.set(src, src);
+          }
+        }
+        content = content.split(src).join(cache.get(src));
+      }
+      msg.content = content;
+      return msg;
+    }));
   }
 
   async function generateContent(fmt, data) {
@@ -536,12 +581,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (fmt === 'doc') return { content: generator.generateWord(), mime: 'application/msword' };
         return { content: generator.generateHTML(), mime: 'text/html' };
       }
+      const richMsgs = await embedImagesAsDataUris(msgs);
       const style = 'body{font-family:Arial,sans-serif;max-width:900px;margin:auto;padding:20px;line-height:1.6}img{max-width:100%;height:auto}.msg{margin-bottom:20px;padding:12px;border:1px solid #e5e7eb;border-radius:8px}.role{font-weight:700;margin-bottom:8px}';
-      const body = msgs.map((m) => {
+      const body = richMsgs.map((m) => {
         return `<div class="msg"><div class="role">${escapeHtml(m.role)}</div><div>${renderRichMessageHtml(m.content)}</div></div>`;
       }).join('');
       const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><style>${style}</style></head><body><h1>${escapeHtml(title)}</h1>${body}</body></html>`;
-      return { content: html, mime: fmt === 'doc' ? 'application/msword' : 'text/html' };
+      if (fmt === 'doc') {
+        const docHtml = `<!DOCTYPE html><html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><style>${style}</style></head><body><h1>${escapeHtml(title)}</h1>${body}</body></html>`;
+        return { content: docHtml, mime: 'application/msword' };
+      }
+      return { content: html, mime: 'text/html' };
     }
 
     if (fmt === 'json') return { content: JSON.stringify({ platform: data.platform, messages: msgs.map((m) => ({ role: m.role, content: stripImageTokens(m.content).replace(/\n/g, ' ') })) }, null, 2), mime: 'application/json' };
@@ -843,6 +893,33 @@ document.addEventListener('DOMContentLoaded', () => {
     a.download = name;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  }
+
+  async function fetchFileBlob(url) {
+    if (!url) return null;
+    try {
+      return await fetch(url, { credentials: 'include' }).then((r) => (r.ok ? r.blob() : null));
+    } catch {
+      return null;
+    }
+  }
+
+  async function downloadByUrlOrBlob(url, filename) {
+    try {
+      if (/^data:|^blob:/i.test(url)) {
+        chrome.downloads.download({ url, filename, saveAs: false });
+        return true;
+      }
+      const blob = await fetchFileBlob(url);
+      if (!blob) {
+        chrome.downloads.download({ url, filename, saveAs: false });
+        return true;
+      }
+      downloadBlob(blob, filename.split('/').pop() || 'file.bin');
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   const openModal = (m) => { if (m) m.style.display = 'flex'; };
