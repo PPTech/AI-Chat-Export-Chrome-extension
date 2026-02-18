@@ -262,3 +262,14 @@
 
 ### J5. Evidence Gate Verification
 - `verify:claims` validates script availability, version synchronization, and forensic export artifact hooks before release claims are accepted.
+
+
+### J6. Header-Version Synchronization Gate
+- Release synchronization now updates and verifies runtime header version markers for critical modules, preventing multi-version drift across code and metadata.
+
+
+### J7. Runtime Integration Proof Hooks
+- Content runtime now installs SecurityGuard kill-switch and emits AEGIS session diagnostics using logger module to prove integration paths are executed.
+
+### J8. Deterministic Image Embedding Helper
+- `DataProcessor.embedImageAsBase64` provides a single image-embedding primitive used by `embedImages` for explicit success/failure handling.

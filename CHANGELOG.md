@@ -4,6 +4,16 @@
 
 # Changelog
 
+## 0.12.3 - Real Integration & Version Discipline
+- Added real image embedding helper (`embedImageAsBase64`) in DataProcessor and routed embedding pipeline through it.
+- Integrated security guard/network kill-switch and structured session logging usage into content extraction flow.
+- Added release contract tests for real integration markers and synchronized all versions to 0.12.3.
+
+## 0.12.2 - Unified Version Governance Hardening
+- Extended sync/verify gates to include `package.json` and runtime file version headers.
+- Upgraded release consistency rules so `verify:release` fails on header mismatches in core runtime modules.
+- Kept all release metadata synchronized from `version.js` SSOT and documented stricter verification expectations.
+
 
 ## 0.12.1 - Evidence-Gated Version Governance
 - Added `FORENSICS/HEAD.txt` capture workflow and `FORENSICS/CLAIMS.md` claim ledger for anti-hallucination release evidence.

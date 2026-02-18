@@ -29,6 +29,7 @@ const markerMatch = versionFile.match(/version v(\d+\.\d+\.\d+)/i);
 const manifest = readJson('manifest.json');
 const versionJson = readJson('VERSION.json');
 const metadata = readJson('metadata.json');
+const packageJson = readJson('package.json');
 
 const claims = [];
 if (!versionMatch) claims.push('APP_VERSION missing from version.js');
@@ -39,6 +40,7 @@ if (markerMatch && markerMatch[1] !== appVersion) {
 if (manifest.version !== appVersion) claims.push(`manifest version mismatch: ${manifest.version} != ${appVersion}`);
 if (versionJson.version !== appVersion) claims.push(`VERSION.json mismatch: ${versionJson.version} != ${appVersion}`);
 if (metadata.version !== appVersion) claims.push(`metadata.json mismatch: ${metadata.version} != ${appVersion}`);
+if (packageJson.version !== appVersion) claims.push(`package.json mismatch: ${packageJson.version} != ${appVersion}`);
 
 const scriptSource = fs.readFileSync('script.js', 'utf8');
 for (const token of ['.diagnostics.json', '.export_bundle_manifest.json', 'bundleManifest']) {

@@ -2,7 +2,7 @@
 # Code generated with support from CODEX and CODEX CLI.
 # Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 
-# Release Checklist (v0.12.1)
+# Release Checklist (v0.12.2)
 
 - [ ] `npm run sync:version`
 

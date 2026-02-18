@@ -397,3 +397,13 @@ This prevents image token corruption and ensures valid `<img>` tags are emitted 
 - `version.js` is SSOT for release version; run `npm run sync:version` to align manifest metadata.
 - `npm run verify:claims` enforces release-script presence, version consistency, and forensic export hooks.
 - For each change window, `FORENSICS/HEAD.txt` captures branch/head/toolchain evidence.
+
+
+## Unified Version Governance (v0.12.2)
+- `sync:version` now aligns `package.json` and selected runtime version-header markers in addition to manifest metadata.
+- `verify:release` now fails when core runtime headers drift from the SSOT version.
+
+
+## Real Integration Checks (v0.12.3)
+- Content script now invokes SecurityGuard kill-switch at runtime and emits AEGIS session logs via logger integration.
+- Image embedding pipeline now uses `embedImageAsBase64` in DataProcessor before HTML/Word export transformations.

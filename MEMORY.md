@@ -55,3 +55,7 @@
 - v0.12.0: Threat model and premium local agent console design documented for security and product continuation.
 
 - v0.12.1: Added evidence-gated claim verification (`verify:claims`) and FORensics head snapshot ledger.
+
+- v0.12.2: Tightened version governance by syncing package/runtime header versions and enforcing them in release verification.
+
+- v0.12.3: Added explicit logger/security integration in content flow and real image embed helper in DataProcessor.

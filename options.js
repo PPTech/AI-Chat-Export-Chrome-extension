@@ -1,7 +1,8 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// options.js - Extension Options v0.12.0
+// نویسنده دکتر بابک سرخپور با کمک ابزار چت جی پی تی.
+// options.js - Extension Options v0.12.3
 
 const KEY = 'local_agent_options_v1';
 const plannerEnabled = document.getElementById('planner-enabled');

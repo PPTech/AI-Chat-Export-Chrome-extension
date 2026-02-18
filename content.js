@@ -27,12 +27,18 @@
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // نویسنده دکتر بابک سرخپور با کمک ابزار چت جی پی تی.
-// content.js - Platform Engine Orchestrator v0.10.26
+// content.js - Platform Engine Orchestrator v0.12.3
 
 (() => {
   if (window.hasRunContent) return;
   window.hasRunContent = true;
   console.log(`[INJECT] content script active on ${location.href}`);
+
+  const AEGIS_LOGGER = window.AegisLogger || null;
+  const SECURITY_GUARD = window.SecurityGuard || null;
+  if (SECURITY_GUARD?.installNetworkKillSwitch) {
+    try { SECURITY_GUARD.installNetworkKillSwitch(window); } catch (error) { console.warn('[SECURITY] kill-switch setup failed', error?.message || error); }
+  }
 
   const CHATGPT_ANALYSIS_KEY = 'CHATGPT_DOM_ANALYSIS';
 
@@ -1994,6 +2000,7 @@
 
     setDebugOverlay(items, !!options.debug);
     sendRuntime({ action: 'LOCAL_SAVE_CHAT', payload: { host: location.hostname, title: document.title, payload: { summary: diag, items: items.slice(0, 200) } } }).catch(() => null);
+    emitSessionDiagnostics(items).catch(() => null);
     return {
       success: true,
       summary: { messages: messages.length, images: images.length, files: files.length },
@@ -2084,6 +2091,30 @@
     }
   }
 
+  async function emitSessionDiagnostics(items = []) {
+    if (!AEGIS_LOGGER?.buildSessionLog) return null;
+    try {
+      const exportedContent = (items || []).slice(0, 120).map((i) => i?.content || '').join('\n').slice(0, 5000);
+      const sessionLog = await AEGIS_LOGGER.buildSessionLog({
+        nodesDetected: (items || []).length,
+        securityBlocks: SECURITY_GUARD?.metrics?.securityBlocks || 0,
+        exportedContent,
+        visualElementsCount: (items || []).length
+      });
+      sendRuntime({ action: 'LOG_ERROR', message: 'AEGIS Session Log', details: JSON.stringify(sessionLog) }).catch(() => null);
+      return sessionLog;
+    } catch (error) {
+      console.warn('[LOGGER] failed to emit session diagnostics', error?.message || error);
+      return null;
+    }
+  }
+
+  function detectAllFileLinks() {
+    if (!window.DataProcessor) return [];
+    const processor = new window.DataProcessor();
+    return processor.detectAllFileReferences(document.body);
+  }
+
   async function runImageExtractionDiagnostic() {
     if (!window.DataProcessor) return { success: false, error: 'DataProcessor unavailable' };
     const processor = new window.DataProcessor();
@@ -2094,7 +2125,7 @@
   async function runFileDetectionDiagnostic() {
     if (!window.DataProcessor) return { success: false, error: 'DataProcessor unavailable' };
     const processor = new window.DataProcessor();
-    const files = processor.detectAllFileReferences(document.body);
+    const files = detectAllFileLinks();
     return { success: true, count: files.length, files };
   }
 
