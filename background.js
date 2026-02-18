@@ -27,7 +27,7 @@
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
-// background.js - State & Log Manager v0.12.7
+// background.js - State & Log Manager v0.12.8
 
 console.log('[LOCAL-ONLY] AI engine network disabled; offline models only.');
 const nativeBackgroundFetch = globalThis.fetch?.bind(globalThis);
@@ -60,6 +60,40 @@ async function mediaFetchProxy(payload = {}) {
   } catch (e) {
     return { success: false, error: e.message || 'media_fetch_failed' };
   }
+}
+
+
+
+function buildPrometheusMhtml(messages = [], title = 'Prometheus Export') {
+  const safe = (text = '') => String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+
+  const body = (messages || []).map((m) => {
+    const imgs = (m.images || []).filter((src) => /^data:image\//i.test(String(src || '')))
+      .map((src) => `<img src="${src}" alt="embedded" style="max-width:100%;height:auto;display:block;margin-top:8px;"/>`).join('');
+    return `<section style="border:1px solid #e5e7eb;padding:12px;margin-bottom:10px;border-radius:8px;"><div style="font-weight:700;margin-bottom:8px;">${safe(m.role || 'UNKNOWN')}</div><div>${safe(m.content || '').replace(/\n/g, '<br>')}</div>${imgs}</section>`;
+  }).join('');
+
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${safe(title)}</title></head><body style="font-family:Arial,sans-serif;padding:16px;"><h1>${safe(title)}</h1>${body}</body></html>`;
+  const boundary = `----=_Prometheus_${Date.now()}`;
+  return [
+    'MIME-Version: 1.0',
+    `Content-Type: multipart/related; boundary="${boundary}"; type="text/html"`,
+    '',
+    `--${boundary}`,
+    'Content-Type: text/html; charset="utf-8"',
+    'Content-Transfer-Encoding: 8bit',
+    'Content-Location: file:///index.html',
+    '',
+    html,
+    '',
+    `--${boundary}--`,
+    ''
+  ].join('\r\n');
 }
 
 function patchLocalOnlyNetworkGuards() {
@@ -340,6 +374,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       case 'DOWNLOAD_MHTML_ARTIFACT': {
         downloadMhtmlArtifact(message.payload || {}).then(sendResponse);
+        return true;
+      }
+
+      case 'RUN_PROMETHEUS_EXPORT': {
+        routeToTabAction(tabId, 'extract_prometheus_visual', message.payload || {}, async (res) => {
+          if (!res?.success) {
+            sendResponse({ success: false, error: res?.error || 'prometheus_extract_failed' });
+            return;
+          }
+          const mhtml = buildPrometheusMhtml(res.messages || [], message.payload?.title || 'Prometheus Export');
+          const download = await downloadMhtmlArtifact({
+            fileName: message.payload?.fileName || `prometheus_export_${new Date().toISOString().slice(0, 10)}.mhtml`,
+            content: mhtml
+          });
+          sendResponse({ success: !!download?.success, extraction: res, download });
+        });
         return true;
       }
 

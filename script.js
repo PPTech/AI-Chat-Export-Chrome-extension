@@ -2,7 +2,7 @@
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
-// script.js - Main Controller v0.12.7
+// script.js - Main Controller v0.12.8
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
@@ -197,8 +197,7 @@ document.addEventListener('DOMContentLoaded', () => {
           ...(m.contentBlocks || []).map((b) => String(b.text || '')),
           ...(m.attachments || []).map((a) => a.kind === 'image' ? `[[IMG:${a.sourceUrl || ''}]]` : `[[FILE:${a.sourceUrl || ''}|${a.displayName || 'File'}]]`)
         ].filter(Boolean);
-        return { role: m.role, content: parts.join('
-'), order: idx, attachments: m.attachments || [] };
+        return { role: m.role, content: parts.join('\n'), order: idx, attachments: m.attachments || [] };
       }),
       diagnostics: buildDiagnosticsBundle(dataset, "LocalAgent")
     };

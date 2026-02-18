@@ -2,7 +2,7 @@
 # Code generated with support from CODEX and CODEX CLI.
 # Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 
-# Technical Algorithms (v0.10.26)
+# Technical Algorithms (v0.12.8)
 
 ## 0) Local Agent Core (Air-Gapped)
 
@@ -90,6 +90,21 @@
     - static markdown render fallback,
   - attachments (images/files) with blob-to-base64 conversion for images.
 - Fails gracefully per-turn: logs warning and continues.
+
+
+### A8. Prometheus Visual Inference (Gemini + AI Studio)
+- `queryDeepPrometheus(root, selector)` recursively traverses open shadow roots and aggregates selector hits to avoid Shadow DOM blindness in AI Studio.
+- `predictRolePrometheus(element)` applies geometry + iconography:
+  - Right-aligned block (`left > 40% viewport`) => `USER`.
+  - Left-aligned block with Gemini icon/sparkle hint => `MODEL`.
+  - Else => `UNKNOWN`.
+- Text extraction strategy:
+  1. CodeMirror line joins (`.cm-line`) with explicit `\n` preservation.
+  2. Prose fallback (`p/div/span`) with structural line joins.
+- Image freezing strategy:
+  - Convert discovered image URLs to data URLs at extraction time via local fetch + FileReader.
+- Fail-loud fallback:
+  - If no visual turns are detected, run `fallbackTextDensityScan()` over large text blocks to prevent empty-success exports.
 
 ## B) Export Algorithms (`script.js`)
 

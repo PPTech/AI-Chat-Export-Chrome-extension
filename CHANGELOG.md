@@ -4,6 +4,12 @@
 
 # Changelog
 
+## 0.12.8 - Prometheus Visual Inference Rescue Layer
+- Added Prometheus visual extraction path in `content.js` (`extract_prometheus_visual`) with recursive shadow traversal, geometry/icon role inference, CodeMirror-aware text extraction, Base64 image freezing, and text-density fallback.
+- Added background orchestration route `RUN_PROMETHEUS_EXPORT` to request tab extraction, generate MHTML, and trigger deterministic local download.
+- Added dedicated runtime modules `mhtml_generator.js` and `popup.js` and wired popup page loading in `index.html`.
+- Added Prometheus integration contracts in `tests/integration/prometheus_runtime_contract.test.mjs`.
+
 ## 0.12.7 - Injection/Extraction Hardening + English-Only Source Policy
 - Added wildcard ChatGPT host coverage (`*.chatgpt.com`) to manifest host permissions, content script matches, and web-accessible resource matches.
 - Upgraded `content_miner/extract.mjs` with a `v4` selector tier, resilient text extraction fallback (`innerText` -> `textContent`), and stronger role inference using subtree metadata hints.

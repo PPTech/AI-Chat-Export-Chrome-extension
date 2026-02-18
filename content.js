@@ -27,7 +27,7 @@
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
-// content.js - Platform Engine Orchestrator v0.12.7
+// content.js - Platform Engine Orchestrator v0.12.8
 
 (() => {
   if (window.hasRunContent) return;
@@ -2164,6 +2164,111 @@
     return runLocalAgentExtract({ ...options, mode: 'agentic' });
   }
 
+
+  function queryDeepPrometheus(root, selector) {
+    if (!root || !selector) return [];
+    const out = [];
+    const seen = new Set();
+    const pushAll = (ctx) => {
+      if (!ctx?.querySelectorAll) return;
+      for (const node of Array.from(ctx.querySelectorAll(selector))) {
+        if (seen.has(node)) continue;
+        seen.add(node);
+        out.push(node);
+      }
+    };
+
+    pushAll(root);
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      if (node?.shadowRoot) {
+        pushAll(node.shadowRoot);
+      }
+    }
+    return out;
+  }
+
+  function predictRolePrometheus(element) {
+    const rect = element.getBoundingClientRect();
+    const right = rect.left > (window.innerWidth * 0.4);
+    if (right) return 'USER';
+    const hasModelIcon = queryDeepPrometheus(element, 'svg, img[alt*="Gemini" i], [aria-label*="Gemini" i]').length > 0;
+    if (!right && hasModelIcon) return 'MODEL';
+    return 'UNKNOWN';
+  }
+
+  function fallbackTextDensityScan() {
+    const candidates = Array.from(document.querySelectorAll('main div, main article, [role="main"] div'))
+      .map((el) => ({ el, len: (el.textContent || '').trim().length }))
+      .filter((x) => x.len > 60)
+      .sort((a, b) => b.len - a.len)
+      .slice(0, 12);
+    return candidates.map((entry, index) => ({
+      role: index % 2 === 0 ? 'MODEL' : 'USER',
+      content: (entry.el.textContent || '').replace(/\s+/g, ' ').trim(),
+      images: []
+    }));
+  }
+
+  async function toDataUrlPrometheus(url) {
+    if (!url || /^data:/i.test(url)) return String(url || '');
+    try {
+      const response = await fetch(url, { credentials: 'include' });
+      if (!response.ok) return '';
+      const blob = await response.blob();
+      return await new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onloadend = () => resolve(String(fr.result || ''));
+        fr.onerror = () => reject(fr.error || new Error('read_failed'));
+        fr.readAsDataURL(blob);
+      });
+    } catch {
+      return '';
+    }
+  }
+
+  async function extractPrometheusVisual() {
+    const turnSelectors = [
+      'main [data-test-id*="user" i]',
+      'main [data-test-id*="model" i]',
+      'main article',
+      'ms-chat-turn',
+      '[data-turn-id]'
+    ];
+
+    let turns = [];
+    for (const selector of turnSelectors) {
+      turns = queryDeepPrometheus(document, selector).filter((el) => (el.textContent || '').trim().length > 0);
+      if (turns.length > 0) break;
+    }
+
+    const messages = [];
+    for (const turn of turns.slice(0, 400)) {
+      const role = predictRolePrometheus(turn);
+      const cmLines = queryDeepPrometheus(turn, '.cm-content .cm-line, .cm-line').map((n) => (n.textContent || '').trimEnd()).filter(Boolean);
+      const proseLines = queryDeepPrometheus(turn, 'p,div,span').map((n) => (n.textContent || '').trim()).filter(Boolean);
+      const content = (cmLines.length ? cmLines : proseLines).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+      if (!content) continue;
+      const imageNodes = queryDeepPrometheus(turn, 'img[src]');
+      const images = [];
+      for (const img of imageNodes.slice(0, 6)) {
+        const src = img.currentSrc || img.getAttribute('src') || '';
+        const dataUrl = await toDataUrlPrometheus(src);
+        if (dataUrl) images.push(dataUrl);
+      }
+      messages.push({ role, content, images });
+    }
+
+    const finalMessages = messages.length > 0 ? messages : fallbackTextDensityScan();
+    return {
+      success: true,
+      source: location.hostname,
+      fallback_used: messages.length === 0,
+      messages: finalMessages
+    };
+  }
+
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'ping_content') {
       sendResponse({ injected: true, href: location.href, domain: location.hostname });
@@ -2204,6 +2309,10 @@
     }
     if (request.action === 'extract_local_agent') {
       runLocalAgentExtract(request.options || {}).then(sendResponse);
+      return true;
+    }
+    if (request.action === 'extract_prometheus_visual') {
+      extractPrometheusVisual().then(sendResponse);
       return true;
     }
     if (request.action === 'extract_chat_agentic') {

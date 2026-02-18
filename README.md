@@ -1,6 +1,6 @@
 # 🚀 AI Chat Exporter Ultimate
 
-**Version**: 0.12.7  
+**Version**: 0.12.8  
 **License**: MIT (Ultimate Edition)  
 **Code Source**: Generated with support from CODEX and CODEX CLI.  
 **Owner / Management**: Dr. Babak Sorkhpour ([@Drbabakskr](https://x.com/Drbabakskr))  
@@ -31,13 +31,24 @@ The repository triage identified five primary bottlenecks that caused near-empty
 4. **Diagnostics explainability gap**: stage timings and selector evidence were not consistently carried in diagnostics.
 5. **Documentation drift**: version and audit docs did not reflect the current 0.12.x architecture, creating false confidence and hard-to-debug reports.
 
-### Implemented Remediation in 0.12.7
+### Implemented Remediation in 0.12.8
 
 - Added wildcard ChatGPT host coverage in `manifest.json` for host permissions, content script matching, and web-accessible resources.
 - Upgraded selector fallback to include conversation-turn data-testid/data-turn-id patterns and robust text extraction fallback (`innerText` → `textContent`).
 - Improved role inference using direct and subtree hints (`data-message-author-role`, `data-role`, `aria-label`, `data-testid`).
 - Extended diagnostics builder to support stage-level timing records and deterministic manifest timestamps when supplied.
 - Removed non-English comments from code headers to keep project files consistently English-only.
+
+
+## Prometheus Rescue Layer (Gemini + AI Studio)
+
+The 0.12.8 release adds a dedicated visual extraction rescue path for Gemini and Google AI Studio:
+
+- `extract_prometheus_visual` in `content.js` with recursive Shadow DOM traversal and role prediction by geometry/iconography.
+- Text extraction prioritizes CodeMirror lines and falls back to prose block aggregation.
+- Inline image URLs are frozen to Base64 data URLs at extraction time for true offline portability.
+- If visual heuristics return no turns, a text-density fallback scan emits best-effort conversation blocks instead of silent empty success.
+- `RUN_PROMETHEUS_EXPORT` in `background.js` builds and downloads Word-compatible MHTML in one action.
 
 ## 🛠 Features
 
