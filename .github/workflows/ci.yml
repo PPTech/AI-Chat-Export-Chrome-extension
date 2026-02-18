@@ -12,4 +12,5 @@ jobs:
           node-version: 22
       - run: npm ci
       - run: npm run verify:local-assets
+      - run: npm run verify:release
       - run: npm test

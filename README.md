@@ -368,3 +368,9 @@ This prevents image token corruption and ensures valid `<img>` tags are emitted 
 - Community usage is governed by AGPLv3 (`LICENSE`).
 - Commercial/proprietary deployment requires separate commercial licensing as documented in `LEGAL_NOTICE.md`.
 - Reusable legal source header template is provided in `COPYRIGHT_HEADER.js`.
+
+## Audit-Driven Improvements (v0.11.4)
+- Version synchronization enforced across runtime metadata files.
+- CI now validates release consistency and required CDN host permissions.
+- Diagnostic logs redact long tokens and URLs to reduce accidental sensitive retention.
+- Optional host permission request is triggered before heavy asset extraction flows.

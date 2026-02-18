@@ -120,3 +120,12 @@
 - Added `COPYRIGHT_HEADER.js` template for AGPLv3 + commercial-license exception notice.
 - Added `LEGAL_NOTICE.md` with dual-license and IP warning language.
 - Applied legal header block to `content.js`, `background.js`, `smart_vision.js`, and `export_core.js` while preserving project ownership headers.
+
+## 0.11.4 - Audit-Driven Hardening & Release Consistency
+- Added CDN host permissions/optional permissions for modern chat asset domains and updated extension CSP for local WASM-capable runtime (`wasm-unsafe-eval`) while keeping `connect-src 'self'`.
+- Added popup-side optional permission request flow before extraction/export asset resolution.
+- Added release consistency gate (`scripts/verify_release_consistency.cjs`) and CI enforcement.
+- Synchronized versions across `manifest.json`, `VERSION.json`, and `metadata.json`.
+- Added redaction in background logs to reduce sensitive URL/token leakage in diagnostic entries.
+- Added regression tests for release consistency and host-permission coverage.
+- Incorporated lessons-learned documentation from deep review feedback.

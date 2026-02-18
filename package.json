@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "gherkin:generate": "node scripts/generate_gherkin_from_code.cjs",
     "test": "node --test tests/unit/*.test.mjs tests/integration/*.test.mjs",
-    "verify:local-assets": "node scripts/verify_local_assets.cjs"
+    "verify:local-assets": "node scripts/verify_local_assets.cjs",
+    "verify:release": "node scripts/verify_release_consistency.cjs"
   },
   "dependencies": {},
   "devDependencies": {

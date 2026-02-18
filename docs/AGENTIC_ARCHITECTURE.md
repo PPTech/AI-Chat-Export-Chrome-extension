@@ -33,3 +33,10 @@
 - If model assets missing: run `npm run verify:local-assets`.
 - If extraction regresses: compare `diagnostics.learning.recipeBefore/After`.
 - If assets fail: inspect `diagnostics.assets.*Failures` and host allowlist.
+
+
+## Lessons Learned from Deep Review (v0.11.4)
+- Packaging placeholders as “model runtime” erodes trust; release gates now explicitly verify local assets and version consistency.
+- Agentic claims must be tied to default execution paths, not optional buttons.
+- Security controls must be enforced at both code allowlist and manifest permission layers.
+- Diagnostics should preserve engineering utility while redacting sensitive values.

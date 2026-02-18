@@ -40,3 +40,6 @@
 - v0.11.2: Continuity docs and PTS mapping added for faster onboarding and safer release governance.
 
 - v0.11.3: Legal compliance layer added (AGPLv3 license file, copyright header template, legal notice, and header injection on key runtime files).
+
+- v0.11.4: Implemented critique-driven remediation: release version sync, CDN permission hardening, optional permission request flow, and log redaction safeguards.
+- v0.11.4: Added explicit regression tests and CI gate for release consistency to prevent drift between manifest/version metadata.

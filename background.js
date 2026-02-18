@@ -26,7 +26,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// background.js - State & Log Manager v0.11.2
+// background.js - State & Log Manager v0.11.4
 
 console.log('[LOCAL-ONLY] AI engine network disabled; offline models only.');
 
@@ -175,12 +175,21 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   }
 });
 
+function redactDetails(details) {
+  if (details == null) return '';
+  const txt = typeof details === 'string' ? details : JSON.stringify(details);
+  return String(txt)
+    .replace(/https?:\/\/[^\s"']+/g, '[REDACTED_URL]')
+    .replace(/[A-Za-z0-9_\-]{24,}/g, '[REDACTED_TOKEN]')
+    .slice(0, 1200);
+}
+
 function log(level, message, details = null) {
   const entry = {
     timestamp: new Date().toISOString(),
     level,
     message,
-    details: details ? JSON.stringify(details) : ''
+    details: redactDetails(details)
   };
   appLogs.push(entry);
   if (appLogs.length > 1000) appLogs.shift();

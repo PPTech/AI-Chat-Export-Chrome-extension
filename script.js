@@ -153,6 +153,7 @@ let gestureProofToken = "";
 
   async function requestExtraction() {
     const options = { convertImages: checkImages.checked, rawHtml: checkRawHtml.checked, highlightCode: checkCode.checked, extractFiles: checkExportFiles.checked };
+    await ensureAssetPermissions();
     setAnalyzeProgress(25, 'Agent self-test');
 
     const runLegacyFallback = () => {
@@ -374,6 +375,7 @@ let gestureProofToken = "";
     const packMode = !!checkPhotoZip.checked;
     const date = new Date().toISOString().slice(0, 10);
     const platformPrefix = (currentChatData.platform || 'Export').replace(/[^a-zA-Z0-9]/g, '');
+    await ensureAssetPermissions();
     const processor = window.DataProcessor ? new window.DataProcessor() : null;
     const textCorpus = (currentChatData.messages || []).map((m) => m.content || '').join('\n');
 
@@ -416,6 +418,7 @@ let gestureProofToken = "";
     if (!currentChatData) return;
     if (!checkExportFiles.checked) return showInfo('Files Export Disabled', 'Enable "Extract and ZIP Chat Files" in Settings first.');
 
+    await ensureAssetPermissions();
     const processor = window.DataProcessor ? new window.DataProcessor() : null;
     const textCorpus = (currentChatData.messages || []).map((m) => m.content || '').join('\n');
     const metaFiles = processor ? processor.extractDownloadMetadata(textCorpus) : [];
@@ -1154,6 +1157,27 @@ let gestureProofToken = "";
   async function resolveAssetViaBroker(url) {
     const token = ensureGestureProofToken();
     return sendToActiveTab({ action: "fetch_blob_page", url, gestureToken: token });
+  }
+
+
+  async function ensureAssetPermissions() {
+    const origins = [
+      'https://*.oaiusercontent.com/*',
+      'https://*.oaistatic.com/*',
+      'https://*.openai.com/*',
+      'https://*.googleusercontent.com/*',
+      'https://*.gstatic.com/*',
+      'https://*.anthropic.com/*'
+    ];
+    return new Promise((resolve) => {
+      chrome.permissions.contains({ origins }, (has) => {
+        if (has) {
+          resolve(true);
+          return;
+        }
+        chrome.permissions.request({ origins }, (granted) => resolve(!!granted));
+      });
+    });
   }
 
   async function fetchFileBlob(url) {

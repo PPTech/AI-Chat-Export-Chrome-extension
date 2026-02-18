@@ -207,3 +207,17 @@
 
 ### F2. Header Enforcement on Critical Runtime Files
 - Legal header prepended to content/background/vision/export modules to ensure runtime-distributed sources carry licensing terms.
+
+
+## v0.11.4 Audit-Remediation Algorithms
+### G1. Release Consistency Gate
+- Validate semantic version parity across `manifest.json`, `VERSION.json`, and `metadata.json`.
+- Fail CI when drift is detected.
+
+### G2. Permission Hardening Flow
+- Preflight optional host permission request before asset-heavy extraction/export operations.
+- Keep baseline permissions minimal and elevate only via user-granted optional origins.
+
+### G3. Sensitive Log Redaction
+- Background logger redacts URL-like strings and long token-like fragments before persistence.
+- Bounded log detail length limits accidental high-entropy data retention.
