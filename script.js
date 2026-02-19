@@ -6,6 +6,8 @@
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
   let activeTabId = null;
+  let lastDiagnostics = null; // stores last export's flight recorder data
+  let lastAssetFailures = []; // stores last export's asset resolution failures
 
   const btnExport = document.getElementById('btn-export-main');
   const btnLoadFull = document.getElementById('btn-load-full');
@@ -203,19 +205,67 @@ document.addEventListener('DOMContentLoaded', () => {
     el.textContent = `Detected: ${c.messages} messages • ${c.photos} photos • ${c.files} files • ${c.others} others`;
   }
 
+  // --- Inline flight recorder (popup context, no ES modules) ---
+  function createPopupFlightRecorder(runId, platform) {
+    const entries = [];
+    const startedAt = new Date().toISOString();
+    let counter = 0;
+    function makeId() { counter++; return `${runId}-${counter}-${Date.now()}`; }
+    function record(opts = {}) {
+      const entry = {
+        ts: Date.now(), lvl: opts.lvl || 'INFO', event: opts.event || 'unknown',
+        runId, eventId: makeId(), parentEventId: opts.parentEventId || null,
+        tabScope: activeTabId != null ? `tab:${activeTabId}` : 'global',
+        platform: platform || 'unknown', module: opts.module || 'popup',
+        phase: opts.phase || 'unknown', result: opts.result || null,
+        details: opts.details || null,
+      };
+      entries.push(entry);
+      if (entries.length > 2000) entries.shift();
+      return entry;
+    }
+    function finish(counts = {}, failures = []) {
+      const endedAt = new Date().toISOString();
+      return {
+        schema_version: 'diagnostics.v4',
+        run: { run_id: runId, started_at_utc: startedAt, ended_at_utc: endedAt, tool_version: '0.10.10', platform },
+        tabScope: activeTabId != null ? `tab:${activeTabId}` : 'global',
+        entries, counts, failures,
+        scorecard: buildDiagScorecard(counts),
+      };
+    }
+    function toJsonl() { return entries.map((e) => JSON.stringify(e)).join('\n'); }
+    return { record, finish, toJsonl, entries };
+  }
+
+  function buildDiagScorecard(counts) {
+    const total = counts.messages_total || 0;
+    const unknown = counts.messages_unknown || 0;
+    const ratio = total > 0 ? unknown / total : 0;
+    return { messages_total: total, unknown_role_ratio: Number(ratio.toFixed(4)), unknown_role_pass: ratio <= 0.05, has_messages: total > 0 };
+  }
+
   btnExport.onclick = async () => {
     const formats = Array.from(document.querySelectorAll('.format-item.selected')).map((i) => i.dataset.ext);
     if (!formats.length || !currentChatData) return;
     btnExport.disabled = true;
     setProcessingProgress(2);
 
+    const debug = isDebugMode();
+    const runId = `export-${Date.now()}`;
+    const recorder = debug ? createPopupFlightRecorder(runId, currentChatData.platform) : null;
+    lastAssetFailures = [];
+
     try {
+      if (recorder) recorder.record({ event: 'export.start', module: 'popup', phase: 'assemble', result: 'ok', details: { formats, messageCount: (currentChatData.messages || []).length } });
+
       const date = new Date().toISOString().slice(0, 10);
       const baseName = `${(currentChatData.platform || 'Export').replace(/[^a-zA-Z0-9]/g, '')}_${date}`;
       const files = [];
 
       for (let i = 0; i < formats.length; i += 1) {
         const fmt = formats[i];
+        if (recorder) recorder.record({ event: `export.format.${fmt}`, module: 'export', phase: 'assemble', result: 'ok' });
         const generated = await generateContent(fmt, currentChatData);
         const fileExt = generated.ext || fmt;
         files.push({ name: `${baseName}.${fileExt}`, content: generated.content, mime: generated.mime });
@@ -232,8 +282,22 @@ document.addEventListener('DOMContentLoaded', () => {
         setProcessingProgress(98, 'Downloading');
         downloadBlob(zip, `${baseName}.zip`);
       }
+
+      if (recorder) {
+        recorder.record({ event: 'export.end', module: 'popup', phase: 'finalize', result: 'ok', details: { fileCount: files.length } });
+        const msgs = currentChatData.messages || [];
+        const unknownCount = msgs.filter((m) => /unknown/i.test(m.role)).length;
+        lastDiagnostics = recorder.finish({ messages_total: msgs.length, messages_unknown: unknownCount }, lastAssetFailures);
+      }
+
       setProcessingProgress(100, 'Done');
     } catch (error) {
+      if (recorder) recorder.record({ lvl: 'ERROR', event: 'export.error', module: 'popup', phase: 'finalize', result: 'fail', details: { error: (error?.message || '').slice(0, 200) } });
+      if (recorder) {
+        const msgs = currentChatData?.messages || [];
+        const unknownCount = msgs.filter((m) => /unknown/i.test(m.role)).length;
+        lastDiagnostics = recorder.finish({ messages_total: msgs.length, messages_unknown: unknownCount }, lastAssetFailures);
+      }
       showError(error);
     } finally {
       updateExportBtn();
@@ -784,6 +848,44 @@ document.addEventListener('DOMContentLoaded', () => {
     checkDebugMode.addEventListener('change', () => {
       if (btnDownloadDiagnostics) btnDownloadDiagnostics.style.display = checkDebugMode.checked ? 'block' : 'none';
     });
+  }
+
+  // Forensic bundle export: 3-file download (diagnostics.jsonl, run_summary.json, asset_failures.json)
+  if (btnDownloadDiagnostics) {
+    btnDownloadDiagnostics.onclick = async () => {
+      if (!lastDiagnostics) {
+        showInfo('No Diagnostics', 'Run an export with Debug Mode enabled first.');
+        return;
+      }
+      const date = new Date().toISOString().slice(0, 10);
+      const prefix = `${(currentChatData?.platform || 'Export').replace(/[^a-zA-Z0-9]/g, '')}_${date}`;
+
+      // File 1: diagnostics.jsonl (all flight recorder entries)
+      const jsonlContent = lastDiagnostics.entries.map((e) => JSON.stringify(e)).join('\n');
+      // File 2: run_summary.json (run metadata + scorecard)
+      const runSummary = {
+        schema_version: lastDiagnostics.schema_version,
+        run: lastDiagnostics.run,
+        tabScope: lastDiagnostics.tabScope,
+        counts: lastDiagnostics.counts,
+        scorecard: lastDiagnostics.scorecard,
+        entryCount: lastDiagnostics.entries.length,
+      };
+      // File 3: asset_failures.json
+      const assetFailures = {
+        failures: lastDiagnostics.failures || [],
+        failureCount: (lastDiagnostics.failures || []).length,
+      };
+
+      const bundleFiles = [
+        { name: `${prefix}.diagnostics.jsonl`, content: jsonlContent, mime: 'application/x-ndjson' },
+        { name: `${prefix}.run_summary.json`, content: JSON.stringify(runSummary, null, 2), mime: 'application/json' },
+        { name: `${prefix}.asset_failures.json`, content: JSON.stringify(assetFailures, null, 2), mime: 'application/json' },
+      ];
+
+      const zip = await createRobustZip(bundleFiles);
+      downloadBlob(zip, `${prefix}_diagnostics_bundle.zip`);
+    };
   }
 
   safeInit();
