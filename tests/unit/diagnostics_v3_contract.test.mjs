@@ -1,19 +1,20 @@
 // License: MIT
-// Contract test for diagnostics v3 flight recorder.
+// Contract test for diagnostics v4 flight recorder (full JSONL schema).
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createFlightRecorder, redactUrl, scanForLeaks, redactSecrets } from '../../lib/diagnostics.mjs';
 
-test('flight recorder emits required fields', () => {
-  const recorder = createFlightRecorder({ runId: 'test-run-1', tabId: 42, toolVersion: '0.11.0' });
-  recorder.record('extraction_start', { strategy: 'ssot' });
-  recorder.record('extraction_end', { messages_found: 10 });
+test('flight recorder emits required v4 fields', () => {
+  const recorder = createFlightRecorder({ runId: 'test-run-1', tabId: 42, toolVersion: '0.11.0', platform: 'chatgpt' });
+  recorder.record({ lvl: 'INFO', event: 'extraction.start', module: 'content', phase: 'detect', result: 'ok', details: { strategy: 'ssot' } });
+  recorder.record({ lvl: 'INFO', event: 'extraction.end', module: 'content', phase: 'collect', result: 'ok', details: { messages_found: 10 } });
 
   const diag = recorder.finish({ messages_total: 10, messages_unknown: 0 });
 
-  assert.equal(diag.schema_version, 'diagnostics.v3');
+  assert.equal(diag.schema_version, 'diagnostics.v4');
   assert.equal(diag.run.run_id, 'test-run-1');
+  assert.equal(diag.run.platform, 'chatgpt');
   assert.ok(diag.run.started_at_utc);
   assert.ok(diag.run.ended_at_utc);
   assert.equal(diag.tabScope, 'tab:42');
@@ -23,14 +24,53 @@ test('flight recorder emits required fields', () => {
   assert.equal(diag.scorecard.unknown_role_pass, true);
 });
 
-test('flight recorder entry contains runId and tabScope', () => {
-  const recorder = createFlightRecorder({ runId: 'r2', tabId: 7 });
-  const entry = recorder.record('test_stage', { detail: 'info' });
+test('flight recorder entry has full JSONL schema fields', () => {
+  const recorder = createFlightRecorder({ runId: 'r2', tabId: 7, platform: 'gemini' });
+  const entry = recorder.record({ lvl: 'DEBUG', event: 'test.stage', module: 'export', phase: 'assemble', result: 'ok', details: { detail: 'info' } });
 
   assert.equal(entry.runId, 'r2');
   assert.equal(entry.tabScope, 'tab:7');
-  assert.equal(entry.stage, 'test_stage');
+  assert.equal(entry.lvl, 'DEBUG');
+  assert.equal(entry.event, 'test.stage');
+  assert.ok(entry.eventId, 'must have eventId');
+  assert.equal(entry.parentEventId, null);
+  assert.equal(entry.platform, 'gemini');
+  assert.equal(entry.module, 'export');
+  assert.equal(entry.phase, 'assemble');
+  assert.equal(entry.result, 'ok');
   assert.ok(entry.ts);
+});
+
+test('record with parentEventId links events', () => {
+  const recorder = createFlightRecorder({ runId: 'r3', tabId: 1 });
+  const parent = recorder.record({ event: 'parent.event', module: 'content' });
+  const child = recorder.record({ event: 'child.event', parentEventId: parent.eventId, module: 'content' });
+
+  assert.equal(child.parentEventId, parent.eventId);
+});
+
+test('toJsonl produces one JSON object per line', () => {
+  const recorder = createFlightRecorder({ runId: 'r4', tabId: 1 });
+  recorder.record({ event: 'a' });
+  recorder.record({ event: 'b' });
+
+  const jsonl = recorder.toJsonl();
+  const lines = jsonl.split('\n');
+  assert.equal(lines.length, 2);
+  // Each line must be valid JSON
+  for (const line of lines) {
+    const parsed = JSON.parse(line);
+    assert.ok(parsed.eventId);
+    assert.ok(parsed.runId);
+  }
+});
+
+test('ring buffer limits entries to MAX_RING_BUFFER', () => {
+  const recorder = createFlightRecorder({ runId: 'r5', tabId: 1 });
+  for (let i = 0; i < 2100; i++) {
+    recorder.record({ event: `event.${i}` });
+  }
+  assert.ok(recorder.entries.length <= 2000);
 });
 
 test('redactUrl produces scheme/host/pathHash (no full URL)', () => {
@@ -39,7 +79,6 @@ test('redactUrl produces scheme/host/pathHash (no full URL)', () => {
   assert.equal(result.host, 'chatgpt.com');
   assert.ok(result.pathHash);
   assert.equal(result.pathHash.length, 12);
-  // Must not contain the full path
   assert.ok(!result.pathHash.includes('abc-123'));
 });
 
@@ -83,28 +122,30 @@ test('redactSecrets removes Bearer tokens from text', () => {
 });
 
 test('scorecard fails when unknown_role_ratio > 5%', () => {
-  const recorder = createFlightRecorder({ runId: 'r3', tabId: 1 });
+  const recorder = createFlightRecorder({ runId: 'r6', tabId: 1 });
   const diag = recorder.finish({ messages_total: 10, messages_unknown: 2 });
   assert.equal(diag.scorecard.unknown_role_pass, false);
   assert.equal(diag.scorecard.unknown_role_ratio, 0.2);
 });
 
 test('scorecard passes when unknown_role_ratio <= 5%', () => {
-  const recorder = createFlightRecorder({ runId: 'r4', tabId: 1 });
+  const recorder = createFlightRecorder({ runId: 'r7', tabId: 1 });
   const diag = recorder.finish({ messages_total: 100, messages_unknown: 5 });
   assert.equal(diag.scorecard.unknown_role_pass, true);
 });
 
-test('recordUrlEvent emits redacted URL info', () => {
-  const recorder = createFlightRecorder({ runId: 'r5', tabId: 1 });
-  recorder.recordUrlEvent('fetch_attempt', 'https://cdn.example.com/path/to/file.png', { status: 'blocked' });
+test('recordUrlEvent emits redacted URL info with module/phase', () => {
+  const recorder = createFlightRecorder({ runId: 'r8', tabId: 1 });
+  recorder.recordUrlEvent('asset.fetch', 'https://cdn.example.com/path/to/file.png', { result: 'deny', module: 'assets', phase: 'resolve' });
 
   const entry = recorder.entries[0];
-  assert.equal(entry.scheme, 'https:');
-  assert.equal(entry.host, 'cdn.example.com');
-  assert.ok(entry.pathHash);
-  assert.equal(entry.status, 'blocked');
-  // Full URL must not appear in the entry
+  assert.equal(entry.module, 'assets');
+  assert.equal(entry.phase, 'resolve');
+  assert.equal(entry.result, 'deny');
+  assert.ok(entry.details.scheme);
+  assert.ok(entry.details.host);
+  assert.ok(entry.details.pathHash);
+  // Full URL must not appear
   const serialized = JSON.stringify(entry);
   assert.ok(!serialized.includes('/path/to/file.png'));
 });
