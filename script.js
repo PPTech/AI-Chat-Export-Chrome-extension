@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// script.js - Main Controller v0.10.10
+// script.js - Main Controller v0.10.11
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
@@ -228,7 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const endedAt = new Date().toISOString();
       return {
         schema_version: 'diagnostics.v4',
-        run: { run_id: runId, started_at_utc: startedAt, ended_at_utc: endedAt, tool_version: '0.10.10', platform },
+        run: { run_id: runId, started_at_utc: startedAt, ended_at_utc: endedAt, tool_version: '0.10.11', platform },
         tabScope: activeTabId != null ? `tab:${activeTabId}` : 'global',
         entries, counts, failures,
         scorecard: buildDiagScorecard(counts),
