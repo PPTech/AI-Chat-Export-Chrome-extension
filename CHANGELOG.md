@@ -1,4 +1,10 @@
 
+## 0.12.20 - 2026-02-19
+- Fixed in-app version mismatch by synchronizing popup/header/about and runtime diagnostics version markers with the canonical release version.
+- Reworked history hydration to async retry-based top-scroll loading with completion stabilization and explicit hydration diagnostics output.
+- Expanded artifact recovery selectors for attachment image wrappers and file-card patterns in modern chat UIs.
+- Added attachment classification hardening for external link handling and diagnostics_v2 logging coverage.
+
 ## 0.12.19 - 2026-02-18
 - Added ChatGPT full-history extraction path using backend conversation mapping (`/backend-api/conversation/<id>`) and canonical turn reconstruction.
 - Added reusable ChatGPT backend helpers (`chatgpt_backend_utils.js`) for conversation id detection, node ordering, deep URL extraction, and attachment URL classification.

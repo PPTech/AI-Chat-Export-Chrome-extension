@@ -27,7 +27,7 @@
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
-// content.js - Platform Engine Orchestrator v0.12.19
+// content.js - Platform Engine Orchestrator v0.12.20
 
 (() => {
   if (window.hasRunContent) return;
@@ -1460,27 +1460,49 @@
     return scored[0].el;
   }
 
-  function loadFullHistory(sendResponse) {
+  async function loadFullHistory() {
     const scroller = findScrollContainer();
-    let stable = 0;
-    let prev = scroller.scrollHeight;
-    let rounds = 0;
-    const timer = setInterval(() => {
-      rounds += 1;
-      scroller.scrollTop = 0;
-      if (Math.abs(scroller.scrollHeight - prev) < 24) stable += 1;
-      else stable = 0;
-      prev = scroller.scrollHeight;
-      if (stable >= 10 || rounds >= 45) {
-        clearInterval(timer);
-        try {
-          scroller.scrollTop = scroller.scrollHeight;
-        } catch {
-          // no-op
-        }
-        setTimeout(() => sendResponse({ status: 'done', rounds, stable }), 420);
+    if (!scroller) return { status: 'failed', reason: 'missing_scroller' };
+
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    let previousHeight = scroller.scrollHeight;
+    let retries = 0;
+    let iterations = 0;
+
+    window.__AEGIS_HYDRATION_ACTIVE__ = true;
+    console.log('[HYDRATE] Starting history hydration');
+
+    while (retries < 3) {
+      iterations += 1;
+      try {
+        scroller.scrollTop = 0;
+      } catch {
+        // no-op
       }
-    }, 1200);
+      await sleep(1500);
+      const newHeight = scroller.scrollHeight;
+      if (newHeight > previousHeight + 16) {
+        const delta = newHeight - previousHeight;
+        console.log(`[HYDRATE] Loaded chunk, delta=${delta}px`);
+        previousHeight = newHeight;
+        retries = 0;
+      } else {
+        retries += 1;
+        console.log('[HYDRATE] No new history chunk detected, retrying check');
+      }
+      if (iterations >= 60) break;
+    }
+
+    try {
+      scroller.scrollTop = scroller.scrollHeight;
+    } catch {
+      // no-op
+    }
+    await sleep(500);
+    window.__AEGIS_HYDRATION_ACTIVE__ = false;
+    console.log('[HYDRATE] Full history hydration completed');
+
+    return { status: 'done', retries, iterations, finalHeight: scroller.scrollHeight };
   }
 
   function discoverClaudeStructure() {
@@ -2583,7 +2605,7 @@
       return true;
     }
     if (request.action === 'scroll_chat') {
-      loadFullHistory(sendResponse);
+      loadFullHistory().then(sendResponse).catch((error) => sendResponse({ status: 'failed', error: error?.message || 'hydration_failed' }));
       return true;
     }
     if (request.action === 'analyze_dom') {

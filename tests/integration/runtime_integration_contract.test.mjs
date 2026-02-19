@@ -59,3 +59,13 @@ test('Attachment classifier ignores script bundle resources', () => {
   assert.match(assetSource, /react\(\?:-dom\)\?\\.production\\.min\\.js/);
   assert.match(assetSource, /\\.\(\?:m\?js\|cjs\|map\)/);
 });
+
+
+test('Hydration engine uses async retry loop and no timer-only shallow scroll', () => {
+  const contentSource = fs.readFileSync('content.js', 'utf8');
+  assert.match(contentSource, /async function loadFullHistory\(\)/);
+  assert.match(contentSource, /while \(retries < 3\)/);
+  assert.match(contentSource, /await sleep\(1500\)/);
+  assert.match(contentSource, /window\.__AEGIS_HYDRATION_ACTIVE__ = true/);
+  assert.doesNotMatch(contentSource, /setInterval\(\(\) => \{/);
+});

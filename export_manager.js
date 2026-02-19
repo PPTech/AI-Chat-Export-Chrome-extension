@@ -2,7 +2,7 @@
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
-// export_manager.js - ExportManager v0.12.19
+// export_manager.js - ExportManager v0.12.20
 
 (() => {
   if (window.ExportManager) return;

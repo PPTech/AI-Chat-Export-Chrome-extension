@@ -1,6 +1,6 @@
 # 🚀 AI Chat Exporter Ultimate
 
-**Version**: 0.12.18  
+**Version**: 0.12.20  
 **License**: MIT (Ultimate Edition)  
 **Code Source**: Generated with support from CODEX and CODEX CLI.  
 **Owner / Management**: Dr. Babak Sorkhpour ([@Drbabakskr](https://x.com/Drbabakskr))  
@@ -83,12 +83,12 @@ This prevents false WARN messages when the header shows media but the strict ite
 *   **Security Hardened**: Input sanitization prevents XSS in exported files.
 *   **Local Agent (Air-Gapped Ready)**: Visual + semantic local extraction with self-test and recipe fallback; no external AI API required.
 
-## ChatGPT Full Conversation Extraction (v0.12.19)
+## ChatGPT Full Conversation Extraction (v0.12.20)
 - Primary mode for ChatGPT now uses conversation backend mapping (`/backend-api/conversation/<id>`) to reconstruct the full current path instead of relying only on visible DOM nodes.
 - Export data for ChatGPT is built from canonical turns and attachment candidates extracted from message content/metadata.
 - DOM extraction remains as fallback when backend mapping is unavailable.
 
-## 🔐 Network Policy split (v0.12.18)
+## 🔐 Network Policy split (v0.12.20)
 
 - **AI_INFERENCE**: network denied (local models only).
 - **ASSET_FETCH**: allowed only with gesture-proof token + allowlisted host + permissions.

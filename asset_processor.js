@@ -2,7 +2,7 @@
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 // Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
-// asset_processor.js - DataProcessor v0.12.19
+// asset_processor.js - DataProcessor v0.12.20
 
 (() => {
   if (window.DataProcessor) return;
@@ -112,6 +112,16 @@
         if (/icon|avatar/i.test(src) && w < minSize && h < minSize) return;
         if (w && h && (w < minSize || h < minSize)) return;
         images.push({ src, alt: img.alt || '', width: w, height: h, source: 'img' });
+      });
+
+      const attachmentImageNodes = messageElement.querySelectorAll('[data-testid*="image" i] img, [data-testid*="attachment" i] img, [class*="attachment" i] img, [class*="file" i] img');
+      attachmentImageNodes.forEach((img) => {
+        const src = this.sanitizeUrl(img.currentSrc || img.src || img.getAttribute('src') || img.getAttribute('data-src') || '');
+        if (!src) return;
+        const w = img.naturalWidth || img.width || 0;
+        const h = img.naturalHeight || img.height || 0;
+        if (w && h && (w < minSize || h < minSize)) return;
+        images.push({ src, alt: img.alt || '', width: w, height: h, source: 'attachment_img' });
       });
 
       const all = messageElement.querySelectorAll('*');
