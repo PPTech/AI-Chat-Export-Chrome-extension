@@ -60,8 +60,8 @@
     .message-count { font-size: 32px; font-weight: 800; margin: 4px 0; }
     .message-label { font-size: 11px; color: var(--text-sub); }
 
-    .action-row { display: flex; gap: 8px; margin-top: 12px; }
-    .action-btn { flex: 1; padding: 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-color); color: var(--text-main); font-size: 11px; font-weight: 600; cursor: pointer; }
+    .action-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .action-btn { flex: 1 1 auto; min-width: 70px; padding: 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-color); color: var(--text-main); font-size: 11px; font-weight: 600; cursor: pointer; }
     .action-btn:hover { border-color: var(--primary); color: var(--primary); }
 
     .section-title { font-size: 11px; font-weight: 700; color: var(--text-sub); text-transform: uppercase; margin-bottom: 6px; }
@@ -114,7 +114,6 @@
     .footer-links { font-size: 9px; color: var(--text-sub); display: flex; justify-content: center; gap: 12px; margin-top: 4px; }
     .footer-links span { cursor: pointer; text-decoration: underline; }
   </style>
-<link rel="stylesheet" href="/index.css">
 </head>
 <body class="light">
   <div class="container">

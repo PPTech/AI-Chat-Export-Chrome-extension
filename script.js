@@ -755,7 +755,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-save-settings').onclick = () => {
     const settings = collectSettings();
     saveSettingsToStorage(settings);
-    exportSettingsCfg(settings);
     closeModal(settingsModal);
   };
   document.getElementById('btn-open-about').onclick = () => openModal(aboutModal);
