@@ -497,6 +497,11 @@
         if (!src) continue;
         if (isUser && alt.includes('avatar')) continue;
         if (alt.includes('avatar') || cls.includes('avatar') || cls.includes('icon')) continue;
+        // Block external favicon services and tiny UI icons
+        if (/favicon|google\.com\/s2\/favicons|gstatic\.com.*icon/i.test(src)) continue;
+        const w = img.naturalWidth || img.width || 0;
+        const h = img.naturalHeight || img.height || 0;
+        if (w > 0 && h > 0 && w <= 24 && h <= 24) continue; // skip tiny icons
 
         const normalized = options.convertImages ? await this.urlToBase64(src) : src;
         if (normalized) tokens.push(`[[IMG:${normalized}]]`);

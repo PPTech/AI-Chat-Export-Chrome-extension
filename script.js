@@ -520,27 +520,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (fmt === 'doc') {
-      // Truthful output: MHTML format (not a fake .doc)
+      // Word-compatible HTML document (.doc extension opens in Word/LibreOffice)
+      // No fake MHTML wrapper — this is honest HTML that Word renders correctly.
       const style = 'body{font-family:Arial,sans-serif;max-width:900px;margin:auto;padding:20px;line-height:1.6}img{max-width:100%;height:auto}.msg{margin-bottom:20px;padding:12px;border:1px solid #e5e7eb;border-radius:8px}.role{font-weight:700;margin-bottom:8px}';
       const body = msgs.map((m) => {
         return `<div class="msg"><div class="role">${escapeHtml(m.role)}</div><div>${renderRichMessageHtml(m.content)}</div></div>`;
       }).join('');
       const html = `<!DOCTYPE html><html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>${style}</style></head><body><h1>${escapeHtml(title)}</h1>${body}</body></html>`;
-      const boundary = `----=_NextPart_Export_${Date.now()}`;
-      const mhtml = [
-        'MIME-Version: 1.0',
-        `Content-Type: multipart/related; boundary="${boundary}"; type="text/html"`,
-        '',
-        `--${boundary}`,
-        'Content-Type: text/html; charset="utf-8"',
-        'Content-Transfer-Encoding: 8bit',
-        'Content-Location: file:///export.html',
-        '',
-        html,
-        '',
-        `--${boundary}--`
-      ].join('\r\n');
-      return { content: mhtml, mime: 'multipart/related', ext: 'mhtml' };
+      return { content: html, mime: 'application/msword', ext: 'doc' };
     }
 
     if (fmt === 'html') {
@@ -597,7 +584,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function addWrappedText(text, fontSize = FONT_SIZE, bold = false) {
-      const lines = wrapLineSmart(stripImageTokens(text), MAX_CHARS);
+      // Strip HTML tags and image tokens before PDF rendering
+      const clean = stripHtmlTags(stripImageTokens(text));
+      const lines = wrapLineSmart(clean, MAX_CHARS);
       for (const line of lines) {
         addLine(line, fontSize, bold);
       }
@@ -606,6 +595,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // Title
     addLine(title || 'Chat Export', TITLE_SIZE, true);
     cursorY -= 10;
+
+    // Check for non-Latin content and add warning
+    const allText = messages.map((m) => m.content || '').join(' ');
+    if (hasNonLatinChars(allText)) {
+      addLine('Note: Non-Latin characters (Arabic, Persian, CJK, etc.) are shown as "?" in this PDF.', 8, false);
+      addLine('For full Unicode support, use HTML or Markdown export instead.', 8, false);
+      cursorY -= 6;
+    }
 
     // Messages
     for (const m of messages) {
@@ -621,12 +618,41 @@ document.addEventListener('DOMContentLoaded', () => {
     return assemblePdfDocument(pages, PAGE_W, PAGE_H);
   }
 
+  /**
+   * Strip HTML tags from text, preserving content.
+   */
+  function stripHtmlTags(text) {
+    return String(text || '')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/(p|div|li|h[1-6])>/gi, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#0?39;/g, "'")
+      .replace(/&nbsp;/g, ' ');
+  }
+
+  /**
+   * Detect if text contains non-Latin characters (Arabic, Persian, CJK, etc.)
+   */
+  function hasNonLatinChars(text) {
+    // eslint-disable-next-line no-control-regex
+    return /[^\x00-\x7F\xA0-\xFF]/.test(text);
+  }
+
   function pdfEscapeText(text) {
     return String(text || '')
+      // Strip any HTML tags that leaked through
+      .replace(/<[^>]+>/g, '')
       .replace(/\\/g, '\\\\')
       .replace(/\(/g, '\\(')
       .replace(/\)/g, '\\)')
-      .replace(/[\x00-\x1F\x7F-\xFF]/g, '');
+      // Keep printable ASCII + common Latin-1 supplement (accented chars)
+      // Replace non-Latin chars with ? (Type1 Helvetica limitation)
+      .replace(/[^\x20-\x7E\xA0-\xFF\\()]/g, '?')
+      .trim();
   }
 
   function assemblePdfDocument(pages, pageW, pageH) {
