@@ -207,7 +207,8 @@ document.addEventListener('DOMContentLoaded', () => {
       for (let i = 0; i < formats.length; i += 1) {
         const fmt = formats[i];
         const generated = await generateContent(fmt, currentChatData);
-        files.push({ name: `${baseName}.${fmt}`, content: generated.content, mime: generated.mime });
+        const fileExt = generated.ext || fmt;
+        files.push({ name: `${baseName}.${fileExt}`, content: generated.content, mime: generated.mime });
         const percent = 10 + ((i + 1) / Math.max(1, formats.length)) * 75;
         setProcessingProgress(percent, `Processing ${fmt.toUpperCase()}`);
       }
@@ -436,111 +437,198 @@ document.addEventListener('DOMContentLoaded', () => {
   async function generateContent(fmt, data) {
     const msgs = data.messages || [];
     const title = data.title || 'Export';
+    const platform = data.platform || 'Unknown';
+    const exportDate = new Date().toISOString();
 
     if (fmt === 'pdf') {
-      const pdf = await buildRichPdf(title, msgs);
+      const pdf = buildTextPdf(title, msgs);
       return { content: pdf, mime: 'application/pdf' };
     }
 
-    if (fmt === 'doc' || fmt === 'html') {
+    if (fmt === 'doc') {
+      // Truthful output: MHTML format (not a fake .doc)
+      const style = 'body{font-family:Arial,sans-serif;max-width:900px;margin:auto;padding:20px;line-height:1.6}img{max-width:100%;height:auto}.msg{margin-bottom:20px;padding:12px;border:1px solid #e5e7eb;border-radius:8px}.role{font-weight:700;margin-bottom:8px}';
+      const body = msgs.map((m) => {
+        return `<div class="msg"><div class="role">${escapeHtml(m.role)}</div><div>${renderRichMessageHtml(m.content)}</div></div>`;
+      }).join('');
+      const html = `<!DOCTYPE html><html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>${style}</style></head><body><h1>${escapeHtml(title)}</h1>${body}</body></html>`;
+      const boundary = `----=_NextPart_Export_${Date.now()}`;
+      const mhtml = [
+        'MIME-Version: 1.0',
+        `Content-Type: multipart/related; boundary="${boundary}"; type="text/html"`,
+        '',
+        `--${boundary}`,
+        'Content-Type: text/html; charset="utf-8"',
+        'Content-Transfer-Encoding: 8bit',
+        'Content-Location: file:///export.html',
+        '',
+        html,
+        '',
+        `--${boundary}--`
+      ].join('\r\n');
+      return { content: mhtml, mime: 'multipart/related', ext: 'mhtml' };
+    }
+
+    if (fmt === 'html') {
       const style = 'body{font-family:Arial,sans-serif;max-width:900px;margin:auto;padding:20px;line-height:1.6}img{max-width:100%;height:auto}.msg{margin-bottom:20px;padding:12px;border:1px solid #e5e7eb;border-radius:8px}.role{font-weight:700;margin-bottom:8px}';
       const body = msgs.map((m) => {
         return `<div class="msg"><div class="role">${escapeHtml(m.role)}</div><div>${renderRichMessageHtml(m.content)}</div></div>`;
       }).join('');
       const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><style>${style}</style></head><body><h1>${escapeHtml(title)}</h1>${body}</body></html>`;
-      return { content: html, mime: fmt === 'doc' ? 'application/msword' : 'text/html' };
+      return { content: html, mime: 'text/html' };
     }
 
-    if (fmt === 'json') return { content: JSON.stringify({ platform: data.platform, messages: msgs.map((m) => ({ role: m.role, content: stripImageTokens(m.content).replace(/\n/g, ' ') })) }, null, 2), mime: 'application/json' };
-    if (fmt === 'csv') return { content: '\uFEFFRole,Content\n' + msgs.map((m) => `"${m.role.replace(/"/g, '""')}","${stripImageTokens(m.content).replace(/"/g, '""').replace(/\n/g, ' ')}"`).join('\n'), mime: 'text/csv' };
-    if (fmt === 'sql') return { content: 'CREATE TABLE chat_export (id SERIAL PRIMARY KEY, role VARCHAR(50), content TEXT);\n' + msgs.map((m) => `INSERT INTO chat_export (role, content) VALUES ('${m.role.replace(/'/g, "''")}', '${stripImageTokens(m.content).replace(/'/g, "''")}');`).join('\n'), mime: 'application/sql' };
-    if (fmt === 'txt') return { content: msgs.map((m) => `[${m.role}] ${stripImageTokens(m.content).replace(/\n/g, ' ')}`).join('\n'), mime: 'text/plain' };
+    if (fmt === 'json') return { content: JSON.stringify({ schema: 'chat-export.v1', platform, exported_at: exportDate, title, messages: msgs.map((m, i) => ({ index: i, role: m.role, content: stripImageTokens(m.content) })) }, null, 2), mime: 'application/json' };
+    if (fmt === 'csv') {
+      const header = '\uFEFFIndex,Role,Platform,Content,ExportedAt';
+      const rows = msgs.map((m, i) => `${i},"${m.role.replace(/"/g, '""')}","${platform.replace(/"/g, '""')}","${stripImageTokens(m.content).replace(/"/g, '""').replace(/\n/g, ' ')}","${exportDate}"`);
+      return { content: `${header}\n${rows.join('\n')}`, mime: 'text/csv' };
+    }
+    if (fmt === 'sql') return { content: `CREATE TABLE chat_export (id SERIAL PRIMARY KEY, msg_index INT, role VARCHAR(50), platform VARCHAR(100), content TEXT, exported_at TIMESTAMP);\n` + msgs.map((m, i) => `INSERT INTO chat_export (msg_index, role, platform, content, exported_at) VALUES (${i}, '${m.role.replace(/'/g, "''")}', '${platform.replace(/'/g, "''")}', '${stripImageTokens(m.content).replace(/'/g, "''")}', '${exportDate}');`).join('\n'), mime: 'application/sql' };
+    if (fmt === 'txt') return { content: msgs.map((m, i) => `[${i}] [${m.role}] ${stripImageTokens(m.content)}`).join('\n\n'), mime: 'text/plain' };
     return { content: msgs.map((m) => `### ${m.role}\n${m.content}\n`).join('\n'), mime: 'text/markdown' };
   }
 
-  async function buildRichPdf(title, messages) {
-    const pageWidth = 1240;
-    const pageHeight = 1754;
-    const margin = 56;
-    const pageDataUrls = [];
+  function buildTextPdf(title, messages) {
+    // Text-based PDF with extractable text (not raster/canvas).
+    // Uses PDF text objects (BT/ET) with Helvetica (Type1, built-in).
+    const PAGE_W = 595; // A4 points
+    const PAGE_H = 842;
+    const MARGIN = 50;
+    const FONT_SIZE = 10;
+    const TITLE_SIZE = 16;
+    const ROLE_SIZE = 12;
+    const LINE_HEIGHT = 14;
+    const MAX_CHARS = 85;
 
-    let canvas = document.createElement('canvas');
-    canvas.width = pageWidth;
-    canvas.height = pageHeight;
-    let ctx = canvas.getContext('2d');
-    let y = margin;
+    const pages = []; // each page = array of text operations
+    let currentPage = [];
+    let cursorY = PAGE_H - MARGIN;
 
-    const resetPage = () => {
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(0, 0, pageWidth, pageHeight);
-      ctx.textBaseline = 'top';
-      y = margin;
-    };
-
-    const pushPage = () => {
-      pageDataUrls.push(canvas.toDataURL('image/jpeg', 0.92));
-      canvas = document.createElement('canvas');
-      canvas.width = pageWidth;
-      canvas.height = pageHeight;
-      ctx = canvas.getContext('2d');
-      resetPage();
-    };
-
-    const ensureSpace = (need) => {
-      if (y + need <= pageHeight - margin) return;
-      pushPage();
-    };
-
-    const drawTextBlock = (text, font, color = '#111111', lineHeight = 28, maxChars = 90) => {
-    const normalized = String(text || '').replace(/\r/g, '').trim();
-      if (!normalized) return;
-      const profile = detectScriptProfile(normalized);
-      const lines = wrapLineSmart(normalized, maxChars, profile);
-      ctx.font = font;
-      ctx.fillStyle = color;
-      ctx.direction = profile.isRtl ? 'rtl' : 'ltr';
-      ctx.textAlign = profile.isRtl ? 'right' : 'left';
-      const x = profile.isRtl ? pageWidth - margin : margin;
-      for (const line of lines) {
-        ensureSpace(lineHeight + 4);
-        ctx.fillText(line, x, y);
-        y += lineHeight;
+    function ensureSpace(needed) {
+      if (cursorY - needed < MARGIN) {
+        pages.push(currentPage);
+        currentPage = [];
+        cursorY = PAGE_H - MARGIN;
       }
-      ctx.direction = 'ltr';
-      ctx.textAlign = 'left';
-    };
-
-    resetPage();
-    drawTextBlock(title, 'bold 36px "Noto Sans", "Segoe UI", "Arial Unicode MS", Tahoma, Arial, sans-serif', '#111827', 40, 64);
-    y += 8;
-
-    for (const message of messages) {
-      drawTextBlock(`[${message.role}]`, 'bold 26px "Noto Sans", "Segoe UI", Arial, sans-serif', '#1D4ED8', 32, 64);
-      const parts = splitContentAndImages(message.content);
-      for (const part of parts) {
-        if (part.type === 'text') {
-          drawTextBlock(stripImageTokens(part.value), '24px "Noto Sans Arabic", "Noto Sans CJK SC", "Noto Sans", "Arial Unicode MS", Tahoma, Arial, sans-serif', '#111111', 30, 88);
-          continue;
-        }
-        const src = normalizeImageSrc((part.value || '').trim());
-        if (!src) continue;
-        const img = await loadImage(src);
-        if (!img) continue;
-        const maxW = pageWidth - margin * 2;
-        const w = Math.min(maxW, img.width || maxW);
-        const h = Math.max(36, Math.round((img.height / Math.max(img.width, 1)) * w));
-        ensureSpace(h + 14);
-        ctx.drawImage(img, margin, y, w, h);
-        y += h + 12;
-      }
-      y += 10;
     }
 
-    pageDataUrls.push(canvas.toDataURL('image/jpeg', 0.92));
-    return buildPdfFromJpegPages(pageDataUrls, pageWidth, pageHeight);
+    function addLine(text, fontSize = FONT_SIZE, bold = false) {
+      const cleaned = pdfEscapeText(text);
+      if (!cleaned) return;
+      ensureSpace(fontSize + 4);
+      const fontName = bold ? '/F2' : '/F1';
+      currentPage.push(`BT ${fontName} ${fontSize} Tf ${MARGIN} ${cursorY.toFixed(1)} Td (${cleaned}) Tj ET`);
+      cursorY -= (fontSize + 4);
+    }
+
+    function addWrappedText(text, fontSize = FONT_SIZE, bold = false) {
+      const lines = wrapLineSmart(stripImageTokens(text), MAX_CHARS);
+      for (const line of lines) {
+        addLine(line, fontSize, bold);
+      }
+    }
+
+    // Title
+    addLine(title || 'Chat Export', TITLE_SIZE, true);
+    cursorY -= 10;
+
+    // Messages
+    for (const m of messages) {
+      ensureSpace(LINE_HEIGHT * 3);
+      addLine(`[${m.role}]`, ROLE_SIZE, true);
+      addWrappedText(m.content || '', FONT_SIZE, false);
+      cursorY -= 8;
+    }
+
+    pages.push(currentPage);
+
+    // Build PDF structure
+    return assemblePdfDocument(pages, PAGE_W, PAGE_H);
   }
 
-  function detectScriptProfile(text) {
+  function pdfEscapeText(text) {
+    return String(text || '')
+      .replace(/\\/g, '\\\\')
+      .replace(/\(/g, '\\(')
+      .replace(/\)/g, '\\)')
+      .replace(/[\x00-\x1F\x7F-\xFF]/g, '');
+  }
+
+  function assemblePdfDocument(pages, pageW, pageH) {
+    const objects = [];
+
+    // obj 1: catalog
+    objects[1] = `1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n`;
+
+    // obj 3: Helvetica font
+    objects[3] = `3 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj\n`;
+
+    // obj 4: Helvetica-Bold font
+    objects[4] = `4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>\nendobj\n`;
+
+    // Resources shared by all pages
+    const resourcesRef = '<< /Font << /F1 3 0 R /F2 4 0 R >> >>';
+
+    // Build page objects
+    const kids = [];
+    let objNum = 5;
+    const pageDefs = [];
+
+    for (const ops of pages) {
+      const pageObj = objNum;
+      const contentObj = objNum + 1;
+      kids.push(`${pageObj} 0 R`);
+
+      const stream = ops.join('\n');
+      objects[contentObj] = `${contentObj} 0 obj\n<< /Length ${stream.length} >>\nstream\n${stream}\nendstream\nendobj\n`;
+      objects[pageObj] = `${pageObj} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageW} ${pageH}] /Resources ${resourcesRef} /Contents ${contentObj} 0 R >>\nendobj\n`;
+
+      pageDefs.push({ pageObj, contentObj });
+      objNum += 2;
+    }
+
+    // obj 2: pages
+    objects[2] = `2 0 obj\n<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${pages.length} >>\nendobj\n`;
+
+    // Serialize
+    const enc = new TextEncoder();
+    const header = enc.encode('%PDF-1.4\n');
+    const chunks = [header];
+    const offsets = [0];
+    let offset = header.length;
+
+    for (let i = 1; i < objects.length; i++) {
+      if (!objects[i]) continue;
+      offsets[i] = offset;
+      const bytes = enc.encode(objects[i]);
+      chunks.push(bytes);
+      offset += bytes.length;
+    }
+
+    const maxObj = objects.length - 1;
+    const xrefStart = offset;
+    let xref = `xref\n0 ${maxObj + 1}\n0000000000 65535 f \n`;
+    for (let i = 1; i <= maxObj; i++) {
+      xref += `${String(offsets[i] || 0).padStart(10, '0')} 00000 n \n`;
+    }
+    chunks.push(enc.encode(xref));
+    chunks.push(enc.encode(`trailer\n<< /Size ${maxObj + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`));
+
+    // Concatenate
+    const total = chunks.reduce((a, b) => a + b.length, 0);
+    const out = new Uint8Array(total);
+    let pos = 0;
+    for (const chunk of chunks) {
+      out.set(chunk, pos);
+      pos += chunk.length;
+    }
+    return out;
+  }
+
+  // detectScriptProfile removed: was only used by the old canvas PDF builder.
+
+  function _unused_detectScriptProfile(text) {
     const s = String(text || '');
     const isRtl = /[֐-ࣿיִ-﷽ﹰ-ﻼ]/.test(s);
     const isCjk = /[぀-ヿ㐀-鿿豈-﫿]/.test(s);
@@ -561,93 +649,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (lastIndex < (content || '').length) parts.push({ type: 'text', value: (content || '').slice(lastIndex) });
     if (!parts.length) parts.push({ type: 'text', value: content || '' });
     return parts;
-  }
-
-  function loadImage(src) {
-    return new Promise((resolve) => {
-      const img = new Image();
-      if (!src.startsWith('data:')) img.crossOrigin = 'anonymous';
-      img.onload = () => resolve(img);
-      img.onerror = () => resolve(null);
-      img.src = src;
-    });
-  }
-
-  function buildPdfFromJpegPages(pageDataUrls, widthPx, heightPx) {
-    const pointsPerPx = 0.75;
-    const w = Math.round(widthPx * pointsPerPx);
-    const h = Math.round(heightPx * pointsPerPx);
-    const objects = [];
-
-    objects[1] = toBytes('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n');
-    const kids = [];
-    let objNum = 3;
-    const pageDefs = [];
-    for (let i = 0; i < pageDataUrls.length; i += 1) {
-      const pageObj = objNum;
-      const contentObj = objNum + 1;
-      const imageObj = objNum + 2;
-      kids.push(`${pageObj} 0 R`);
-      pageDefs.push({ pageObj, contentObj, imageObj, dataUrl: pageDataUrls[i], index: i + 1 });
-      objNum += 3;
-    }
-    objects[2] = toBytes(`2 0 obj\n<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${pageDefs.length} >>\nendobj\n`);
-
-    for (const def of pageDefs) {
-      const stream = `q\n${w} 0 0 ${h} 0 0 cm\n/Im${def.index} Do\nQ`;
-      const jpgBytes = dataUrlToBytes(def.dataUrl);
-      objects[def.pageObj] = toBytes(
-        `${def.pageObj} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${w} ${h}] /Resources << /XObject << /Im${def.index} ${def.imageObj} 0 R >> >> /Contents ${def.contentObj} 0 R >>\nendobj\n`
-      );
-      objects[def.contentObj] = toBytes(`${def.contentObj} 0 obj\n<< /Length ${stream.length} >>\nstream\n${stream}\nendstream\nendobj\n`);
-      objects[def.imageObj] = concatBytes(
-        toBytes(`${def.imageObj} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${widthPx} /Height ${heightPx} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpgBytes.length} >>\nstream\n`),
-        jpgBytes,
-        toBytes('\nendstream\nendobj\n')
-      );
-    }
-
-    const valid = [];
-    for (let i = 1; i < objects.length; i += 1) if (objects[i]) valid.push({ idx: i, bytes: objects[i] });
-
-    const chunks = [toBytes('%PDF-1.4\n')];
-    const offsets = [0];
-    let offset = chunks[0].length;
-    for (const obj of valid) {
-      offsets[obj.idx] = offset;
-      chunks.push(obj.bytes);
-      offset += obj.bytes.length;
-    }
-    const xrefStart = offset;
-    const maxObj = valid[valid.length - 1].idx;
-    let xref = `xref\n0 ${maxObj + 1}\n0000000000 65535 f \n`;
-    for (let i = 1; i <= maxObj; i += 1) xref += `${String(offsets[i] || 0).padStart(10, '0')} 00000 n \n`;
-    chunks.push(toBytes(xref));
-    chunks.push(toBytes(`trailer\n<< /Size ${maxObj + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`));
-    return concatBytes(...chunks);
-  }
-
-  function toBytes(text) {
-    return new TextEncoder().encode(text);
-  }
-
-  function dataUrlToBytes(dataUrl) {
-    const b64 = (dataUrl.split(',')[1] || '');
-    const raw = atob(b64);
-    const out = new Uint8Array(raw.length);
-    for (let i = 0; i < raw.length; i += 1) out[i] = raw.charCodeAt(i);
-    return out;
-  }
-
-  function concatBytes(...arrays) {
-    const total = arrays.reduce((a, b) => a + b.length, 0);
-    const out = new Uint8Array(total);
-    let pos = 0;
-    for (const arr of arrays) {
-      out.set(arr, pos);
-      pos += arr.length;
-    }
-    return out;
   }
 
   function wrapLineSmart(text, max, profile = { isRtl: false, isCjk: false }) {
