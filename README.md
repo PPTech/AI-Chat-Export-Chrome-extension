@@ -1,7 +1,7 @@
 # 🚀 AI Chat Exporter Ultimate
 
-**Version**: 0.10.10  
-**License**: MIT (Ultimate Edition)  
+**Version**: 0.10.10Beta  
+**License**: MIT (The most safe version Edition)  
 **Code Source**: Generated with support from CODEX and CODEX CLI.  
 **Owner / Management**: Dr. Babak Sorkhpour ([@Drbabakskr](https://x.com/Drbabakskr))  
 **Author**: Dr. Babak Sorkhpour with support from **Gemini 2.0 Flash (Google)**
