@@ -15,7 +15,8 @@
     "verify:model": "node scripts/verify_model_checksum.cjs",
     "verify:claims": "node scripts/verify_claims.cjs",
     "test:runtime": "node test_image_embed.js && node test_file_download.js && node test_integration.js",
-    "verify:gesture": "node scripts/verify_gesture_path.cjs"
+    "verify:gesture": "node scripts/verify_gesture_path.cjs",
+    "verify:scoped": "node scripts/verify_scoped_changes.cjs"
   },
   "dependencies": {},
   "devDependencies": {

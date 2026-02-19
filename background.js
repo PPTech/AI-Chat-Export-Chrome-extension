@@ -75,6 +75,19 @@ async function buildDiagnosticsV2(payload = {}) {
   };
 }
 
+
+function withEventScope(details, tabId) {
+  const base = details && typeof details === 'object' ? { ...details } : {};
+  const resolvedTabId = tabId ?? base.tabId ?? null;
+  if (resolvedTabId != null) {
+    base.tabId = resolvedTabId;
+    base.tabScope = base.tabScope || 'tab';
+  } else if (!base.tabScope) {
+    base.tabScope = 'global';
+  }
+  return base;
+}
+
 async function logPolicyDenial(details = {}) {
   const diag = await buildDiagnosticsV2({
     url: details.url || '',
@@ -385,10 +398,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ success: true });
         break;
 
-      case 'LOG_EVENT':
-        log(String(message.level || 'INFO').toUpperCase(), message.message || 'event', message.details || null);
+      case 'LOG_EVENT': {
+        const scopedDetails = withEventScope(message.details, tabId);
+        log(String(message.level || 'INFO').toUpperCase(), message.message || 'event', scopedDetails);
         sendResponse({ success: true });
         break;
+      }
 
       case 'GET_LOGS':
         sendResponse(appLogs);

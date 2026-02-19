@@ -1,5 +1,8 @@
 
 ## 0.12.20 - 2026-02-19
+- Stabilization sprint: blocked placeholder `example.com` attachment URLs in production fetch paths and emit `placeholder_url_detected` warnings for diagnostics.
+- Added diagnostics scope normalization so LOG_EVENT entries always include `tabId` or `tabScope`.
+- Added CI scoped-change gate (`verify:scoped`) to prevent accidental UI churn outside `fix(ui):`/`feat(ui):` commits.
 - Fixed in-app version mismatch by synchronizing popup/header/about and runtime diagnostics version markers with the canonical release version.
 - Reworked history hydration to async retry-based top-scroll loading with completion stabilization and explicit hydration diagnostics output.
 - Expanded artifact recovery selectors for attachment image wrappers and file-card patterns in modern chat UIs.

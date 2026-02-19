@@ -56,7 +56,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (isDebugLoggingEnabled()) {
       const fn = level === 'ERROR' ? console.error : (level === 'WARN' ? console.warn : console.log);
       fn(`[ACTIVITY][${direction}] ${action}`, entry.payload || '');
-      chrome.runtime.sendMessage({ action: 'LOG_EVENT', level, message: `${direction}:${action}`, details: entry }, () => void chrome.runtime.lastError);
+      const withScope = { ...entry, tabId: activeTabId ?? null, tabScope: activeTabId ? 'tab' : 'global' };
+      chrome.runtime.sendMessage({ action: 'LOG_EVENT', level, message: `${direction}:${action}`, details: withScope, tabId: activeTabId ?? null }, () => void chrome.runtime.lastError);
     }
   }
 
@@ -546,7 +547,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const processor = window.DataProcessor ? new window.DataProcessor({ includeExternalLinks: !!checkExternalLinks?.checked }) : null;
     const textCorpus = (currentChatData.messages || []).map((m) => m.content || '').join('\n');
     const metaFiles = processor ? processor.extractDownloadMetadata(textCorpus) : [];
-    const legacyFiles = extractAllFileSources(currentChatData.messages, currentChatData.dataset).map((f) => ({ fileName: f.name, url: f.url, type: /^sandbox:/i.test(f.url) ? 'sandbox' : 'text_reference', needsResolution: /^sandbox:/i.test(f.url) }));
+    const legacyFiles = extractAllFileSources(currentChatData.messages, currentChatData.dataset, !!checkExternalLinks?.checked).map((f) => ({ fileName: f.name, url: f.url, type: /^sandbox:/i.test(f.url) ? 'sandbox' : 'text_reference', needsResolution: /^sandbox:/i.test(f.url) }));
     const filesFound = processor ? processor.deduplicateFiles([...legacyFiles, ...metaFiles]) : legacyFiles;
     await permPromise;
 
@@ -743,12 +744,40 @@ document.addEventListener('DOMContentLoaded', () => {
     }).join('');
   }
 
+
+  function isPlaceholderUrl(url = '') {
+    try {
+      const u = new URL(String(url || ''));
+      return u.hostname === 'example.com' || u.hostname.endsWith('.example.com');
+    } catch {
+      return false;
+    }
+  }
+
+  function warnPlaceholderUrl(url = '') {
+    const safeUrl = String(url || '');
+    console.warn('[ASSET][WARN] placeholder_url_detected', safeUrl);
+    logActivity('OUT', 'placeholder_url_detected', { host: (() => { try { return new URL(safeUrl).hostname; } catch { return 'unknown'; } })() }, 'WARN');
+  }
+
+  function classifyAttachmentCandidate(url, includeExternalLinks = false) {
+    const classifier = window.AttachmentClassifier;
+    if (!classifier?.classifyAttachmentUrl) return { accepted: true, reason: 'no_classifier' };
+    return classifier.classifyAttachmentUrl(url, { includeExternalLinks: !!includeExternalLinks });
+  }
+
   function extractAllImageSources(messages, dataset = null) {
     const set = new Set();
     const canonical = (dataset?.attachments || []).filter((a) => a.kind === 'image').map((a) => a?.resolved?.dataUri || a?.sourceUrl || '').filter(Boolean);
     canonical.forEach((src) => {
       const norm = normalizeImageSrc(src);
-      if (norm) set.add(norm);
+      if (!norm) return;
+      if (isPlaceholderUrl(norm)) {
+        warnPlaceholderUrl(norm);
+        return;
+      }
+      if (!classifyAttachmentCandidate(norm, false).accepted) return;
+      set.add(norm);
     });
 
     const tokenRegex = /\[\[IMG:([\s\S]*?)\]\]/g;
@@ -758,26 +787,37 @@ document.addEventListener('DOMContentLoaded', () => {
       let match;
       while ((match = tokenRegex.exec(m.content || '')) !== null) {
         const src = normalizeImageSrc((match[1] || '').trim());
-        if (src) set.add(src);
+        if (!src) continue;
+        if (isPlaceholderUrl(src)) { warnPlaceholderUrl(src); continue; }
+        if (!classifyAttachmentCandidate(src, false).accepted) continue;
+        set.add(src);
       }
       while ((match = mdRegex.exec(m.content || '')) !== null) {
         const src = normalizeImageSrc((match[1] || '').trim());
-        if (src) set.add(src);
+        if (!src) continue;
+        if (isPlaceholderUrl(src)) { warnPlaceholderUrl(src); continue; }
+        if (!classifyAttachmentCandidate(src, false).accepted) continue;
+        set.add(src);
       }
       while ((match = directImgRegex.exec(m.content || '')) !== null) {
         const src = normalizeImageSrc((match[0] || '').trim());
-        if (src) set.add(src);
+        if (!src) continue;
+        if (isPlaceholderUrl(src)) { warnPlaceholderUrl(src); continue; }
+        if (!classifyAttachmentCandidate(src, false).accepted) continue;
+        set.add(src);
       }
     }
     return Array.from(set);
   }
 
-  function extractAllFileSources(messages, dataset = null) {
+  function extractAllFileSources(messages, dataset = null, includeExternalLinks = false) {
     const files = [];
     (dataset?.attachments || []).filter((a) => a.kind === 'file').forEach((a) => {
       const url = String(a?.sourceUrl || '').trim();
       if (!url) return;
       const safeName = String(a?.fileNameSafe || a?.displayName || 'file.bin').replace(/[\/:*?"<>|]+/g, '_') || 'file.bin';
+      if (isPlaceholderUrl(url)) { warnPlaceholderUrl(url); return; }
+      if (!classifyAttachmentCandidate(url, includeExternalLinks).accepted) return;
       files.push({ url, name: safeName });
     });
 
@@ -792,21 +832,29 @@ document.addEventListener('DOMContentLoaded', () => {
         const fileName = (match[2] || 'file.bin').trim();
         if (!rawUrl) continue;
         const safeName = fileName.replace(/[\/:*?"<>|]+/g, '_') || 'file.bin';
+        if (isPlaceholderUrl(rawUrl)) { warnPlaceholderUrl(rawUrl); continue; }
+        if (!classifyAttachmentCandidate(rawUrl, includeExternalLinks).accepted) continue;
         files.push({ url: rawUrl, name: safeName });
       }
       while ((match = sandboxRegex.exec(m.content || '')) !== null) {
         const rawUrl = (match[0] || '').replace(/^sandbox:\/\//i, 'sandbox:/').trim();
         const fileName = decodeURIComponent(rawUrl.split('/').pop() || 'file.bin').replace(/[\/:*?"<>|]+/g, '_') || 'file.bin';
+        if (isPlaceholderUrl(rawUrl)) { warnPlaceholderUrl(rawUrl); continue; }
+        if (!classifyAttachmentCandidate(rawUrl, includeExternalLinks).accepted) continue;
         files.push({ url: rawUrl, name: fileName });
       }
       while ((match = markdownFileRegex.exec(m.content || '')) !== null) {
         const rawUrl = (match[1] || '').trim();
         const fileName = decodeURIComponent(rawUrl.split('/').pop() || 'file.bin').replace(/[\/:*?"<>|]+/g, '_') || 'file.bin';
+        if (isPlaceholderUrl(rawUrl)) { warnPlaceholderUrl(rawUrl); continue; }
+        if (!classifyAttachmentCandidate(rawUrl, includeExternalLinks).accepted) continue;
         files.push({ url: rawUrl, name: fileName });
       }
       while ((match = plainFileRegex.exec(m.content || '')) !== null) {
         const rawUrl = (match[0] || '').trim();
         const fileName = decodeURIComponent(rawUrl.split('/').pop() || 'file.bin').replace(/[\/:*?"<>|]+/g, '_') || 'file.bin';
+        if (isPlaceholderUrl(rawUrl)) { warnPlaceholderUrl(rawUrl); continue; }
+        if (!classifyAttachmentCandidate(rawUrl, includeExternalLinks).accepted) continue;
         files.push({ url: rawUrl, name: fileName });
       }
 
@@ -827,6 +875,10 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         if (!url) return '';
         const clean = sanitizeTokenUrl(url);
+        if (isPlaceholderUrl(clean)) {
+          warnPlaceholderUrl(clean);
+          return null;
+        }
         if (/^data:/i.test(clean)) return clean;
         const blob = await fetchFileBlob(clean);
         if (!blob) return clean;
@@ -1289,6 +1341,10 @@ document.addEventListener('DOMContentLoaded', () => {
       async fetchBlob(url) {
         if (!url) return null;
         const clean = sanitizeTokenUrl(url);
+        if (isPlaceholderUrl(clean)) {
+          warnPlaceholderUrl(clean);
+          return null;
+        }
         if (blobCache.has(clean)) return blobCache.get(clean);
         try {
           const blob = await fetchFileBlob(clean);
@@ -1413,6 +1469,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!url) return null;
     if (!activeTabId) return null;
     const clean = sanitizeTokenUrl(url);
+    if (isPlaceholderUrl(clean)) {
+      warnPlaceholderUrl(clean);
+      return null;
+    }
     if (/^data:/i.test(clean)) {
       const direct = dataUrlToBlob(clean);
       return direct;
