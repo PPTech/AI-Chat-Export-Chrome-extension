@@ -26,3 +26,5 @@ jobs:
         run: node --test tests/unit/*.test.mjs
       - name: Verify claims gate
         run: node scripts/verify_claims.mjs
+      - name: Compare exports quality gate
+        run: node scripts/compare_exports.cjs
