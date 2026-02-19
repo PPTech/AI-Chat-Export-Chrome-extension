@@ -21,6 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const checkZip = document.getElementById('check-zip');
   const checkPhotoZip = document.getElementById('check-photo-zip');
   const checkExportFiles = document.getElementById('check-export-files');
+  const checkAdvancedLinks = document.getElementById('check-advanced-links');
 
   const settingsModal = document.getElementById('settings-modal');
   const errorModal = document.getElementById('error-modal');
@@ -38,7 +39,8 @@ document.addEventListener('DOMContentLoaded', () => {
       rawHtml: false,
       zip: false,
       photoZip: true,
-      exportFiles: true
+      exportFiles: true,
+      advancedLinks: false
     };
   }
 
@@ -50,6 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
       zip: !!checkZip.checked,
       photoZip: !!checkPhotoZip.checked,
       exportFiles: !!checkExportFiles.checked,
+      advancedLinks: !!checkAdvancedLinks.checked,
       updatedAt: new Date().toISOString()
     };
   }
@@ -62,6 +65,7 @@ document.addEventListener('DOMContentLoaded', () => {
     checkZip.checked = !!s.zip;
     checkPhotoZip.checked = !!s.photoZip;
     checkExportFiles.checked = !!s.exportFiles;
+    checkAdvancedLinks.checked = !!s.advancedLinks;
   }
 
   function saveSettingsToStorage(settings) {
