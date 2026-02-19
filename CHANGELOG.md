@@ -1,8 +1,75 @@
+
+## 0.12.20 - 2026-02-19
+- Added diagnostics v3 flight recorder module with bounded ring buffer, run correlation IDs, and redaction-safe structured JSONL export.
+- Added safe UI key telemetry toggle (metadata-only, no raw key capture), diagnostics panel actions (download/copy/purge), and IPC-safe logging metadata.
+- Added `verify:no-secrets` gate and diagnostics v3 contract tests/BDD coverage.
+- Stabilization sprint: blocked placeholder `example.com` attachment URLs in production fetch paths and emit `placeholder_url_detected` warnings for diagnostics.
+- Added diagnostics scope normalization so LOG_EVENT entries always include `tabId` or `tabScope`.
+- Added CI scoped-change gate (`verify:scoped`) to prevent accidental UI churn outside `fix(ui):`/`feat(ui):` commits.
+- Fixed in-app version mismatch by synchronizing popup/header/about and runtime diagnostics version markers with the canonical release version.
+- Reworked history hydration to async retry-based top-scroll loading with completion stabilization and explicit hydration diagnostics output.
+- Expanded artifact recovery selectors for attachment image wrappers and file-card patterns in modern chat UIs.
+- Added attachment classification hardening for external link handling and diagnostics_v2 logging coverage.
+
+## 0.12.19 - 2026-02-18
+- Added ChatGPT full-history extraction path using backend conversation mapping (`/backend-api/conversation/<id>`) and canonical turn reconstruction.
+- Added reusable ChatGPT backend helpers (`chatgpt_backend_utils.js`) for conversation id detection, node ordering, deep URL extraction, and attachment URL classification.
+- Added content runtime action `extract_chatgpt_full` and backend-preferred extraction fallback in `extractChatData` for ChatGPT hosts.
+- Added mapping fixture and unit contracts to validate full-path reconstruction and script-asset ignore behavior.
+- Replaced debug overlay usage with debug logging controls in settings/options and background command ingress logging.
+
 # License: MIT
 # Code generated with support from CODEX and CODEX CLI.
 # Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 
 # Changelog
+
+## 0.12.18 - Gesture-Safe Permissions + Attachment Ignore Classifier + Claude UX Fix
+- Added direct gesture-path permission request helper in popup export handlers so permission prompts are initiated before first `await`.
+- Added `scripts/verify_gesture_path.cjs` and `npm run verify:gesture` to enforce the no-await-before-permission rule.
+- Added attachment ignore classifier rules in `asset_processor.js` to reject script/framework assets and non-download noise links (e.g., React bundles).
+- Improved Claude file-export error guidance for filename-only messages that do not include downloadable URLs.
+- Improved image token sanitization in Word/HTML rendering to prevent false `[Image skipped: unsupported scheme]` due to trailing token punctuation.
+- Added optional host permission coverage for `lh3.googleusercontent.com` and kept policy controls for asset broker path.
+
+
+## 0.12.13 - Claude Content Noise Guard + Selector Crash Hardening
+- Hardened Claude content node filtering to avoid invalid `closest()` selector usage at runtime.
+- Added safe selector probing (`safeClosestAny`) and dedicated UI chrome filtering (`isClaudeUiChromeNode`) to keep extraction focused on real message content.
+- Added integration contract coverage for the selector crash regression.
+
+## 0.12.12 - Claude Selector Hotfix + Version Surface Alignment
+- Fixed invalid selector crash in Claude extraction path by properly escaping class name selector `.group\/status` in `content.js`.
+- Synchronized in-app visible version labels in popup (`index.html`) with release metadata.
+- Updated settings export/version diagnostics markers to current release value.
+- Restored project header markers to `License: MIT` per project instruction.
+
+## 0.12.11 - CSP Fetch Fix + User-Only Export Artifacts + AGPL Headers
+- Fixed extension CSP fetch violations for user-initiated media proxy by expanding allowed `connect-src` hosts in `manifest.json`.
+- Stopped appending internal diagnostics/manifest JSON files to user export bundles.
+- Updated repository license headers from MIT markers to AGPL-3.0 markers in source and tests.
+
+## 0.12.10 - Self-Test Media Count Reconciliation
+- Fixed `self_test_local_agent` mismatch where WARN could appear despite visible media in header summary.
+- Added media reconciliation in `content.js` using extraction item evidence + DOM evidence before deciding PASS/WARN.
+- Added integration contract assertions for self-test media evidence logic.
+
+## 0.12.9 - Runtime Enforcement: Image/File/Integration Smoke Tests
+- Added executable runtime smoke tests: `test_image_embed.js`, `test_file_download.js`, and `test_integration.js`.
+- Added `npm run test:runtime` script and CI enforcement workflow `.github/workflows/enforce.yml`.
+- Hardened delivery gate so image embed/file download/integration contracts are validated before release checks.
+
+## 0.12.8 - Prometheus Visual Inference Rescue Layer
+- Added Prometheus visual extraction path in `content.js` (`extract_prometheus_visual`) with recursive shadow traversal, geometry/icon role inference, CodeMirror-aware text extraction, Base64 image freezing, and text-density fallback.
+- Added background orchestration route `RUN_PROMETHEUS_EXPORT` to request tab extraction, generate MHTML, and trigger deterministic local download.
+- Added dedicated runtime modules `mhtml_generator.js` and `popup.js` and wired popup page loading in `index.html`.
+- Added Prometheus integration contracts in `tests/integration/prometheus_runtime_contract.test.mjs`.
+
+## 0.12.7 - Injection/Extraction Hardening + English-Only Source Policy
+- Added wildcard ChatGPT host coverage (`*.chatgpt.com`) to manifest host permissions, content script matches, and web-accessible resource matches.
+- Upgraded `content_miner/extract.mjs` with a `v4` selector tier, resilient text extraction fallback (`innerText` -> `textContent`), and stronger role inference using subtree metadata hints.
+- Extended `packager/build_export_bundle.mjs` contracts with stage-aware diagnostics input and deterministic manifest timestamp override.
+- Removed non-English source comments across the repository and refreshed root-cause analysis documentation.
 
 ## 0.12.6 - Evidence-Gated Neural-Eye Export Contracts
 - Added canonical local-only export modules (`content_miner`, `normalizer`, `attachment_resolver`, `packager`, `self_heal`, `tools/pts`) with deterministic diagnostics and reason-code contracts.

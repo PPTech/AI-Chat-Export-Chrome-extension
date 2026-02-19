@@ -12,6 +12,6 @@ test('Legal header exists in required runtime files', () => {
   for (const f of files) {
     const txt = fs.readFileSync(f, 'utf8');
     assert.match(txt, /AI Chat Export & Local Agent \(Project Aegis\)/, `missing legal header in ${f}`);
-    assert.match(txt, /License: MIT/, `missing project MIT ownership header in ${f}`);
+    assert.match(txt, /License: MIT/, `missing project AGPL ownership header in ${f}`);
   }
 });

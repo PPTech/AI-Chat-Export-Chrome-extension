@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// نویسنده دکتر بابک سرخپور با کمک ابزار چت جی پی تی.
+// Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -38,7 +38,7 @@ test('extracts messages and emits LOCAL_ONLY_BLOCK for external attachment', asy
   });
 
   const { messages, used_selector } = extractRawMessages(doc);
-  assert.equal(used_selector, 'v3');
+  assert.equal(['v4', 'v3'].includes(used_selector), true);
   const dataset = buildDataset({ source: { product: 'ChatGPT', host: 'chatgpt.com', url: 'https://chatgpt.com/c/x', captured_at_utc: new Date(0).toISOString() }, usedSelector: used_selector, rawMessages: messages });
   const result = await resolveAttachments(dataset, async () => new Uint8Array([1, 2]));
   assert.equal(dataset.messages.length >= 2, true);

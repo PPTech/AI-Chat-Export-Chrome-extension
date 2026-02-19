@@ -1,8 +1,8 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// نویسنده دکتر بابک سرخپور با کمک ابزار چت جی پی تی.
-// export_manager.js - ExportManager v0.12.6
+// Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
+// export_manager.js - ExportManager v0.12.20
 
 (() => {
   if (window.ExportManager) return;
@@ -31,13 +31,26 @@
     renderMessageContent(content = '') {
       return String(content)
         .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
-        .replace(/\[\[IMG:([\s\S]*?)\]\]/g, (m, src) => /^data:image\//i.test(src) ? `<img src="${src}" alt="embedded image"/>` : '<div>[Image Load Failed]</div>')
+        .replace(/\[\[IMG:([\s\S]*?)\]\]/g, (m, src) => {
+          const safeSrc = String(src || '').trim().replace(/[\]\)>'"\s]+$/g, '');
+          if (!safeSrc) return '';
+          if (/^(data:image\/|https?:\/\/|blob:)/i.test(safeSrc)) return `<img src="${safeSrc}" alt="embedded image"/>`;
+          return `<div>[Image skipped: unsupported scheme]</div>`;
+        })
         .replace(/\n/g, '<br>');
     }
 
     buildSelfContainedHtml(title = 'Export', messages = []) {
       const body = messages.map((m) => `<div class="message"><div class="role">${this.escapeHtml(m.role || 'Unknown')}</div><div>${this.renderMessageContent(m.content || '')}</div></div>`).join('');
       return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${this.escapeHtml(title)}</title><style>${this.inlineStyle}</style></head><body><h1>${this.escapeHtml(title)}</h1>${body}</body></html>`;
+    }
+
+    describeExportKind(format = '') {
+      const f = String(format || '').toLowerCase();
+      if (f === 'doc' || f === 'docx') return 'docx';
+      if (f === 'mhtml') return 'mhtml';
+      if (f === 'pdf') return 'pdf';
+      return 'html';
     }
 
     buildWordDocument(title = 'Export', messages = []) {

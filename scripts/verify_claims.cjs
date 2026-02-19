@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// نویسنده دکتر بابک سرخپور با کمک ابزار چت جی پی تی.
+// Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
 
 const fs = require('fs');
 
@@ -18,7 +18,8 @@ const requiredScripts = [
   'verify:claims',
   'test',
   'gherkin:generate',
-  'build'
+  'build',
+  'verify:no-secrets'
 ];
 
 const missingScripts = requiredScripts.filter((name) => !pkg.scripts || !pkg.scripts[name]);
@@ -43,12 +44,24 @@ if (metadata.version !== appVersion) claims.push(`metadata.json mismatch: ${meta
 if (packageJson.version !== appVersion) claims.push(`package.json mismatch: ${packageJson.version} != ${appVersion}`);
 
 const scriptSource = fs.readFileSync('script.js', 'utf8');
-for (const token of ['.diagnostics.json', '.export_bundle_manifest.json', 'bundleManifest']) {
-  if (!scriptSource.includes(token)) claims.push(`export forensic artifact hook missing token: ${token}`);
+const contentSource = fs.readFileSync('content.js', 'utf8');
+for (const token of ['.diagnostics.json', '.export_bundle_manifest.json']) {
+  if (scriptSource.includes(token)) claims.push(`internal export token must not be present: ${token}`);
 }
 
 if (!fs.existsSync('FORENSICS/HEAD.txt')) {
   claims.push('FORENSICS/HEAD.txt missing');
+}
+
+
+for (const bad of ["LOG_ERROR', message: 'Extraction Result'", "LOG_ERROR', message: 'Adaptive Analyzer'"]) {
+  if (contentSource.includes(bad)) claims.push(`error-level success log pattern present: ${bad}`);
+}
+
+for (const token of ['diagnostics_v2', 'urlPathHash', 'permissionState', 'userGesture']) {
+  if (!fs.readFileSync('background.js', 'utf8').includes(token)) {
+    claims.push(`background diagnostics field missing: ${token}`);
+  }
 }
 
 if (missingScripts.length || claims.length) {
@@ -62,3 +75,9 @@ if (missingScripts.length || claims.length) {
 }
 
 console.log(`Claim verification passed for version ${appVersion}.`);
+
+for (const token of ['FlightRecorderToolkit', 'DIAG_V3_CONFIG', 'GET_DIAGNOSTICS_V3_JSONL']) {
+  if (!fs.readFileSync('background.js', 'utf8').includes(token)) {
+    claims.push(`background diagnostics v3 token missing: ${token}`);
+  }
+}

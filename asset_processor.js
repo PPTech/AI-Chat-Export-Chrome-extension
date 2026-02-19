@@ -1,15 +1,16 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// نویسنده دکتر بابک سرخپور با کمک ابزار چت جی پی تی.
-// asset_processor.js - DataProcessor v0.12.6
+// Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
+// asset_processor.js - DataProcessor v0.12.20
 
 (() => {
   if (window.DataProcessor) return;
 
   class DataProcessor {
     constructor(options = {}) {
-      this.options = { minImageSize: 50, maxRetries: 2, ...options };
+      this.options = { minImageSize: 50, maxRetries: 2, includeExternalLinks: false, ...options };
+      this.diagnostics = { ignored: { externalLinks: 0, scriptAssets: 0, docsLinks: 0, frameworkBundles: 0 } };
     }
 
     sanitizeUrl(url = '') {
@@ -46,15 +47,48 @@
       return (direct || fallback).replace(/[\/:*?"<>|]+/g, '_').trim();
     }
 
+
+
+    classifyAttachmentUrl(url = '') {
+      const classifier = window.AttachmentClassifier;
+      const result = classifier?.classifyAttachmentUrl ? classifier.classifyAttachmentUrl(url, { includeExternalLinks: !!this.options.includeExternalLinks }) : { accepted: !this.isIgnoredAttachmentUrl(url), reason: 'legacy' };
+      if (!result.accepted) {
+        if (result.reason === 'external_link_blocked' || result.reason === 'plain_hyperlink') this.diagnostics.ignored.externalLinks += 1;
+        if (result.reason === 'script_asset') this.diagnostics.ignored.scriptAssets += 1;
+        if (result.reason === 'docs_link') this.diagnostics.ignored.docsLinks += 1;
+        if (/react(?:-dom)?\.production\.min\.js/i.test(String(url || ''))) this.diagnostics.ignored.frameworkBundles += 1;
+      }
+      return result;
+    }
+
+    isIgnoredAttachmentUrl(url = '') {
+      const clean = String(url || '').toLowerCase();
+      if (!clean) return true;
+      if (clean.startsWith('chrome-extension://')) return true;
+      if (/\.(?:m?js|cjs|map)(?:$|\?)/i.test(clean)) return true;
+      if (/\.(?:css|ico)(?:$|\?)/i.test(clean)) return true;
+      if (/react(?:-dom)?\.production\.min\.js/i.test(clean)) return true;
+      return false;
+    }
+
+    isLikelyUserDownload(url = '', fileName = '') {
+      const probe = `${url} ${fileName}`.toLowerCase();
+      if (/sandbox:\/mnt\/data\//i.test(probe) || /blob:/i.test(probe)) return true;
+      return /\.(pdf|docx|xlsx|pptx|zip|png|jpe?g|webp|txt|csv|json|py|md)(?:$|\?)/i.test(probe);
+    }
+
     extractDownloadMetadata(text = '') {
       const links = [];
-      const regex = /(blob:https?:\/\/[^\s"')]+|sandbox:\/\/[^\s"')]+|sandbox:\/[^\s"')]+|https?:\/\/[^\s"')]+\.(?:csv|pdf|docx|xlsx|pptx|zip|png|jpe?g|webp|md|txt|json))/gi;
+      const regex = /(blob:https?:\/\/[^\s"')]+|sandbox:\/\/[^\s"')]+|sandbox:\/[^\s"')]+|https?:\/\/[^\s"')]+\.(?:csv|pdf|docx|xlsx|pptx|zip|png|jpe?g|webp|txt|json|py|md))/gi;
       let m;
       while ((m = regex.exec(String(text || ''))) !== null) {
         const u = this.sanitizeUrl(m[1]);
+        const fileName = decodeURIComponent(u.split('/').pop() || 'file.bin');
+        const classified = this.classifyAttachmentUrl(u);
+        if (!this.isLikelyUserDownload(u, fileName) || !classified.accepted || this.isIgnoredAttachmentUrl(u)) continue;
         links.push({
           type: /^sandbox:/i.test(u) ? 'sandbox' : (/^blob:/i.test(u) ? 'blob_url' : 'text_reference'),
-          fileName: u.split('/').pop() || 'file.bin',
+          fileName,
           url: u,
           download_url: u,
           needsResolution: /^sandbox:/i.test(u)
@@ -78,6 +112,16 @@
         if (/icon|avatar/i.test(src) && w < minSize && h < minSize) return;
         if (w && h && (w < minSize || h < minSize)) return;
         images.push({ src, alt: img.alt || '', width: w, height: h, source: 'img' });
+      });
+
+      const attachmentImageNodes = messageElement.querySelectorAll('[data-testid*="image" i] img, [data-testid*="attachment" i] img, [class*="attachment" i] img, [class*="file" i] img');
+      attachmentImageNodes.forEach((img) => {
+        const src = this.sanitizeUrl(img.currentSrc || img.src || img.getAttribute('src') || img.getAttribute('data-src') || '');
+        if (!src) return;
+        const w = img.naturalWidth || img.width || 0;
+        const h = img.naturalHeight || img.height || 0;
+        if (w && h && (w < minSize || h < minSize)) return;
+        images.push({ src, alt: img.alt || '', width: w, height: h, source: 'attachment_img' });
       });
 
       const all = messageElement.querySelectorAll('*');
@@ -146,7 +190,7 @@
         });
       });
 
-      const fileExtRegex = /([\w\-.]+\.(pdf|docx|xlsx|pptx|py|js|json|csv|txt|md|zip))/gi;
+      const fileExtRegex = /([\w\-.]+\.(pdf|docx|xlsx|pptx|py|json|csv|txt|md|zip))/gi;
       const fileMatches = bodyText.match(fileExtRegex) || [];
       fileMatches.forEach((fileName) => {
         const link = Array.from(container.querySelectorAll('a, button')).find((el) => (el.textContent || '').includes(fileName));
@@ -166,7 +210,11 @@
         if (fileName && url) files.push({ type: 'present_files', fileName, url, element: el });
       });
 
-      return this.deduplicateFiles(files);
+      return this.deduplicateFiles(files).filter((f) => {
+        const u = this.sanitizeUrl(f.url || f.path || "");
+        const n = String(f.fileName || "");
+        return !!u && !this.isIgnoredAttachmentUrl(u) && this.isLikelyUserDownload(u, n);
+      });
     }
 
     async resolveSandboxFile(path, clickResolver) {
@@ -259,5 +307,6 @@
     }
   }
 
+  DataProcessor.prototype.getDiagnostics = function getDiagnostics() { return this.diagnostics; };
   window.DataProcessor = DataProcessor;
 })();

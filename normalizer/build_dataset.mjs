@@ -1,7 +1,7 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// نویسنده دکتر بابک سرخپور با کمک ابزار چت جی پی تی.
+// Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
 // normalizer/build_dataset.mjs - Dataset normalizer v0.12.6
 
 import { createHash } from 'node:crypto';

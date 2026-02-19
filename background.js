@@ -26,40 +26,160 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// نویسنده دکتر بابک سرخپور با کمک ابزار چت جی پی تی.
-// background.js - State & Log Manager v0.12.6
+// Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
+// background.js - State & Log Manager v0.12.20
 
+importScripts('diagnostics/redact.js', 'diagnostics/flight_recorder.js', 'network_policy.js');
 console.log('[LOCAL-ONLY] AI engine network disabled; offline models only.');
 const nativeBackgroundFetch = globalThis.fetch?.bind(globalThis);
+globalThis.FlightRecorderToolkit?.configure?.({ debugLogging: false, persistLogs: false });
 
 
 function isAllowedMediaHost(url) {
-  try {
-    const host = new URL(url).hostname;
-    const allow = ['chatgpt.com','chat.openai.com','oaiusercontent.com','oaistatic.com','openai.com','claude.ai','anthropic.com','googleusercontent.com','gstatic.com','google.com'];
-    return allow.some((h) => host === h || host.endsWith(`.${h}`));
-  } catch {
-    return false;
+  return !!globalThis.NetworkPolicyToolkit?.isAllowedHost?.(url);
+}
+
+function getUrlHost(url) {
+  try { return new URL(String(url || '')).hostname || 'unknown'; } catch { return 'unknown'; }
+}
+
+function getUrlScheme(url) {
+  const txt = String(url || '');
+  const idx = txt.indexOf(':');
+  return idx > 0 ? txt.slice(0, idx).toLowerCase() : 'unknown';
+}
+
+async function sha256Hex(input = '') {
+  const data = new TextEncoder().encode(String(input || ''));
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function buildDiagnosticsV2(payload = {}) {
+  return {
+    schema: 'diagnostics_v2',
+    eventId: `evt_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
+    tabId: payload.tabId ?? -1,
+    phase: payload.phase || 'resolve',
+    urlHost: getUrlHost(payload.url),
+    urlPathHash: await sha256Hex((() => { try { const u = new URL(String(payload.url || '')); return `${u.pathname}${u.search}`; } catch { return String(payload.url || ''); } })()),
+    scheme: getUrlScheme(payload.url),
+    strategy: payload.strategy || 'SW_FETCH',
+    result: payload.result || 'fail',
+    statusCode: payload.statusCode ?? null,
+    errorName: payload.errorName || null,
+    errorCode: payload.errorCode || null,
+    permissionState: payload.permissionState || 'unknown',
+    userGesture: payload.userGesture || 'missing',
+    category: payload.category || 'unknown',
+    callingModule: payload.callingModule || 'unknown'
+  };
+}
+
+
+function withEventScope(details, tabId) {
+  const base = details && typeof details === 'object' ? { ...details } : {};
+  const resolvedTabId = tabId ?? base.tabId ?? null;
+  if (resolvedTabId != null) {
+    base.tabId = resolvedTabId;
+    base.tabScope = base.tabScope || 'tab';
+  } else if (!base.tabScope) {
+    base.tabScope = 'global';
   }
+  return base;
+}
+
+async function logPolicyDenial(details = {}) {
+  const diag = await buildDiagnosticsV2({
+    url: details.url || '',
+    tabId: details.tabId,
+    phase: 'resolve',
+    strategy: details.strategy || 'SW_FETCH',
+    result: 'fail',
+    statusCode: details.statusCode ?? null,
+    errorName: 'NETWORK_POLICY_DENY',
+    errorCode: details.reason || 'unknown',
+    permissionState: details.permissionState || 'unknown',
+    userGesture: details.userGesture || 'missing',
+    category: details.category || 'unknown',
+    callingModule: details.callingModule || 'unknown'
+  });
+  log('ERROR', 'NETWORK_POLICY_DENY', diag);
 }
 
 async function mediaFetchProxy(payload = {}) {
   const url = String(payload.url || '');
-  const userInitiated = !!payload.userInitiated;
-  if (!userInitiated) return { success: false, error: 'user_initiation_required' };
-  if (!/^https?:\/\//i.test(url)) return { success: false, error: 'unsupported_scheme' };
-  if (!isAllowedMediaHost(url)) return { success: false, error: 'host_not_allowlisted' };
+  const tabId = payload.tabId ?? null;
+  const category = payload.category || (globalThis.NetworkPolicyToolkit?.CATEGORIES?.ASSET_FETCH || 'ASSET_FETCH');
+  const policy = await globalThis.NetworkPolicyToolkit.validateAssetRequest({
+    url,
+    category,
+    gestureToken: payload.gestureToken || ''
+  });
+  if (!policy.ok) {
+    const reason = (policy.reason === 'missingGesture' || policy.reason === 'gestureExpired') ? 'user_initiation_required' : policy.reason;
+    await logPolicyDenial({ url, tabId, category, reason, callingModule: 'mediaFetchProxy', permissionState: reason === 'permissionsMissing' ? 'denied' : 'granted', userGesture: reason === 'user_initiation_required' ? 'missing' : 'present' });
+    return { success: false, error: reason };
+  }
   if (!nativeBackgroundFetch) return { success: false, error: 'fetch_unavailable' };
   try {
-    const res = await nativeBackgroundFetch(url, { credentials: 'include' });
-    if (!res.ok) return { success: false, error: `HTTP_${res.status}` };
+    const res = await nativeBackgroundFetch(url, { credentials: payload.credentials === 'include' ? 'include' : 'omit', redirect: 'follow' });
+    if (!res.ok) {
+      await logPolicyDenial({ url, tabId, category, reason: `HTTP_${res.status}`, statusCode: res.status, callingModule: 'mediaFetchProxy', permissionState: 'granted', userGesture: 'present' });
+      return { success: false, error: `HTTP_${res.status}` };
+    }
     const buf = await res.arrayBuffer();
     const bytes = new Uint8Array(buf);
     const b64 = Buffer.from(bytes).toString('base64');
-    return { success: true, mime: res.headers.get('content-type') || 'application/octet-stream', dataUrl: `data:${res.headers.get('content-type') || 'application/octet-stream'};base64,${b64}`, byteLength: bytes.length };
+    return {
+      success: true,
+      mime: res.headers.get('content-type') || 'application/octet-stream',
+      dataUrl: `data:${res.headers.get('content-type') || 'application/octet-stream'};base64,${b64}`,
+      byteLength: bytes.length,
+      finalUrl: res.url || url,
+      strategy: 'SW_FETCH'
+    };
   } catch (e) {
+    await logPolicyDenial({ url, tabId, category, reason: e.message || 'fetch_failed', callingModule: 'mediaFetchProxy', permissionState: 'granted', userGesture: 'present' });
     return { success: false, error: e.message || 'media_fetch_failed' };
   }
+}
+
+async function assetFetchBroker(payload = {}) {
+  return mediaFetchProxy({ ...payload, category: payload.category || (globalThis.NetworkPolicyToolkit?.CATEGORIES?.ASSET_FETCH || 'ASSET_FETCH') });
+}
+
+
+function buildPrometheusMhtml(messages = [], title = 'Prometheus Export') {
+  const safe = (text = '') => String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+
+  const body = (messages || []).map((m) => {
+    const imgs = (m.images || []).filter((src) => /^data:image\//i.test(String(src || '')))
+      .map((src) => `<img src="${src}" alt="embedded" style="max-width:100%;height:auto;display:block;margin-top:8px;"/>`).join('');
+    return `<section style="border:1px solid #e5e7eb;padding:12px;margin-bottom:10px;border-radius:8px;"><div style="font-weight:700;margin-bottom:8px;">${safe(m.role || 'UNKNOWN')}</div><div>${safe(m.content || '').replace(/\n/g, '<br>')}</div>${imgs}</section>`;
+  }).join('');
+
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${safe(title)}</title></head><body style="font-family:Arial,sans-serif;padding:16px;"><h1>${safe(title)}</h1>${body}</body></html>`;
+  const boundary = `----=_Prometheus_${Date.now()}`;
+  return [
+    'MIME-Version: 1.0',
+    `Content-Type: multipart/related; boundary="${boundary}"; type="text/html"`,
+    '',
+    `--${boundary}`,
+    'Content-Type: text/html; charset="utf-8"',
+    'Content-Transfer-Encoding: 8bit',
+    'Content-Location: file:///index.html',
+    '',
+    html,
+    '',
+    `--${boundary}--`,
+    ''
+  ].join('\r\n');
 }
 
 function patchLocalOnlyNetworkGuards() {
@@ -240,10 +360,21 @@ function log(level, message, details = null) {
   if (appLogs.length > 1000) appLogs.shift();
   if (runtimeJsonlLogs.length > 2000) runtimeJsonlLogs.shift();
   console.log(`[${level}] ${message}`, details || '');
+  globalThis.FlightRecorderToolkit?.record?.({
+    lvl: String(level || 'INFO').toUpperCase(),
+    event: String(message || 'event'),
+    tabId: entry?.details?.tabId ?? null,
+    tabScope: entry?.details?.tabScope || (entry?.details?.tabId == null ? 'global' : 'tab'),
+    module: 'sw',
+    phase: 'export',
+    result: String(level || '').toUpperCase() === 'ERROR' ? 'fail' : 'ok',
+    reason: 'log'
+  });
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const tabId = message.tabId || (sender.tab ? sender.tab.id : null);
+  log('COMMAND_IN', String(message?.action || 'UNKNOWN'), { tabId, from: sender?.url || sender?.origin || 'extension', payloadKeys: Object.keys(message || {}).slice(0, 20) });
 
   try {
     switch (message.action) {
@@ -278,6 +409,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ success: true });
         break;
 
+      case 'LOG_EVENT': {
+        const scopedDetails = withEventScope(message.details, tabId);
+        log(String(message.level || 'INFO').toUpperCase(), message.message || 'event', scopedDetails);
+        sendResponse({ success: true });
+        break;
+      }
+
+
+      case 'DIAG_V3_CONFIG':
+        globalThis.FlightRecorderToolkit?.configure?.(message.config || {});
+        sendResponse({ success: true, config: globalThis.FlightRecorderToolkit?.config?.() || null });
+        break;
+
+      case 'GET_DIAGNOSTICS_V3_JSONL':
+        sendResponse({ success: true, jsonl: globalThis.FlightRecorderToolkit?.exportJsonl?.() || '' });
+        break;
+
+      case 'PURGE_DIAGNOSTICS_V3':
+        globalThis.FlightRecorderToolkit?.clear?.();
+        sendResponse({ success: true });
+        break;
       case 'GET_LOGS':
         sendResponse(appLogs);
         break;
@@ -333,6 +485,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
       }
 
+      case 'REGISTER_GESTURE_PROOF': {
+        const row = globalThis.NetworkPolicyToolkit.registerGesture(message.token, sender?.url || `tab:${tabId || 'none'}`);
+        sendResponse({ success: !!row.ok, ...row });
+        break;
+      }
+
+      case 'ASSET_FETCH': {
+        assetFetchBroker(message.payload || {}).then(sendResponse);
+        return true;
+      }
+
       case 'MEDIA_FETCH_PROXY': {
         mediaFetchProxy(message.payload || {}).then(sendResponse);
         return true;
@@ -340,6 +503,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       case 'DOWNLOAD_MHTML_ARTIFACT': {
         downloadMhtmlArtifact(message.payload || {}).then(sendResponse);
+        return true;
+      }
+
+      case 'RUN_PROMETHEUS_EXPORT': {
+        routeToTabAction(tabId, 'extract_prometheus_visual', message.payload || {}, async (res) => {
+          if (!res?.success) {
+            sendResponse({ success: false, error: res?.error || 'prometheus_extract_failed' });
+            return;
+          }
+          const mhtml = buildPrometheusMhtml(res.messages || [], message.payload?.title || 'Prometheus Export');
+          const download = await downloadMhtmlArtifact({
+            fileName: message.payload?.fileName || `prometheus_export_${new Date().toISOString().slice(0, 10)}.mhtml`,
+            content: mhtml
+          });
+          sendResponse({ success: !!download?.success, extraction: res, download });
+        });
         return true;
       }
 

@@ -1,6 +1,6 @@
 # 🚀 AI Chat Exporter Ultimate
 
-**Version**: 0.10.26  
+**Version**: 0.12.20  
 **License**: MIT (Ultimate Edition)  
 **Code Source**: Generated with support from CODEX and CODEX CLI.  
 **Owner / Management**: Dr. Babak Sorkhpour ([@Drbabakskr](https://x.com/Drbabakskr))  
@@ -20,6 +20,57 @@
 | **SQL** | 🟢 **Stable** | PostgreSQL compatible dumps. |
 | **PDF** | 🟢 **Stable** | Standalone file generation with embedded page rendering for multilingual reliability and image inclusion. |
 
+
+## Root-Cause Review (2026-02-18)
+
+The repository triage identified five primary bottlenecks that caused near-empty exports in real ChatGPT sessions:
+
+1. **Host coverage gap**: MV3 injection patterns were missing wildcard ChatGPT subdomains (`*.chatgpt.com`) used by newer rollout hosts.
+2. **DOM selector drift**: extraction relied on older selectors and `innerText` only, which can return empty values in some renderers.
+3. **Weak role inference**: role detection did not consistently use `data-testid`/subtree role hints and produced `unknown` too often.
+4. **Diagnostics explainability gap**: stage timings and selector evidence were not consistently carried in diagnostics.
+5. **Documentation drift**: version and audit docs did not reflect the current 0.12.x architecture, creating false confidence and hard-to-debug reports.
+
+### Implemented Remediation in 0.12.8
+
+- Added wildcard ChatGPT host coverage in `manifest.json` for host permissions, content script matching, and web-accessible resources.
+- Upgraded selector fallback to include conversation-turn data-testid/data-turn-id patterns and robust text extraction fallback (`innerText` → `textContent`).
+- Improved role inference using direct and subtree hints (`data-message-author-role`, `data-role`, `aria-label`, `data-testid`).
+- Extended diagnostics builder to support stage-level timing records and deterministic manifest timestamps when supplied.
+- Removed non-English comments from code headers to keep project files consistently English-only.
+
+
+## Prometheus Rescue Layer (Gemini + AI Studio)
+
+The 0.12.8 release adds a dedicated visual extraction rescue path for Gemini and Google AI Studio:
+
+- `extract_prometheus_visual` in `content.js` with recursive Shadow DOM traversal and role prediction by geometry/iconography.
+- Text extraction prioritizes CodeMirror lines and falls back to prose block aggregation.
+- Inline image URLs are frozen to Base64 data URLs at extraction time for true offline portability.
+- If visual heuristics return no turns, a text-density fallback scan emits best-effort conversation blocks instead of silent empty success.
+- `RUN_PROMETHEUS_EXPORT` in `background.js` builds and downloads Word-compatible MHTML in one action.
+
+
+## Runtime Enforcement Gate (0.12.9)
+
+The repository now includes explicit runtime smoke tests for critical user-visible promises:
+
+- `node test_image_embed.js` validates `embedImageAsBase64()` behavior.
+- `node test_file_download.js` validates `downloadAllFiles()` success/failure accounting.
+- `node test_integration.js` validates logger/security wiring in `content.js` + manifest integration.
+- `npm run test:runtime` executes all three tests as a single mandatory gate.
+
+
+## Self-Test Consistency Fix (0.12.10)
+
+`self_test_local_agent` now reconciles media counts using three sources before PASS/WARN decision:
+
+- direct extraction summary (`images`, `files`),
+- item-level media evidence in extracted blocks/text,
+- DOM-level media/file evidence (`img`, file-link detection).
+
+This prevents false WARN messages when the header shows media but the strict item-type counters are sparse.
+
 ## 🛠 Features
 
 *   **Secure Isolation**: Each extraction process runs independently within its own tab context.
@@ -31,6 +82,17 @@
 *   **Temporary Media Cache Hygiene**: Downloads media to temporary in-memory cache during export, embeds output, then clears cache at begin/finish/close.
 *   **Security Hardened**: Input sanitization prevents XSS in exported files.
 *   **Local Agent (Air-Gapped Ready)**: Visual + semantic local extraction with self-test and recipe fallback; no external AI API required.
+
+## ChatGPT Full Conversation Extraction (v0.12.20)
+- Primary mode for ChatGPT now uses conversation backend mapping (`/backend-api/conversation/<id>`) to reconstruct the full current path instead of relying only on visible DOM nodes.
+- Export data for ChatGPT is built from canonical turns and attachment candidates extracted from message content/metadata.
+- DOM extraction remains as fallback when backend mapping is unavailable.
+
+## 🔐 Network Policy split (v0.12.20)
+
+- **AI_INFERENCE**: network denied (local models only).
+- **ASSET_FETCH**: allowed only with gesture-proof token + allowlisted host + permissions.
+- All denied requests are logged with reason in diagnostics (`NETWORK_POLICY_DENY`).
 
 ## 🧠 Prompt & Extraction Strategy by Service (Summary)
 
@@ -395,7 +457,8 @@ This prevents image token corruption and ensures valid `<img>` tags are emitted 
 
 ## Evidence-Gated Version Governance (v0.12.1)
 - `version.js` is SSOT for release version; run `npm run sync:version` to align manifest metadata.
-- `npm run verify:claims` enforces release-script presence, version consistency, and forensic export hooks.
+- `npm run verify:claims`
+- `npm run verify:gesture` enforces release-script presence, version consistency, and forensic export hooks.
 - For each change window, `FORENSICS/HEAD.txt` captures branch/head/toolchain evidence.
 
 
@@ -422,3 +485,12 @@ This prevents image token corruption and ensures valid `<img>` tags are emitted 
 ## Neural-Eye Evidence Contracts (v0.12.6)
 - Added local-only canonical extractor/normalizer/resolver/packager modules with diagnostics and reason-code output contracts.
 - Added fixture-driven export contract tests and PTS module mapping to ensure evidence-gated improvements and predictable fallback behavior.
+
+
+## ChatGPT DOM Analyzer (Debug-Only)
+
+- Load extension unpacked in Chrome.
+- Open `chatgpt.com` or `chat.openai.com` chat page.
+- Use popup buttons **Analyze (Visible)** then **Analyze (Full Load)**.
+- Inspect `window.__CHATGPT_DOM_ANALYSIS__` in DevTools Console.
+- Optional snapshot helper: run `dev_snapshot.js` in console to download DOM HTML fixture.

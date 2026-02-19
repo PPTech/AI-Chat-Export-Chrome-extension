@@ -2,7 +2,7 @@
 # Code generated with support from CODEX and CODEX CLI.
 # Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 
-# Technical Algorithms (v0.10.26)
+# Technical Algorithms (v0.12.8)
 
 ## 0) Local Agent Core (Air-Gapped)
 
@@ -90,6 +90,21 @@
     - static markdown render fallback,
   - attachments (images/files) with blob-to-base64 conversion for images.
 - Fails gracefully per-turn: logs warning and continues.
+
+
+### A8. Prometheus Visual Inference (Gemini + AI Studio)
+- `queryDeepPrometheus(root, selector)` recursively traverses open shadow roots and aggregates selector hits to avoid Shadow DOM blindness in AI Studio.
+- `predictRolePrometheus(element)` applies geometry + iconography:
+  - Right-aligned block (`left > 40% viewport`) => `USER`.
+  - Left-aligned block with Gemini icon/sparkle hint => `MODEL`.
+  - Else => `UNKNOWN`.
+- Text extraction strategy:
+  1. CodeMirror line joins (`.cm-line`) with explicit `\n` preservation.
+  2. Prose fallback (`p/div/span`) with structural line joins.
+- Image freezing strategy:
+  - Convert discovered image URLs to data URLs at extraction time via local fetch + FileReader.
+- Fail-loud fallback:
+  - If no visual turns are detected, run `fallbackTextDensityScan()` over large text blocks to prevent empty-success exports.
 
 ## B) Export Algorithms (`script.js`)
 
@@ -291,3 +306,37 @@
 
 ### J13. Predictive Test Selection Mapping
 - `tools/pts.mjs` maps changed module domains to targeted unit/integration suites to reduce test scope while preserving correctness evidence.
+
+
+## ChatGPT DOM Discovery Analyzer (v0.12.14)
+
+1. **detectConversationRoot**: ranks container candidates using scrollability, text density, media/code descendants, and repeated message-like child ratio.
+2. **collectMessageNodes**: scans structural nodes and scores message candidates based on text/code/image/link signals, then removes nested duplicates by best score.
+3. **inferRole**: assigns `user|assistant|unknown` using explainable evidence (alignment, ARIA labels, regenerate/copy controls, avatar hints) with confidence thresholds.
+4. **parseMessageContent**: TreeWalker traversal preserving DOM order and yielding typed blocks (`text`,`code`,`list`,`quote`,`image`,`link`).
+5. **ensureChatFullyLoaded**: iterative scroll-top stabilization rounds and final scroll-bottom settle pass with growth/stability reporting.
+
+
+## NetworkPolicy + GestureProof (v0.12.18)
+
+1. Popup issues short-lived gesture token on user action and registers it in service worker memory.
+2. Background validates category + gesture age + allowlisted host + host permission before any asset fetch.
+3. Denials emit structured diagnostics (`NETWORK_POLICY_DENY`) with category/reason/host/module.
+4. Asset bytes are fetched via service worker broker (`ASSET_FETCH`) instead of popup direct fetch to avoid extension-page CSP blocks.
+
+
+## Attachment Ignore Classifier (v0.12.18)
+
+1. Classifier rejects framework/script assets (`.js/.mjs/.cjs/.map`, react bundle names, extension resources).
+2. Only keeps likely user-download assets (`sandbox`, `blob`, or user-file extensions).
+3. Gesture-path guard verifies permission request placement before first async await in export click handlers.
+
+
+## Diagnostics v3 Flight Recorder Algorithm (v0.12.20)
+1. Initialize a bounded ring buffer (`MAX_EVENTS=5000`) with debug logging default OFF.
+2. Generate a `runId` per export flow and unique `eventId` per recorded event.
+3. Normalize each event to required fields (`ts/lvl/event/runId/eventId/tabId|tabScope/platform/module/phase/result/reason`).
+4. For URL diagnostics, store only `scheme`, `host`, and `pathHash` (SHA-256 of path+query) and never the raw URL.
+5. Redact sensitive patterns (Bearer/JWT/email/phone/long-hex) before enqueueing.
+6. Optionally persist redacted ring snapshots in `chrome.storage.local` when explicitly enabled.
+7. Export diagnostics only on explicit user action as JSONL forensic output.

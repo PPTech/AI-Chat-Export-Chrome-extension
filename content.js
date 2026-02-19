@@ -26,8 +26,8 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// نویسنده دکتر بابک سرخپور با کمک ابزار چت جی پی تی.
-// content.js - Platform Engine Orchestrator v0.12.6
+// Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
+// content.js - Platform Engine Orchestrator v0.12.20
 
 (() => {
   if (window.hasRunContent) return;
@@ -209,11 +209,21 @@
       const blocks = [];
       const diagnostics = [];
       const walker = document.createTreeWalker(el, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+      const seenText = new Set();
       while (walker.nextNode()) {
         const node = walker.currentNode;
         if (node.nodeType === Node.TEXT_NODE) {
-          const cleaned = (node.textContent || '').replace(/\[(\d+)\]/g, '').replace(/\s+/g, ' ').trim();
-          if (cleaned) blocks.push({ type: 'text', text: cleaned });
+          const parentTag = node.parentElement?.tagName?.toLowerCase?.() || '';
+          if (!/^(p|span|div|li|h1|h2|h3|h4)$/.test(parentTag)) continue;
+          if (node.parentElement?.querySelector?.('img,pre,code,a')) continue;
+          let cleaned = (node.textContent || '').replace(/\[(\d+)\]/g, '').replace(/\s+/g, ' ').trim();
+          cleaned = cleaned.replace(/^You said\s+/i, '').trim();
+          if (!cleaned) continue;
+          if (/^(update location|based on your places|nothing to see here)/i.test(cleaned)) continue;
+          const canonical = cleaned.toLowerCase();
+          if (seenText.has(canonical)) continue;
+          seenText.add(canonical);
+          blocks.push({ type: 'text', text: cleaned });
           continue;
         }
         const tag = node.tagName ? node.tagName.toLowerCase() : '';
@@ -536,15 +546,24 @@
         window.GEMINI_DOM_ANALYSIS = analysis;
 
         const messages = [];
+        const seenCanonical = new Set();
         for (const m of analysis.messages) {
           const role = m.inferredRole.role === 'assistant' ? 'Gemini' : (m.inferredRole.role === 'user' ? 'User' : 'Unknown');
           const content = composeContentFromBlocks(m.parsed.blocks, options);
           if (content) {
+            const canonical = content
+              .replace(/^You said\s+/gim, '')
+              .replace(/\s+/g, ' ')
+              .trim()
+              .toLowerCase();
+            const key = `${role}|${canonical}`;
+            if (canonical && seenCanonical.has(key)) continue;
+            if (canonical) seenCanonical.add(key);
             messages.push({ role, content, meta: { platform: this.name, sourceSelector: m.signature, confidence: m.inferredRole.confidence, evidence: m.inferredRole.evidence } });
           }
         }
 
-        return { platform: this.name, title: document.title, messages };
+        return { platform: this.name, title: document.title, messages: utils.dedupe(messages) };
       }
     },
 
@@ -608,6 +627,26 @@
         .trim();
     },
 
+    safeClosestAny(el, selectors = []) {
+      if (!el || !Array.isArray(selectors)) return null;
+      for (const selector of selectors) {
+        try {
+          const hit = el.closest(selector);
+          if (hit) return hit;
+        } catch {
+          continue;
+        }
+      }
+      return null;
+    },
+
+    isClaudeUiChromeNode(el) {
+      if (!el) return false;
+      if (this.safeClosestAny(el, ['button', '[role="button"]', 'nav', 'aside', 'header'])) return true;
+      const classBlob = `${el.className || ''} ${el.getAttribute('class') || ''}`;
+      return /(group\/status|\btransition[\w-]*\b|grid-rows|sidebar|topbar)/i.test(classBlob);
+    },
+
     findClaudeContentNodes(seedNodes = []) {
       const hits = [];
       const seen = new Set();
@@ -628,7 +667,7 @@
             if (seen.has(el)) return;
             const textLen = (el.textContent || '').trim().length;
             if (textLen < 20 && !el.querySelector('pre,code,a[href],img')) return;
-            if (el.closest('button,[role="button"],nav,aside,header,.group\/status,[class*="transition"], [class*="grid-rows"]')) return;
+            if (this.isClaudeUiChromeNode(el)) return;
             seen.add(el);
             hits.push(el);
           });
@@ -1162,9 +1201,216 @@
     return analysis;
   }
 
+
+  function getChatGptBackendUtils() {
+    return window.ChatGPTBackendUtils || null;
+  }
+
+  async function getChatGPTAccessToken() {
+    const response = await fetch('https://chatgpt.com/api/auth/session', {
+      method: 'GET',
+      credentials: 'include',
+      headers: { accept: 'application/json' }
+    });
+    if (!response.ok) throw new Error(`auth_session_failed:${response.status}`);
+    const payload = await response.json();
+    const token = payload?.accessToken || payload?.access_token;
+    if (!token || typeof token !== 'string') throw new Error('auth_session_missing_access_token');
+    return token;
+  }
+
+  async function fetchConversationJSON(conversationId, accessToken) {
+    const url = `https://chatgpt.com/backend-api/conversation/${encodeURIComponent(conversationId)}`;
+    const response = await fetch(url, {
+      method: 'GET',
+      credentials: 'include',
+      headers: {
+        accept: 'application/json',
+        authorization: `Bearer ${accessToken}`
+      }
+    });
+    if (!response.ok) throw new Error(`conversation_fetch_failed:${response.status}`);
+    return response.json();
+  }
+
+  function extractTextBlocksFromMessage(message = {}) {
+    const blocks = [];
+    const content = message?.content || {};
+    const parts = Array.isArray(content?.parts) ? content.parts : [];
+    for (const part of parts) {
+      const text = typeof part === 'string' ? part : (part?.text || '');
+      if (!text || !String(text).trim()) continue;
+      blocks.push({ type: 'text', text: String(text).trim() });
+    }
+    if (!blocks.length && typeof content?.text === 'string' && content.text.trim()) {
+      blocks.push({ type: 'text', text: content.text.trim() });
+    }
+    return blocks;
+  }
+
+  function buildChatGptDatasetFromConversation(conversation = {}, mode = 'chat') {
+    const backend = getChatGptBackendUtils();
+    if (!backend) throw new Error('chatgpt_backend_utils_missing');
+    const orderedNodes = backend.orderedNodesFromCurrent(conversation);
+
+    const turns = [];
+    const attachments = [];
+    const attachmentByUrl = new Map();
+
+    const pushAttachment = (url, role, turnId, nodeId) => {
+      const classify = backend.classifyChatGptAssetUrl(url);
+      if (!classify.accepted) return null;
+      if (attachmentByUrl.has(url)) return attachmentByUrl.get(url);
+      const id = `att_${attachments.length + 1}`;
+      const urlObj = new URL(url);
+      const guessedName = decodeURIComponent((urlObj.pathname.split('/').pop() || '').split('?')[0] || `${id}.bin`);
+      const attachment = {
+        id,
+        kind: classify.kind,
+        name: guessedName || `${id}.bin`,
+        mime: null,
+        byteLength: null,
+        sha256: null,
+        source: {
+          scheme: urlObj.protocol.replace(':', '') || 'https',
+          url,
+          resolvedVia: null,
+          redirectChain: []
+        },
+        status: 'unresolved',
+        failureReason: null,
+        role,
+        turnId,
+        nodeId
+      };
+      attachments.push(attachment);
+      attachmentByUrl.set(url, attachment);
+      return attachment;
+    };
+
+    orderedNodes.forEach((node, index) => {
+      const message = node?.message || {};
+      const role = String(message?.author?.role || 'unknown').toLowerCase();
+      const turnId = message?.id || node?.id || `turn_${index + 1}`;
+      const textBlocks = extractTextBlocksFromMessage(message);
+      const urls = backend.collectUrlsDeep({ content: message?.content, metadata: message?.metadata, attachments: message?.attachments });
+      const turnAttachmentIds = [];
+      for (const url of urls) {
+        const attachment = pushAttachment(url, role, turnId, node?.id || turnId);
+        if (attachment) turnAttachmentIds.push(attachment.id);
+      }
+
+      const blocks = [...textBlocks];
+      for (const attachmentId of turnAttachmentIds) {
+        const asset = attachments.find((a) => a.id === attachmentId);
+        if (!asset) continue;
+        blocks.push({ type: asset.kind, attachmentId });
+      }
+
+      if (!blocks.length) return;
+
+      turns.push({
+        id: turnId,
+        role,
+        role_confidence: role === 'unknown' ? 0.2 : 0.92,
+        time: message?.create_time || null,
+        nodeId: node?.id || null,
+        blocks
+      });
+    });
+
+    const messageExports = turns.map((turn, idx) => {
+      const lines = [];
+      for (const block of turn.blocks) {
+        if (block.type === 'text') lines.push(block.text);
+        if (block.type === 'image') {
+          const att = attachments.find((a) => a.id === block.attachmentId);
+          if (att?.source?.url) lines.push(`[[IMG:${att.source.url}]]`);
+        }
+        if (block.type === 'file') {
+          const att = attachments.find((a) => a.id === block.attachmentId);
+          if (att?.source?.url) lines.push(`[[FILE:${att.source.url}|${att.name || 'File'}]]`);
+        }
+      }
+      return {
+        id: turn.id,
+        index: idx,
+        role: turn.role,
+        timestamp: turn.time,
+        content: lines.join('\n').trim(),
+        attachments: attachments.filter((a) => turn.blocks.some((b) => b.attachmentId === a.id))
+      };
+    }).filter((m) => !!m.content);
+
+    return {
+      mode,
+      dataset: {
+        meta: {
+          host: location.hostname,
+          url: location.href,
+          platform: 'ChatGPT',
+          exportedAt: new Date().toISOString(),
+          appVersion: '0.12.19',
+          buildSha: null
+        },
+        turns,
+        attachments,
+        forensics: {
+          traceId: `chatgpt_${Date.now()}`,
+          agentAttempts: 1,
+          scorecard: { messageCoverage: turns.length > 0 ? 100 : 0 },
+          warnings: []
+        }
+      },
+      messages: messageExports,
+      diagnostics: {
+        extraction: {
+          mode: 'backend_api',
+          mappingNodeCount: Object.keys(conversation?.mapping || {}).length,
+          turnsCount: turns.length,
+          coverage: Object.keys(conversation?.mapping || {}).length ? (turns.length / Object.keys(conversation.mapping).length) : 0,
+          firstTurnTime: turns[0]?.time || null,
+          lastTurnTime: turns[turns.length - 1]?.time || null
+        }
+      }
+    };
+  }
+
+  async function extractChatGptFullData() {
+    const backend = getChatGptBackendUtils();
+    if (!backend) return { success: false, error: 'chatgpt_backend_utils_missing' };
+
+    const detected = backend.detectChatGPTConversationIdFromUrl(location.href);
+    if (!detected?.id || detected.mode !== 'chat') {
+      return { success: false, error: 'chatgpt_conversation_id_not_found', mode: detected?.mode || 'unknown' };
+    }
+
+    const token = await getChatGPTAccessToken();
+    const conversation = await fetchConversationJSON(detected.id, token);
+    const built = buildChatGptDatasetFromConversation(conversation, detected.mode);
+
+    return {
+      success: built.messages.length > 0,
+      platform: 'ChatGPT',
+      title: conversation?.title || document.title || 'ChatGPT conversation',
+      messages: built.messages,
+      dataset: built.dataset,
+      diagnostics: built.diagnostics
+    };
+  }
+
   async function extractChatData(options) {
     const engine = Object.values(PlatformEngines).find((e) => e.matches());
     if (!engine) return { success: false, platform: 'Unsupported', messages: [] };
+
+    if (/chatgpt\.com|chat\.openai\.com/i.test(location.hostname) && options?.preferBackend !== false) {
+      try {
+        const full = await extractChatGptFullData();
+        if (full?.success) return full;
+      } catch (error) {
+        console.warn('[CHATGPT_FULL] fallback to dom extractor', error?.message || error);
+      }
+    }
 
     const extracted = await engine.extract(options, utils);
     let messages = utils.dedupe(extracted.messages || []);
@@ -1196,8 +1442,9 @@
       }
     }
 
-    chrome.runtime.sendMessage({ action: 'LOG_ERROR', message: 'Extraction Result', details: `${engine.name} found ${messages.length} messages.` });
-    chrome.runtime.sendMessage({ action: 'LOG_ERROR', message: 'Adaptive Analyzer', details: `Engine=${engine.name}; normalized=${messages.length}` });
+    chrome.runtime.sendMessage({ action: 'LOG_EVENT', level: 'INFO', message: 'Extraction Result', details: `${engine.name} found ${messages.length} messages.` });
+    window.FlightRecorderToolkit?.record?.({ lvl: 'INFO', event: 'extract.finish', module: 'content', phase: 'finalize', platform: engine?.name?.toLowerCase?.() || 'unknown', tabScope: 'tab', result: 'ok', reason: 'extraction_complete' });
+    chrome.runtime.sendMessage({ action: 'LOG_EVENT', level: 'INFO', message: 'Adaptive Analyzer', details: `Engine=${engine.name}; normalized=${messages.length}` });
 
     return { success: messages.length > 0, platform: extracted.platform, title: extracted.title, messages };
   }
@@ -1214,22 +1461,49 @@
     return scored[0].el;
   }
 
-  function loadFullHistory(sendResponse) {
+  async function loadFullHistory() {
     const scroller = findScrollContainer();
-    let stable = 0;
-    let prev = scroller.scrollHeight;
-    let rounds = 0;
-    const timer = setInterval(() => {
-      rounds += 1;
-      scroller.scrollTop = 0;
-      if (Math.abs(scroller.scrollHeight - prev) < 24) stable += 1;
-      else stable = 0;
-      prev = scroller.scrollHeight;
-      if (stable >= 10 || rounds >= 45) {
-        clearInterval(timer);
-        sendResponse({ status: 'done' });
+    if (!scroller) return { status: 'failed', reason: 'missing_scroller' };
+
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    let previousHeight = scroller.scrollHeight;
+    let retries = 0;
+    let iterations = 0;
+
+    window.__AEGIS_HYDRATION_ACTIVE__ = true;
+    console.log('[HYDRATE] Starting history hydration');
+
+    while (retries < 3) {
+      iterations += 1;
+      try {
+        scroller.scrollTop = 0;
+      } catch {
+        // no-op
       }
-    }, 1200);
+      await sleep(1500);
+      const newHeight = scroller.scrollHeight;
+      if (newHeight > previousHeight + 16) {
+        const delta = newHeight - previousHeight;
+        console.log(`[HYDRATE] Loaded chunk, delta=${delta}px`);
+        previousHeight = newHeight;
+        retries = 0;
+      } else {
+        retries += 1;
+        console.log('[HYDRATE] No new history chunk detected, retrying check');
+      }
+      if (iterations >= 60) break;
+    }
+
+    try {
+      scroller.scrollTop = scroller.scrollHeight;
+    } catch {
+      // no-op
+    }
+    await sleep(500);
+    window.__AEGIS_HYDRATION_ACTIVE__ = false;
+    console.log('[HYDRATE] Full history hydration completed');
+
+    return { status: 'done', retries, iterations, finalHeight: scroller.scrollHeight };
   }
 
   function discoverClaudeStructure() {
@@ -1762,17 +2036,7 @@
     return { success: true, refs: out, stats };
   }
 
-  function setDebugOverlay(items = [], enabled = false) {
-    const id = '__local_agent_overlay__';
-    const prev = document.getElementById(id);
-    if (prev) prev.remove();
-    if (!enabled) return;
-    const wrap = document.createElement('div');
-    wrap.id = id;
-    wrap.style.cssText = 'position:fixed;right:8px;bottom:8px;z-index:2147483647;background:#111;color:#fff;padding:8px 10px;border-radius:8px;max-width:320px;font:12px/1.4 monospace;box-shadow:0 6px 20px rgba(0,0,0,.4)';
-    wrap.textContent = `Local Agent Debug\nitems=${items.length}`;
-    document.body.appendChild(wrap);
-  }
+
 
 
   function computeDomainFingerprint() {
@@ -2028,8 +2292,15 @@
     console.log('[LOCAL_AGENT][EXTRACT]', { ...diag, aiTagsCount: aiTags.length });
     console.table(items.slice(0, 80).map((i) => ({ type: i.type, role: i.roleGuess, confidence: i.confidence, text: String(i.text || '').slice(0, 80) })));
     console.table(aiTags);
+    if (options?.debug) {
+      sendRuntime({
+        action: 'LOG_EVENT',
+        level: 'INFO',
+        message: 'content.extract_local_agent.debug',
+        details: { url: location.href, summary: diag, sampleItems: items.slice(0, 10).map((i) => ({ type: i.type, role: i.roleGuess, text: String(i.text || '').slice(0, 160) })) }
+      }).catch(() => null);
+    }
 
-    setDebugOverlay(items, !!options.debug);
     sendRuntime({ action: 'LOCAL_SAVE_CHAT', payload: { host: location.hostname, title: document.title, payload: { summary: diag, items: items.slice(0, 200) } } }).catch(() => null);
     emitSessionDiagnostics(items).catch(() => null);
     return {
@@ -2037,6 +2308,38 @@
       summary: { messages: messages.length, images: images.length, files: files.length },
       result
     };
+  }
+
+
+
+  function countMediaEvidenceFromItems(items = []) {
+    const imageTypeSet = new Set(['IMAGE_BLOCK', 'IMAGE', 'PHOTO', 'IMG']);
+    const fileTypeSet = new Set(['FILE_CARD', 'FILE', 'ATTACHMENT']);
+    let imageSignals = 0;
+    let fileSignals = 0;
+
+    for (const item of items) {
+      const t = String(item?.type || '').toUpperCase();
+      const txt = String(item?.text || item?.content || '');
+      const href = String(item?.href || item?.url || item?.src || '');
+
+      if (imageTypeSet.has(t)) imageSignals += 1;
+      if (fileTypeSet.has(t)) fileSignals += 1;
+
+      if (/\[\[IMG:/i.test(txt) || /!\[[^\]]*\]\((data:image\/|https?:\/\/[^)]+\.(png|jpe?g|webp|gif))/i.test(txt)) imageSignals += 1;
+      if (/\[\[FILE:/i.test(txt) || /https?:\/\/[^\s"')]+\.(pdf|docx|xlsx|pptx|zip|csv|txt|json|py|js|md)/i.test(txt)) fileSignals += 1;
+
+      if (/^data:image\//i.test(href) || /^blob:/i.test(href) || /\.(png|jpe?g|webp|gif)$/i.test(href)) imageSignals += 1;
+      if (/\.(pdf|docx|xlsx|pptx|zip|csv|txt|json|py|js|md)$/i.test(href) || /^sandbox:\/mnt\/data\//i.test(href)) fileSignals += 1;
+    }
+
+    return { imageSignals, fileSignals };
+  }
+
+  function collectDomMediaEvidence() {
+    const imageDomCount = document.querySelectorAll('img[src], [style*="background-image"]').length;
+    const fileDomCount = detectAllFileLinks().length;
+    return { imageDomCount, fileDomCount };
   }
 
   async function runLocalAgentSelfTest(options = {}) {
@@ -2055,11 +2358,31 @@
       healed = false;
     }
     const s = ext.summary;
-    const pass = s.messages > 0 && (s.images > 0 || s.files > 0);
-    const warn = s.messages > 0 && s.images === 0 && s.files === 0;
-    if (pass) return { success: true, status: 'PASS', details: `Extracted messages=${s.messages}, images=${s.images}, files=${s.files}, self-heal=${healed ? 'yes' : 'fallback-only'}, localOnly=${localOnly}, classifier=${classifierModel}` };
-    if (warn) return { success: true, status: 'WARN', details: `Messages detected but no media/files. messages=${s.messages}, self-heal=${healed ? 'yes' : 'fallback-only'}, localOnly=${localOnly}, classifier=${classifierModel}` };
-    return { success: true, status: 'FAIL', details: `No viable candidates found. localOnly=${localOnly}, classifier=${classifierModel}` };
+    const itemEvidence = countMediaEvidenceFromItems(ext.result?.items || []);
+    const domEvidence = collectDomMediaEvidence();
+    const derivedImages = Math.max(s.images || 0, itemEvidence.imageSignals, domEvidence.imageDomCount > 0 ? 1 : 0);
+    const derivedFiles = Math.max(s.files || 0, itemEvidence.fileSignals, domEvidence.fileDomCount > 0 ? 1 : 0);
+
+    const pass = s.messages > 0 && (derivedImages > 0 || derivedFiles > 0);
+    const warn = s.messages > 0 && derivedImages === 0 && derivedFiles === 0;
+
+    if (pass) {
+      return {
+        success: true,
+        status: 'PASS',
+        details: `Extracted messages=${s.messages}, images=${derivedImages}, files=${derivedFiles}, self-heal=${healed ? 'yes' : 'fallback-only'}, localOnly=${localOnly}, classifier=${classifierModel}`,
+        evidence: { summary: s, itemEvidence, domEvidence }
+      };
+    }
+    if (warn) {
+      return {
+        success: true,
+        status: 'WARN',
+        details: `Messages detected but no media/files. messages=${s.messages}, images=${derivedImages}, files=${derivedFiles}, self-heal=${healed ? 'yes' : 'fallback-only'}, localOnly=${localOnly}, classifier=${classifierModel}`,
+        evidence: { summary: s, itemEvidence, domEvidence }
+      };
+    }
+    return { success: true, status: 'FAIL', details: `No viable candidates found. localOnly=${localOnly}, classifier=${classifierModel}`, evidence: { summary: s, itemEvidence, domEvidence } };
   }
 
   const ASSET_ALLOWLIST = ['chatgpt.com', 'chat.openai.com', 'oaistatic.com', 'openai.com',
@@ -2132,7 +2455,8 @@
         exportedContent,
         visualElementsCount: (items || []).length
       });
-      sendRuntime({ action: 'LOG_ERROR', message: 'AEGIS Session Log', details: JSON.stringify(sessionLog) }).catch(() => null);
+      sendRuntime({ action: 'LOG_EVENT', level: 'INFO', message: 'AEGIS Session Log', details: JSON.stringify(sessionLog) }).catch(() => null);
+      window.FlightRecorderToolkit?.record?.({ lvl: 'INFO', event: 'extract.dom.snapshot', module: 'content', phase: 'detect', platform: 'unknown', tabScope: 'tab', result: 'ok', reason: 'session_log' });
       return sessionLog;
     } catch (error) {
       console.warn('[LOGGER] failed to emit session diagnostics', error?.message || error);
@@ -2164,6 +2488,111 @@
     return runLocalAgentExtract({ ...options, mode: 'agentic' });
   }
 
+
+  function queryDeepPrometheus(root, selector) {
+    if (!root || !selector) return [];
+    const out = [];
+    const seen = new Set();
+    const pushAll = (ctx) => {
+      if (!ctx?.querySelectorAll) return;
+      for (const node of Array.from(ctx.querySelectorAll(selector))) {
+        if (seen.has(node)) continue;
+        seen.add(node);
+        out.push(node);
+      }
+    };
+
+    pushAll(root);
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      if (node?.shadowRoot) {
+        pushAll(node.shadowRoot);
+      }
+    }
+    return out;
+  }
+
+  function predictRolePrometheus(element) {
+    const rect = element.getBoundingClientRect();
+    const right = rect.left > (window.innerWidth * 0.4);
+    if (right) return 'USER';
+    const hasModelIcon = queryDeepPrometheus(element, 'svg, img[alt*="Gemini" i], [aria-label*="Gemini" i]').length > 0;
+    if (!right && hasModelIcon) return 'MODEL';
+    return 'UNKNOWN';
+  }
+
+  function fallbackTextDensityScan() {
+    const candidates = Array.from(document.querySelectorAll('main div, main article, [role="main"] div'))
+      .map((el) => ({ el, len: (el.textContent || '').trim().length }))
+      .filter((x) => x.len > 60)
+      .sort((a, b) => b.len - a.len)
+      .slice(0, 12);
+    return candidates.map((entry, index) => ({
+      role: index % 2 === 0 ? 'MODEL' : 'USER',
+      content: (entry.el.textContent || '').replace(/\s+/g, ' ').trim(),
+      images: []
+    }));
+  }
+
+  async function toDataUrlPrometheus(url) {
+    if (!url || /^data:/i.test(url)) return String(url || '');
+    try {
+      const response = await fetch(url, { credentials: 'include' });
+      if (!response.ok) return '';
+      const blob = await response.blob();
+      return await new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onloadend = () => resolve(String(fr.result || ''));
+        fr.onerror = () => reject(fr.error || new Error('read_failed'));
+        fr.readAsDataURL(blob);
+      });
+    } catch {
+      return '';
+    }
+  }
+
+  async function extractPrometheusVisual() {
+    const turnSelectors = [
+      'main [data-test-id*="user" i]',
+      'main [data-test-id*="model" i]',
+      'main article',
+      'ms-chat-turn',
+      '[data-turn-id]'
+    ];
+
+    let turns = [];
+    for (const selector of turnSelectors) {
+      turns = queryDeepPrometheus(document, selector).filter((el) => (el.textContent || '').trim().length > 0);
+      if (turns.length > 0) break;
+    }
+
+    const messages = [];
+    for (const turn of turns.slice(0, 400)) {
+      const role = predictRolePrometheus(turn);
+      const cmLines = queryDeepPrometheus(turn, '.cm-content .cm-line, .cm-line').map((n) => (n.textContent || '').trimEnd()).filter(Boolean);
+      const proseLines = queryDeepPrometheus(turn, 'p,div,span').map((n) => (n.textContent || '').trim()).filter(Boolean);
+      const content = (cmLines.length ? cmLines : proseLines).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+      if (!content) continue;
+      const imageNodes = queryDeepPrometheus(turn, 'img[src]');
+      const images = [];
+      for (const img of imageNodes.slice(0, 6)) {
+        const src = img.currentSrc || img.getAttribute('src') || '';
+        const dataUrl = await toDataUrlPrometheus(src);
+        if (dataUrl) images.push(dataUrl);
+      }
+      messages.push({ role, content, images });
+    }
+
+    const finalMessages = messages.length > 0 ? messages : fallbackTextDensityScan();
+    return {
+      success: true,
+      source: location.hostname,
+      fallback_used: messages.length === 0,
+      messages: finalMessages
+    };
+  }
+
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'ping_content') {
       sendResponse({ injected: true, href: location.href, domain: location.hostname });
@@ -2173,8 +2602,12 @@
       extractChatData(request.options || {}).then(sendResponse);
       return true;
     }
+    if (request.action === 'extract_chatgpt_full') {
+      extractChatGptFullData().then(sendResponse).catch((error) => sendResponse({ success: false, error: error?.message || 'extract_chatgpt_full_failed' }));
+      return true;
+    }
     if (request.action === 'scroll_chat') {
-      loadFullHistory(sendResponse);
+      loadFullHistory().then(sendResponse).catch((error) => sendResponse({ status: 'failed', error: error?.message || 'hydration_failed' }));
       return true;
     }
     if (request.action === 'analyze_dom') {
@@ -2204,6 +2637,10 @@
     }
     if (request.action === 'extract_local_agent') {
       runLocalAgentExtract(request.options || {}).then(sendResponse);
+      return true;
+    }
+    if (request.action === 'extract_prometheus_visual') {
+      extractPrometheusVisual().then(sendResponse);
       return true;
     }
     if (request.action === 'extract_chat_agentic') {

@@ -1,0 +1,31 @@
+name: Enforce Quality
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install
+        run: npm ci
+      - name: Runtime smoke tests
+        run: npm run test:runtime
+      - name: Full tests
+        run: npm test
+      - name: Verify claim gates
+        run: npm run verify:claims
+      - name: Verify diagnostics secret redaction
+        run: npm run verify:no-secrets
+      - name: Scoped UI changes gate
+        run: |
+          RANGE="${{ github.event.before }}..${{ github.sha }}"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            RANGE="${{ github.event.pull_request.base.sha }}..${{ github.sha }}"
+          fi
+          VERIFY_SCOPED_RANGE="$RANGE" npm run verify:scoped

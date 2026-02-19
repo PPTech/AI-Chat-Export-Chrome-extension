@@ -6,56 +6,42 @@
 
 ## Scope
 - Repository: `AI-Chat-Export-Chrome-extension`
-- Requested external source: Google AI Studio prompt link (access attempt failed with HTTP 403 from this environment).
-- Method: static review of repository code and metadata.
+- Audit date: 2026-02-18
+- Method: static code review + fixture/integration test run (`npm test`)
 
-## Access limitation
-- The provided AI Studio URL could not be read from this runtime due to a `curl: (56) CONNECT tunnel failed, response 403` error.
+## Confirmed Bottlenecks (Root Causes)
 
-## Gherkin BDD Findings
+1. **Content injection coverage mismatch**
+   - `manifest.json` did not include wildcard ChatGPT rollout hosts (`*.chatgpt.com`) across all relevant sections.
+   - Result: content script could fail to inject on valid ChatGPT pages.
 
-```gherkin
-Feature: Secure and standards-compliant chat export extension
+2. **Selector and text extraction fragility**
+   - `content_miner/extract.mjs` relied mainly on older selector patterns and `innerText`.
+   - Result: some DOM snapshots produced empty message payloads even when message nodes existed.
 
-  Scenario: Extension asks for excessive host permissions
-    Given the manifest requests "<all_urls>" host permissions
-    When the extension is installed
-    Then it has broader site access than required for supported chat platforms
-    And this increases security and privacy risk surface
+3. **Role inference underfit**
+   - Role detection did not consistently consume subtree metadata (`data-testid`, nested role hints).
+   - Result: too many `unknown` roles and lower downstream quality.
 
-  Scenario: Raw HTML export can include unsanitized page HTML
-    Given rawHtml mode returns element.innerHTML directly
-    When exported output is opened as HTML/DOC
-    Then untrusted markup can be preserved and later rendered
-    And this may reintroduce scriptable content depending on viewer behavior
+4. **Diagnostics explainability gaps**
+   - Diagnostics builder did not always include stage records in a single contract call.
+   - Result: difficult triage when extraction/resolution latency or failures occurred.
 
-  Scenario: Internal logs may store message details without redaction
-    Given background logging stringifies arbitrary details
-    When extraction errors include user content fragments
-    Then sensitive data can be written into downloadable logs
+5. **Documentation drift**
+   - README version and audit statements were stale relative to current architecture.
+   - Result: misleading operational expectations and weaker incident response.
 
-  Scenario: PDF generator builds non-compliant structure
-    Given the simple PDF writer uses placeholder/fake cross-reference data
-    When the file is opened by stricter PDF parsers
-    Then rendering or compatibility can fail
+## Remediation Applied
 
-  Scenario: Project governance files are incomplete for release process
-    Given repository-level controls require CHANGELOG.md, MEMORY.md and CI workflows
-    When checking the current tree
-    Then those files are missing
-    And release traceability is reduced
-```
+- Added `https://*.chatgpt.com/*` coverage to host permissions, content script matches, and web-accessible resource matches.
+- Added selector tier `v4` and robust text fallback (`innerText` to `textContent`) in extractor.
+- Hardened role inference via combined direct + subtree metadata hints.
+- Extended diagnostics contract to accept `stages` and manifest contract to accept deterministic `createdAtUtc` override.
+- Removed non-English comment text from repository files (English-only source policy).
+- Updated documentation (`README.md`, `CHANGELOG.md`) to reflect 0.12.7 fixes.
 
-## Non-Gherkin technical notes
-1. `manifest.json` uses broad `<all_urls>` host permission instead of explicit host allowlist for supported targets.
-2. `content.js` returns `element.innerHTML` when `rawHtml` is enabled, bypassing later sanitization safeguards.
-3. `background.js` stores and exposes logs through `GET_LOGS` without masking/scrubbing.
-4. `script.js` PDF output contains intentionally simplified xref/startxref handling, which is fragile for strict readers.
-5. Repository currently lacks `CHANGELOG.md`, `MEMORY.md`, and `.github/workflows/*` despite stated process goals.
+## Residual Risks / Next Work
 
-## Recommended next actions
-- Replace `<all_urls>` with exact domains in host permissions.
-- Add strict HTML sanitization pipeline or disable raw HTML export by default.
-- Add log redaction for content payloads, tokens, and PII-like strings.
-- Replace custom PDF builder with a standards-compliant library or produce HTML/DOC only.
-- Add release governance files (`CHANGELOG.md`, `MEMORY.md`) and CI workflow for build/security checks.
+- Add runtime telemetry sampling to compare selector hit-rates by host variant.
+- Add deterministic bundle integration tests that assert fixed timestamps in manifest output.
+- Add browser-level smoke test for ChatGPT subdomain rollout hosts in CI.

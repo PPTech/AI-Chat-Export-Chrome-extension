@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AI Chat Exporter (Ultimate)",
-  "version": "0.12.6",
+  "version": "0.12.20",
   "description": "AEGIS-2026 local-only autonomous extractor with self-healing and secure artifact export.",
   "action": {
     "default_popup": "index.html",
@@ -25,7 +25,8 @@
     "https://chat.openai.com/*",
     "https://claude.ai/*",
     "https://gemini.google.com/*",
-    "https://aistudio.google.com/*"
+    "https://aistudio.google.com/*",
+    "https://*.chatgpt.com/*"
   ],
   "content_scripts": [
     {
@@ -34,20 +35,25 @@
         "*://chat.openai.com/*",
         "*://gemini.google.com/*",
         "*://claude.ai/*",
-        "*://aistudio.google.com/*"
+        "*://aistudio.google.com/*",
+        "*://*.chatgpt.com/*"
       ],
       "js": [
+        "diagnostics/redact.js",
+        "diagnostics/flight_recorder.js",
         "security_guard.js",
         "smart_vision.js",
         "offline_brain.js",
         "logger.js",
         "export_core.js",
         "visual_walker.js",
+        "attachment_classifier.js",
         "asset_processor.js",
         "smart_miner.js",
         "smart_agent.js",
         "visual_engine.js",
         "artifact_builder.js",
+        "chatgpt_backend_utils.js",
         "content.js"
       ]
     }
@@ -68,19 +74,25 @@
         "export_core.js",
         "logger.js",
         "visual_engine.js",
-        "artifact_builder.js"
+        "artifact_builder.js",
+        "network_policy.js",
+        "chatgpt_backend_utils.js",
+        "attachment_classifier.js",
+        "diagnostics/redact.js",
+        "diagnostics/flight_recorder.js"
       ],
       "matches": [
         "https://chatgpt.com/*",
         "https://chat.openai.com/*",
         "https://claude.ai/*",
         "https://gemini.google.com/*",
-        "https://aistudio.google.com/*"
+        "https://aistudio.google.com/*",
+        "https://*.chatgpt.com/*"
       ]
     }
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'"
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self' https://*.googleusercontent.com https://*.gstatic.com https://*.google.com https://*.oaistatic.com https://*.oaiusercontent.com https://*.openai.com https://*.anthropic.com; base-uri 'self'; form-action 'self'"
   },
   "optional_host_permissions": [
     "https://*.oaiusercontent.com/*",
@@ -88,6 +100,9 @@
     "https://*.openai.com/*",
     "https://*.googleusercontent.com/*",
     "https://*.gstatic.com/*",
-    "https://*.anthropic.com/*"
+    "https://*.anthropic.com/*",
+    "https://*.google.com/*",
+    "https://lh3.google.com/*",
+    "https://lh3.googleusercontent.com/*"
   ]
 }

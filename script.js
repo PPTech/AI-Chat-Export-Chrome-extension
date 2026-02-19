@@ -1,12 +1,13 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// نویسنده دکتر بابک سرخپور با کمک ابزار چت جی پی تی.
-// script.js - Main Controller v0.12.6
+// Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
+// script.js - Main Controller v0.12.20
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
   let activeTabId = null;
+  let analyzeBlinkTimer = null;
   let gestureProofToken = "";
 
   const btnExport = document.getElementById('btn-export-main');
@@ -21,6 +22,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnExtractLocal = document.getElementById('btn-extract-local');
   const btnSelfTest = document.getElementById('btn-self-test');
   const btnLogs = document.getElementById('btn-download-logs');
+  const btnCopyLastError = document.getElementById('btn-copy-last-error');
+  const btnPurgeLogs = document.getElementById('btn-purge-logs');
   const btnExportConfig = document.getElementById('btn-export-config');
   const checkImages = document.getElementById('check-images');
   const checkCode = document.getElementById('check-code');
@@ -28,7 +31,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const checkZip = document.getElementById('check-zip');
   const checkPhotoZip = document.getElementById('check-photo-zip');
   const checkExportFiles = document.getElementById('check-export-files');
-  const checkDebugOverlay = document.getElementById('check-debug-overlay');
+  const checkExternalLinks = document.getElementById('check-external-links');
+  const checkDebugLogging = document.getElementById('check-debug-logging');
+  const checkSafeKeyTelemetry = document.getElementById('check-safe-key-telemetry');
 
   const settingsModal = document.getElementById('settings-modal');
   const errorModal = document.getElementById('error-modal');
@@ -36,9 +41,30 @@ document.addEventListener('DOMContentLoaded', () => {
   const infoModal = document.getElementById('info-modal');
   const errorMsg = document.getElementById('error-msg');
   const errorFix = document.getElementById('error-fix');
+  const diagRunCard = document.getElementById('diag-run-card');
 
   const SETTINGS_KEY = 'ai_exporter_settings_v1';
   const tempMediaCache = createTempMediaCache();
+
+  function isDebugLoggingEnabled() {
+    return !!checkDebugLogging?.checked;
+  }
+
+  function logActivity(direction, action, payload = null, level = 'INFO') {
+    const entry = {
+      ts: new Date().toISOString(),
+      direction,
+      action,
+      payload: payload == null ? null : JSON.parse(JSON.stringify(payload, (_, v) => typeof v === 'string' && v.length > 600 ? `${v.slice(0, 600)}...` : v))
+    };
+    if (isDebugLoggingEnabled()) {
+      const fn = level === 'ERROR' ? console.error : (level === 'WARN' ? console.warn : console.log);
+      fn(`[ACTIVITY][${direction}] ${action}`, entry.payload || '');
+      const withScope = { ...entry, tabId: activeTabId ?? null, tabScope: activeTabId ? 'tab' : 'global' };
+      chrome.runtime.sendMessage({ action: 'LOG_EVENT', level, message: `${direction}:${action}`, details: withScope, tabId: activeTabId ?? null }, () => void chrome.runtime.lastError);
+      window.FlightRecorderToolkit?.record?.({ lvl: String(level || 'INFO').toUpperCase(), event: `${direction}.${action}`, tabId: activeTabId ?? null, tabScope: activeTabId ? 'tab' : 'global', platform: detectPlatform(), module: 'popup', phase: 'export', result: level === 'ERROR' ? 'fail' : 'ok', reason: 'activity' });
+    }
+  }
 
   function installLocalOnlyGuard() {
     const allow = ['chrome-extension://', 'data:', 'blob:'];
@@ -82,7 +108,11 @@ document.addEventListener('DOMContentLoaded', () => {
       zip: false,
       photoZip: true,
       exportFiles: true,
-      debugOverlay: false
+      includeExternalLinks: false,
+      debugLogging: false,
+      safeKeyTelemetry: false,
+      includeRedactedPreviews: false,
+      persistLogs: false
     };
   }
 
@@ -94,7 +124,11 @@ document.addEventListener('DOMContentLoaded', () => {
       zip: !!checkZip.checked,
       photoZip: !!checkPhotoZip.checked,
       exportFiles: !!checkExportFiles.checked,
-      debugOverlay: !!checkDebugOverlay?.checked,
+      includeExternalLinks: !!checkExternalLinks?.checked,
+      debugLogging: !!checkDebugLogging?.checked,
+      safeKeyTelemetry: !!checkSafeKeyTelemetry?.checked,
+      includeRedactedPreviews: false,
+      persistLogs: false,
       updatedAt: new Date().toISOString()
     };
   }
@@ -107,7 +141,8 @@ document.addEventListener('DOMContentLoaded', () => {
     checkZip.checked = !!s.zip;
     checkPhotoZip.checked = !!s.photoZip;
     checkExportFiles.checked = !!s.exportFiles;
-    if (checkDebugOverlay) checkDebugOverlay.checked = !!s.debugOverlay;
+    if (checkExternalLinks) checkExternalLinks.checked = !!s.includeExternalLinks;
+    if (checkDebugLogging) checkDebugLogging.checked = !!(s.debugLogging ?? s.debugOverlay);
   }
 
   function saveSettingsToStorage(settings) {
@@ -122,7 +157,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function exportSettingsCfg(settings) {
     const lines = Object.entries(settings).map(([k, v]) => `${k}=${String(v)}`);
-    const cfg = `# AI Chat Exporter Settings\n# version=0.10.26\n${lines.join('\n')}\n`;
+    const cfg = `# AI Chat Exporter Settings\n# version=0.12.20\n${lines.join('\n')}\n`;
     const date = new Date().toISOString().slice(0, 10);
     downloadBlob(new Blob([cfg], { type: 'text/plain' }), `ai_chat_exporter_settings_${date}.cfg`);
   }
@@ -153,8 +188,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function requestExtraction() {
+    logActivity('flow', 'requestExtraction.start', { tabId: activeTabId });
     const options = { convertImages: checkImages.checked, rawHtml: checkRawHtml.checked, highlightCode: checkCode.checked, extractFiles: checkExportFiles.checked };
-    await ensureAssetPermissions();
     setAnalyzeProgress(25, 'Agent self-test');
 
     const runLegacyFallback = () => {
@@ -174,14 +209,14 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     };
 
-    const selfTest = await sendToActiveTab({ action: 'self_test_local_agent', options: { debug: !!checkDebugOverlay?.checked } });
+    const selfTest = await sendToActiveTab({ action: 'self_test_local_agent', options: { debug: !!checkDebugLogging?.checked } });
     if (!selfTest?.success || selfTest?.status === 'FAIL') {
       runLegacyFallback();
       return;
     }
 
     setAnalyzeProgress(55, 'Agentic extraction');
-    const local = await sendToActiveTab({ action: 'extract_local_agent', options: { debug: !!checkDebugOverlay?.checked, requireModel: true } });
+    const local = await sendToActiveTab({ action: 'extract_local_agent', options: { debug: !!checkDebugLogging?.checked, requireModel: true } });
     if (!local?.success) {
       runLegacyFallback();
       return;
@@ -197,8 +232,7 @@ document.addEventListener('DOMContentLoaded', () => {
           ...(m.contentBlocks || []).map((b) => String(b.text || '')),
           ...(m.attachments || []).map((a) => a.kind === 'image' ? `[[IMG:${a.sourceUrl || ''}]]` : `[[FILE:${a.sourceUrl || ''}|${a.displayName || 'File'}]]`)
         ].filter(Boolean);
-        return { role: m.role, content: parts.join('
-'), order: idx, attachments: m.attachments || [] };
+        return { role: m.role, content: parts.join('\n'), order: idx, attachments: m.attachments || [] };
       }),
       diagnostics: buildDiagnosticsBundle(dataset, "LocalAgent")
     };
@@ -257,7 +291,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const diag = dataset?.diagnostics || {};
     return {
       runId,
-      version: '0.12.0',
+      version: '0.12.20',
       host: location.hostname || 'unknown',
       pageUrl: location.href || '',
       timestamp: now,
@@ -283,9 +317,10 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('msg-count').textContent = res.messages.length;
       document.getElementById('empty-view').style.display = 'none';
       document.getElementById('stats-view').style.display = 'block';
-      updateDetectedSummary(res.messages || []);
+      updateDetectedSummary(res.messages || [], res.dataset || null);
       setAnalyzeProgress(100, 'Completed');
       chrome.runtime.sendMessage({ action: 'SET_DATA', tabId: activeTabId, data: res });
+      logActivity('outbound', 'runtime.SET_DATA', { tabId: activeTabId, platform: res?.platform, messages: res?.messages?.length || 0 });
       updateExportBtn();
       return;
     }
@@ -316,10 +351,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const el = document.getElementById('analyze-progress');
     if (!el) return;
     const bounded = Math.max(0, Math.min(100, Math.round(percent)));
+    const waiting = /waiting|fetch full|loading history/i.test(label);
+    if (!waiting && analyzeBlinkTimer) {
+      clearInterval(analyzeBlinkTimer);
+      analyzeBlinkTimer = null;
+    }
+    if (waiting && !analyzeBlinkTimer) {
+      let tick = 0;
+      analyzeBlinkTimer = setInterval(() => {
+        const dots = '.'.repeat((tick % 3) + 1);
+        el.style.opacity = tick % 2 === 0 ? '1' : '0.5';
+        el.textContent = `Analysis Progress (messages/images/files): ${bounded}% (${label}${dots})`;
+        tick += 1;
+      }, 420);
+      return;
+    }
+    el.style.opacity = '1';
     el.textContent = `Analysis Progress (messages/images/files): ${bounded}% (${label})`;
   }
 
-  function computeDetectedCounts(messages = []) {
+  function computeDetectedCounts(messages = [], dataset = null) {
     let photos = 0;
     let files = 0;
     let others = 0;
@@ -328,15 +379,22 @@ document.addEventListener('DOMContentLoaded', () => {
     let otherQuotes = 0;
     const imgRegex = /\[\[IMG:[\s\S]*?\]\]|!\[[^\]]*\]\((data:image\/[^)]+|https?:\/\/[^)]+)\)/g;
     const fileRegex = /\[\[FILE:([^|\]]+)\|([^\]]+)\]\]/g;
+    const sandboxRegex = /sandbox:(?:\/\/)?\/mnt\/data\/[^\s)\]>"']+/gi;
     const linkRegex = /https?:\/\/[^\s)]+/g;
+    const fileLikeLinkRegex = /https?:\/\/[^\s)]+\.(?:csv|pdf|docx|xlsx|pptx|py|js|ts|json|xml|txt|zip|md)/gi;
     for (const m of messages) {
       const content = m.content || '';
       photos += (content.match(imgRegex) || []).length;
       files += (content.match(fileRegex) || []).length;
+      files += (content.match(sandboxRegex) || []).length;
+      files += (content.match(fileLikeLinkRegex) || []).length;
       otherCodeBlocks += (content.match(/```/g) || []).length / 2;
       otherLinks += Math.max(0, (content.match(linkRegex) || []).length - (content.match(fileRegex) || []).length);
       otherQuotes += (content.match(/^>\s+/gm) || []).length;
     }
+    const attachments = dataset?.attachments || [];
+    photos += attachments.filter((a) => a.kind === 'image').length;
+    files += attachments.filter((a) => a.kind === 'file').length;
     others = Math.round(otherCodeBlocks + otherLinks + otherQuotes);
     return {
       messages: messages.length,
@@ -349,14 +407,17 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
-  function updateDetectedSummary(messages = []) {
+  function updateDetectedSummary(messages = [], dataset = null) {
     const el = document.getElementById('detected-summary');
     if (!el) return;
-    const c = computeDetectedCounts(messages);
-    el.textContent = `Detected: ${c.messages} messages • ${c.photos} photos • ${c.files} files • ${c.others} others (code:${c.otherCodeBlocks}, links:${c.otherLinks}, quotes:${c.otherQuotes})`;
+    const c = computeDetectedCounts(messages, dataset);
+    el.textContent = `Detected: ${c.messages} messages | ${c.photos} photos | ${c.files} files | ${c.others} others (code:${c.otherCodeBlocks}, links:${c.otherLinks}, quotes:${c.otherQuotes})`;
   }
 
   btnExport.onclick = async () => {
+    const runId = window.FlightRecorderToolkit?.startRun?.() || 'run_unknown';
+    logActivity('ui', 'export.main.click', { formatCount: getSelectedFormats().length, runId });
+    if (diagRunCard) diagRunCard.textContent = `RunId: ${runId} | Errors: 0`;
     const formats = Array.from(document.querySelectorAll('.format-item.selected')).map((i) => i.dataset.ext);
     if (!formats.length || !currentChatData) return;
     btnExport.disabled = true;
@@ -377,19 +438,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
 
-      const bundleManifest = {
-        generatedAt: new Date().toISOString(),
-        version: '0.12.0',
-        fileCount: files.length,
-        files: files.map((f) => ({ name: f.name, mime: f.mime || 'application/octet-stream', byteLength: (typeof f.content === 'string' ? f.content.length : (f.content?.length || 0)) })),
-        datasetSummary: {
-          messages: currentChatData?.dataset?.messages?.length || currentChatData?.messages?.length || 0,
-          attachments: currentChatData?.dataset?.attachments?.length || 0
-        }
-      };
-      files.push({ name: `${baseName}.diagnostics.json`, content: JSON.stringify(currentChatData?.diagnostics || {}, null, 2), mime: 'application/json' });
-      files.push({ name: `${baseName}.export_bundle_manifest.json`, content: JSON.stringify(bundleManifest, null, 2), mime: 'application/json' });
-
       if (files.length === 1 && !checkZip.checked) {
         setProcessingProgress(95, 'Finalizing');
         downloadBlob(new Blob([files[0].content], { type: files[0].mime }), files[0].name);
@@ -409,12 +457,13 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   btnLoadFull.onclick = () => {
+    logActivity('ui', 'fetch.full.click', { tabId: activeTabId });
     if (!activeTabId) return;
     const ok = window.confirm('Load full chat from the beginning? This may take longer for long chats.');
     if (!ok) return;
-    setAnalyzeProgress(5, 'Preparing full-load scan');
+    setAnalyzeProgress(5, 'Waiting - Fetch Full');
     chrome.tabs.sendMessage(activeTabId, { action: 'scroll_chat' }, () => {
-      setAnalyzeProgress(80, 'Finalizing full-load scan');
+      setAnalyzeProgress(80, 'Waiting - Finalizing full-load scan');
       setTimeout(requestExtraction, 800);
     });
   };
@@ -425,7 +474,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('msg-count').textContent = '0';
     document.getElementById('empty-view').style.display = 'block';
     document.getElementById('stats-view').style.display = 'none';
-    updateDetectedSummary([]);
+    updateDetectedSummary([], null);
     if (activeTabId) chrome.runtime.sendMessage({ action: 'CLEAR_DATA', tabId: activeTabId });
     updateExportBtn();
   };
@@ -438,6 +487,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   btnExportConfig.onclick = () => {
+    logActivity('ui', 'settings.export', collectSettings());
     const settings = collectSettings();
     saveSettingsToStorage(settings);
     exportSettingsCfg(settings);
@@ -447,21 +497,38 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.runtime.sendMessage({ action: 'GET_LOGS' }, (logs) => {
       downloadBlob(new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' }), 'ai_exporter_logs.json');
     });
-    chrome.runtime.sendMessage({ action: 'GET_DIAGNOSTICS_JSONL' }, (diag) => {
-      if (diag?.success) downloadBlob(new Blob([(diag.lines || []).join('\n')], { type: 'application/x-ndjson' }), 'ai_exporter_diagnostics.jsonl');
+    chrome.runtime.sendMessage({ action: 'GET_DIAGNOSTICS_V3_JSONL' }, (diag) => {
+      const payload = (diag?.success && typeof diag.jsonl === 'string') ? diag.jsonl : JSON.stringify(diag || {}, null, 2);
+      downloadBlob(new Blob([payload], { type: 'application/x-ndjson' }), 'ai_exporter_diagnostics_v3.jsonl');
     });
   };
 
+  btnCopyLastError?.addEventListener('click', () => {
+    chrome.runtime.sendMessage({ action: 'GET_LOGS' }, async (logs) => {
+      const arr = Array.isArray(logs) ? logs : [];
+      const row = [...arr].reverse().find((x) => String(x?.level || '').toUpperCase() === 'ERROR');
+      const summary = row ? `${row.timestamp} | ${row.message}` : 'No ERROR entries.';
+      try { await navigator.clipboard.writeText(summary); } catch {}
+    });
+  });
+
+  btnPurgeLogs?.addEventListener('click', () => {
+    chrome.runtime.sendMessage({ action: 'PURGE_DIAGNOSTICS_V3' }, () => void chrome.runtime.lastError);
+    if (diagRunCard) diagRunCard.textContent = 'RunId: - | Errors: 0';
+  });
+
   btnExportImages.onclick = async () => {
+    logActivity('ui', 'export.images.click', { tabId: activeTabId });
     if (!currentChatData) return;
+    const permPromise = requestAssetPermissionsFromGesture();
     const imageList = extractAllImageSources(currentChatData.messages, currentChatData.dataset);
     if (!imageList.length) return showError(new Error('No images found in extracted chat data.'));
+    await permPromise;
 
     const packMode = !!checkPhotoZip.checked;
     const date = new Date().toISOString().slice(0, 10);
     const platformPrefix = (currentChatData.platform || 'Export').replace(/[^a-zA-Z0-9]/g, '');
-    await ensureAssetPermissions();
-    const processor = window.DataProcessor ? new window.DataProcessor() : null;
+    const processor = window.DataProcessor ? new window.DataProcessor({ includeExternalLinks: !!checkExternalLinks?.checked }) : null;
     const textCorpus = (currentChatData.messages || []).map((m) => m.content || '').join('\n');
 
     if (!packMode) {
@@ -500,16 +567,26 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   btnExportFiles.onclick = async () => {
+    logActivity('ui', 'export.files.click', { tabId: activeTabId });
     if (!currentChatData) return;
     if (!checkExportFiles.checked) return showInfo('Files Export Disabled', 'Enable "Extract and ZIP Chat Files" in Settings first.');
 
-    await ensureAssetPermissions();
-    const processor = window.DataProcessor ? new window.DataProcessor() : null;
+    const permPromise = requestAssetPermissionsFromGesture();
+    const processor = window.DataProcessor ? new window.DataProcessor({ includeExternalLinks: !!checkExternalLinks?.checked }) : null;
     const textCorpus = (currentChatData.messages || []).map((m) => m.content || '').join('\n');
     const metaFiles = processor ? processor.extractDownloadMetadata(textCorpus) : [];
-    const legacyFiles = extractAllFileSources(currentChatData.messages, currentChatData.dataset).map((f) => ({ fileName: f.name, url: f.url, type: /^sandbox:/i.test(f.url) ? 'sandbox' : 'text_reference', needsResolution: /^sandbox:/i.test(f.url) }));
+    const legacyFiles = extractAllFileSources(currentChatData.messages, currentChatData.dataset, !!checkExternalLinks?.checked).map((f) => ({ fileName: f.name, url: f.url, type: /^sandbox:/i.test(f.url) ? 'sandbox' : 'text_reference', needsResolution: /^sandbox:/i.test(f.url) }));
     const filesFound = processor ? processor.deduplicateFiles([...legacyFiles, ...metaFiles]) : legacyFiles;
+    await permPromise;
 
+    if (!filesFound.length && /(chatgpt\.com|chat\.openai\.com)/i.test(location.hostname)) {
+      const resolved = await sendToActiveTab({ action: 'resolve_download_chatgpt_file_links' });
+      if (resolved?.success) {
+        const stats = resolved.stats || { total: 0, downloaded: 0, failed: 0 };
+        showInfo('Resolve + Download Finished', `[${stats.downloaded === stats.total ? 'PASS' : (stats.downloaded > 0 ? 'WARN' : 'FAIL')}] downloaded ${stats.downloaded}/${stats.total}, failed ${stats.failed}.`);
+        return;
+      }
+    }
     if (!filesFound.length) return showError(new Error('No chat-generated file links were detected.'));
     console.log(`[FILES] Found ${filesFound.length} references`);
 
@@ -518,8 +595,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const resolved = await resolveAssetViaBroker(path);
         return resolved?.sourceUrl || resolved?.download_url || null;
       }, (progress) => {
-        if (progress.status === 'ok') console.log(`[FILES][${progress.index}/${progress.total}] ✓ ${progress.fileName}`);
-        else console.warn(`[FILES][${progress.index}/${progress.total}] ✗ ${progress.fileName}: ${progress.error || 'failed'}`);
+        if (progress.status === 'ok') console.log(`[FILES][${progress.index}/${progress.total}] OK ${progress.fileName}`);
+        else console.warn(`[FILES][${progress.index}/${progress.total}] FAIL ${progress.fileName}: ${progress.error || 'failed'}`);
       })
       : { succeeded: [], failed: filesFound, total: filesFound.length };
 
@@ -584,8 +661,9 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   btnExtractLocal.onclick = async () => {
+    logActivity('ui', 'extract.local.click', { debug: !!checkDebugLogging?.checked });
     if (!activeTabId) return;
-    const response = await sendToActiveTab({ action: 'extract_local_agent', options: { debug: !!checkDebugOverlay?.checked } });
+    const response = await sendToActiveTab({ action: 'extract_local_agent', options: { debug: !!checkDebugLogging?.checked } });
     if (!response?.success) {
       showError(new Error(response?.error || 'Local extract failed. Check Ping + Self-Test and open page console for [SmartMiner]/[SCAN]/[DL] diagnostics.'));
       return;
@@ -595,8 +673,9 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   btnSelfTest.onclick = async () => {
+    logActivity('ui', 'self.test.click', { debug: !!checkDebugLogging?.checked });
     if (!activeTabId) return;
-    const response = await sendToActiveTab({ action: 'self_test_local_agent', options: { debug: !!checkDebugOverlay?.checked } });
+    const response = await sendToActiveTab({ action: 'self_test_local_agent', options: { debug: !!checkDebugLogging?.checked } });
     if (!response?.success) {
       showError(new Error(response?.error || 'Self-test failed.'));
       return;
@@ -615,8 +694,19 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function showError(error) {
-    errorMsg.textContent = error?.message || 'Unknown export error.';
-    errorFix.textContent = 'Use Fetch Full first. If images still missing, enable Include Images and retry.';
+    const message = error?.message || 'Unknown export error.';
+    errorMsg.textContent = message;
+    if (/file/i.test(message)) {
+      if (/claude\.ai/i.test(location.hostname)) {
+        errorFix.textContent = 'On Claude, only clickable attachment links can be downloaded. Run Fetch Full, then use Export Files again. Plain filenames without URLs are not downloadable.';
+      } else {
+        errorFix.textContent = 'Use Fetch Full first, then run "Scan Sandbox Links" or "Resolve + Download All" for ChatGPT sandbox:/mnt/data files.';
+      }
+    } else if (/image/i.test(message)) {
+      errorFix.textContent = 'Use Fetch Full first. If images still missing, enable Include Images and retry.';
+    } else {
+      errorFix.textContent = 'Retry Fetch Full and run Self-Test. Open page DevTools for [SCAN]/[DL] diagnostics.';
+    }
     errorModal.style.display = 'flex';
   }
 
@@ -682,40 +772,87 @@ document.addEventListener('DOMContentLoaded', () => {
     }).join('');
   }
 
+
+  function isPlaceholderUrl(url = '') {
+    try {
+      const u = new URL(String(url || ''));
+      return u.hostname === 'example.com' || u.hostname.endsWith('.example.com');
+    } catch {
+      return false;
+    }
+  }
+
+  function warnPlaceholderUrl(url = '') {
+    const safeUrl = String(url || '');
+    console.warn('[ASSET][WARN] placeholder_url_detected', safeUrl);
+    logActivity('OUT', 'placeholder_url_detected', { host: (() => { try { return new URL(safeUrl).hostname; } catch { return 'unknown'; } })() }, 'WARN');
+  }
+
+  function classifyAttachmentCandidate(url, includeExternalLinks = false) {
+    const classifier = window.AttachmentClassifier;
+    if (!classifier?.classifyAttachmentUrl) return { accepted: true, reason: 'no_classifier' };
+    return classifier.classifyAttachmentUrl(url, { includeExternalLinks: !!includeExternalLinks });
+  }
+
   function extractAllImageSources(messages, dataset = null) {
     const set = new Set();
     const canonical = (dataset?.attachments || []).filter((a) => a.kind === 'image').map((a) => a?.resolved?.dataUri || a?.sourceUrl || '').filter(Boolean);
     canonical.forEach((src) => {
       const norm = normalizeImageSrc(src);
-      if (norm) set.add(norm);
+      if (!norm) return;
+      if (isPlaceholderUrl(norm)) {
+        warnPlaceholderUrl(norm);
+        return;
+      }
+      if (!classifyAttachmentCandidate(norm, false).accepted) return;
+      set.add(norm);
     });
 
     const tokenRegex = /\[\[IMG:([\s\S]*?)\]\]/g;
     const mdRegex = /!\[[^\]]*\]\((data:image\/[^)]+|https?:\/\/[^)]+)\)/g;
+    const directImgRegex = /https?:\/\/[^\s"')]+\.(?:png|jpe?g|gif|webp|bmp|svg)(?:\?[^\s"')]*)?/gi;
     for (const m of messages || []) {
       let match;
       while ((match = tokenRegex.exec(m.content || '')) !== null) {
         const src = normalizeImageSrc((match[1] || '').trim());
-        if (src) set.add(src);
+        if (!src) continue;
+        if (isPlaceholderUrl(src)) { warnPlaceholderUrl(src); continue; }
+        if (!classifyAttachmentCandidate(src, false).accepted) continue;
+        set.add(src);
       }
       while ((match = mdRegex.exec(m.content || '')) !== null) {
         const src = normalizeImageSrc((match[1] || '').trim());
-        if (src) set.add(src);
+        if (!src) continue;
+        if (isPlaceholderUrl(src)) { warnPlaceholderUrl(src); continue; }
+        if (!classifyAttachmentCandidate(src, false).accepted) continue;
+        set.add(src);
+      }
+      while ((match = directImgRegex.exec(m.content || '')) !== null) {
+        const src = normalizeImageSrc((match[0] || '').trim());
+        if (!src) continue;
+        if (isPlaceholderUrl(src)) { warnPlaceholderUrl(src); continue; }
+        if (!classifyAttachmentCandidate(src, false).accepted) continue;
+        set.add(src);
       }
     }
     return Array.from(set);
   }
 
-  function extractAllFileSources(messages, dataset = null) {
+  function extractAllFileSources(messages, dataset = null, includeExternalLinks = false) {
     const files = [];
     (dataset?.attachments || []).filter((a) => a.kind === 'file').forEach((a) => {
       const url = String(a?.sourceUrl || '').trim();
       if (!url) return;
       const safeName = String(a?.fileNameSafe || a?.displayName || 'file.bin').replace(/[\/:*?"<>|]+/g, '_') || 'file.bin';
+      if (isPlaceholderUrl(url)) { warnPlaceholderUrl(url); return; }
+      if (!classifyAttachmentCandidate(url, includeExternalLinks).accepted) return;
       files.push({ url, name: safeName });
     });
 
     const fileRegex = /\[\[FILE:([^|\]]+)\|([^\]]+)\]\]/g;
+    const sandboxRegex = /sandbox:(?:\/\/)?\/mnt\/data\/[^\s)\]>"']+/gi;
+    const markdownFileRegex = /\[[^\]]+\]\((sandbox:(?:\/\/)?\/mnt\/data\/[^)\s]+|https?:\/\/[^)\s]+\.(?:csv|pdf|docx|xlsx|pptx|py|js|ts|json|xml|txt|zip|md))\)/gi;
+    const plainFileRegex = /https?:\/\/[^\s"')]+\.(?:csv|pdf|docx|xlsx|pptx|py|js|ts|json|xml|txt|zip|md)(?:\?[^\s"')]*)?/gi;
     for (const m of messages || []) {
       let match;
       while ((match = fileRegex.exec(m.content || '')) !== null) {
@@ -723,8 +860,32 @@ document.addEventListener('DOMContentLoaded', () => {
         const fileName = (match[2] || 'file.bin').trim();
         if (!rawUrl) continue;
         const safeName = fileName.replace(/[\/:*?"<>|]+/g, '_') || 'file.bin';
+        if (isPlaceholderUrl(rawUrl)) { warnPlaceholderUrl(rawUrl); continue; }
+        if (!classifyAttachmentCandidate(rawUrl, includeExternalLinks).accepted) continue;
         files.push({ url: rawUrl, name: safeName });
       }
+      while ((match = sandboxRegex.exec(m.content || '')) !== null) {
+        const rawUrl = (match[0] || '').replace(/^sandbox:\/\//i, 'sandbox:/').trim();
+        const fileName = decodeURIComponent(rawUrl.split('/').pop() || 'file.bin').replace(/[\/:*?"<>|]+/g, '_') || 'file.bin';
+        if (isPlaceholderUrl(rawUrl)) { warnPlaceholderUrl(rawUrl); continue; }
+        if (!classifyAttachmentCandidate(rawUrl, includeExternalLinks).accepted) continue;
+        files.push({ url: rawUrl, name: fileName });
+      }
+      while ((match = markdownFileRegex.exec(m.content || '')) !== null) {
+        const rawUrl = (match[1] || '').trim();
+        const fileName = decodeURIComponent(rawUrl.split('/').pop() || 'file.bin').replace(/[\/:*?"<>|]+/g, '_') || 'file.bin';
+        if (isPlaceholderUrl(rawUrl)) { warnPlaceholderUrl(rawUrl); continue; }
+        if (!classifyAttachmentCandidate(rawUrl, includeExternalLinks).accepted) continue;
+        files.push({ url: rawUrl, name: fileName });
+      }
+      while ((match = plainFileRegex.exec(m.content || '')) !== null) {
+        const rawUrl = (match[0] || '').trim();
+        const fileName = decodeURIComponent(rawUrl.split('/').pop() || 'file.bin').replace(/[\/:*?"<>|]+/g, '_') || 'file.bin';
+        if (isPlaceholderUrl(rawUrl)) { warnPlaceholderUrl(rawUrl); continue; }
+        if (!classifyAttachmentCandidate(rawUrl, includeExternalLinks).accepted) continue;
+        files.push({ url: rawUrl, name: fileName });
+      }
+
     }
     const uniq = new Map();
     files.forEach((f) => { if (!uniq.has(f.url)) uniq.set(f.url, f); });
@@ -742,6 +903,10 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         if (!url) return '';
         const clean = sanitizeTokenUrl(url);
+        if (isPlaceholderUrl(clean)) {
+          warnPlaceholderUrl(clean);
+          return null;
+        }
         if (/^data:/i.test(clean)) return clean;
         const blob = await fetchFileBlob(clean);
         if (!blob) return clean;
@@ -860,6 +1025,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const title = data.title || 'Export';
 
     if (fmt === 'pdf') {
+      logActivity('export', 'pdf.mode', { mode: 'textBased' });
       const pdf = await buildRichPdf(title, msgs);
       return { content: pdf, mime: 'application/pdf' };
     }
@@ -867,7 +1033,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (fmt === 'doc' || fmt === 'html') {
       let richMsgs = msgs;
       if (window.DataProcessor) {
-        const processor = new window.DataProcessor();
+        const processor = new window.DataProcessor({ includeExternalLinks: !!checkExternalLinks?.checked });
         richMsgs = await processor.embedImages(msgs, fetchFileBlob);
       } else {
         richMsgs = await embedImagesAsDataUris(msgs);
@@ -877,6 +1043,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const manager = new window.ExportManager();
         const htmlOut = manager.buildSelfContainedHtml(title, richMsgs);
         if (fmt === 'doc') {
+      logActivity('export', 'doc.kind', { kind: 'docx' });
           return { content: manager.buildWordDocument(title, richMsgs), mime: 'application/msword' };
         }
         return { content: htmlOut, mime: 'text/html' };
@@ -886,6 +1053,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const body = richMsgs.map((m) => `<div class="msg"><div class="role">${escapeHtml(m.role)}</div><div>${renderRichMessageHtml(m.content)}</div></div>`).join('');
       const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><style>${style}</style></head><body><h1>${escapeHtml(title)}</h1>${body}</body></html>`;
       if (fmt === 'doc') {
+      logActivity('export', 'doc.kind', { kind: 'docx' });
         const docHtml = `<!DOCTYPE html><html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'><head><meta charset='utf-8'><style>${style}</style></head><body><h1>${escapeHtml(title)}</h1>${body}</body></html>`;
         return { content: docHtml, mime: 'application/msword' };
       }
@@ -983,8 +1151,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function detectScriptProfile(text) {
     const s = String(text || '');
-    const isRtl = /[֐-ࣿיִ-﷽ﹰ-ﻼ]/.test(s);
-    const isCjk = /[぀-ヿ㐀-鿿豈-﫿]/.test(s);
+    const isRtl = /[\u0590-\u08FF\uFB1D-\uFDFD\uFE70-\uFEFC]/.test(s);
+    const isCjk = /[\u3040-\u30FF\u3400-\u9FFF\uF900-\uFAFF]/.test(s);
     return { isRtl, isCjk };
   }
 
@@ -1204,6 +1372,10 @@ document.addEventListener('DOMContentLoaded', () => {
       async fetchBlob(url) {
         if (!url) return null;
         const clean = sanitizeTokenUrl(url);
+        if (isPlaceholderUrl(clean)) {
+          warnPlaceholderUrl(clean);
+          return null;
+        }
         if (blobCache.has(clean)) return blobCache.get(clean);
         try {
           const blob = await fetchFileBlob(clean);
@@ -1241,20 +1413,51 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function sendToActiveTab(payload) {
+    logActivity('outbound', 'tabs.sendMessage', { tabId: activeTabId, action: payload?.action });
     return new Promise((resolve) => {
       chrome.tabs.sendMessage(activeTabId, payload, (res) => {
         if (chrome.runtime.lastError) {
-          resolve({ success: false, error: chrome.runtime.lastError.message });
+          const error = chrome.runtime.lastError.message;
+          logActivity('inbound', 'tabs.sendMessage.error', { action: payload?.action, error }, 'ERROR');
+          resolve({ success: false, error });
           return;
         }
+        logActivity('inbound', 'tabs.sendMessage.ok', { action: payload?.action, success: !!res?.success });
         resolve(res || { success: false, error: 'No response from content script.' });
       });
     });
   }
 
   function ensureGestureProofToken() {
-    if (!gestureProofToken) gestureProofToken = `gesture_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
+    if (!gestureProofToken) {
+      gestureProofToken = `gesture_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
+      chrome.runtime.sendMessage({ action: 'REGISTER_GESTURE_PROOF', token: gestureProofToken }, () => void chrome.runtime.lastError);
+    }
     return gestureProofToken;
+  }
+
+
+  function requestAssetPermissionsFromGesture() {
+    const origins = [
+      'https://*.oaiusercontent.com/*',
+      'https://*.oaistatic.com/*',
+      'https://*.openai.com/*',
+      'https://*.googleusercontent.com/*',
+      'https://lh3.googleusercontent.com/*',
+      'https://*.gstatic.com/*',
+      'https://*.google.com/*',
+      'https://lh3.google.com/*',
+      'https://*.anthropic.com/*'
+    ];
+    return new Promise((resolve) => {
+      chrome.permissions.request({ origins }, (granted) => {
+        if (chrome.runtime.lastError) {
+          resolve(false);
+          return;
+        }
+        resolve(!!granted);
+      });
+    });
   }
 
   async function resolveAssetViaBroker(url) {
@@ -1269,7 +1472,10 @@ document.addEventListener('DOMContentLoaded', () => {
       'https://*.oaistatic.com/*',
       'https://*.openai.com/*',
       'https://*.googleusercontent.com/*',
+      'https://lh3.googleusercontent.com/*',
       'https://*.gstatic.com/*',
+      'https://*.google.com/*',
+      'https://lh3.google.com/*',
       'https://*.anthropic.com/*'
     ];
     return new Promise((resolve) => {
@@ -1284,8 +1490,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function fetchMediaViaBackgroundProxy(url) {
+    const token = ensureGestureProofToken();
     return new Promise((resolve) => {
-      chrome.runtime.sendMessage({ action: "MEDIA_FETCH_PROXY", payload: { url, userInitiated: true } }, (res) => resolve(res || { success: false }));
+      chrome.runtime.sendMessage({ action: "ASSET_FETCH", payload: { url, tabId: activeTabId, gestureToken: token, category: 'ASSET_FETCH', userInitiated: true } }, (res) => resolve(res || { success: false }));
     });
   }
 
@@ -1293,12 +1500,20 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!url) return null;
     if (!activeTabId) return null;
     const clean = sanitizeTokenUrl(url);
-    if (/^data:/i.test(clean)) return dataUrlToBlob(clean);
+    if (isPlaceholderUrl(clean)) {
+      warnPlaceholderUrl(clean);
+      return null;
+    }
+    if (/^data:/i.test(clean)) {
+      const direct = dataUrlToBlob(clean);
+      return direct;
+    }
     if (/^blob:/i.test(clean)) {
       const pageBlob = await resolveAssetViaBroker(clean);
       if (!pageBlob?.success) return null;
       return dataUrlToBlob(pageBlob.dataUrl);
     }
+    if (!/^https?:/i.test(clean)) return null;
     const pageBlob = await resolveAssetViaBroker(clean);
     if (pageBlob?.success) return dataUrlToBlob(pageBlob.dataUrl);
     const bgProxy = await fetchMediaViaBackgroundProxy(clean);
@@ -1348,6 +1563,46 @@ document.addEventListener('DOMContentLoaded', () => {
       return false;
     }
   }
+
+
+  function keyClassForEvent(e) {
+    const c = String(e?.code || '');
+    if (/Arrow|Tab|Page|Home|End|Escape/.test(c)) return 'nav';
+    if (/Enter|NumpadEnter/.test(c)) return 'submit';
+    if (/Backspace|Delete/.test(c)) return 'edit';
+    if (e?.ctrlKey || e?.metaKey || e?.altKey) return 'shortcut';
+    return 'other';
+  }
+
+  function installSafeKeyTelemetry() {
+    const onKey = (e) => {
+      if (!checkSafeKeyTelemetry?.checked) return;
+      const target = e.target;
+      const targetType = target?.tagName ? String(target.tagName).toLowerCase() : 'document';
+      const typeAttr = String(target?.getAttribute?.('type') || '').toLowerCase();
+      const isSensitiveField = ['password', 'email', 'tel'].includes(typeAttr)
+        || String(target?.getAttribute?.('autocomplete') || '').includes('password')
+        || !!target?.hasAttribute?.('data-sensitive');
+      const beforeLen = Number(target?.dataset?.lastLen || 0);
+      const nowLen = Number((target?.value || '').length);
+      if (target?.dataset) target.dataset.lastLen = String(nowLen);
+      logActivity('ui', 'key', {
+        keyClass: keyClassForEvent(e),
+        code: String(e.code || ''),
+        ctrl: !!e.ctrlKey,
+        alt: !!e.altKey,
+        shift: !!e.shiftKey,
+        meta: !!e.metaKey,
+        targetType,
+        isSensitiveField,
+        valueLenDelta: nowLen - beforeLen
+      });
+    };
+    document.addEventListener('keydown', onKey, true);
+    document.addEventListener('keyup', onKey, true);
+  }
+
+  installSafeKeyTelemetry();
 
   const openModal = (m) => { if (m) m.style.display = 'flex'; };
   const closeModal = (m) => { if (m) m.style.display = 'none'; };

@@ -65,3 +65,9 @@
 - v0.12.5: Removed redundant optional/required host permission overlap and added architecture-level file relationship mapping.
 
 - v0.12.6: Added Neural-Eye evidence-gated extraction contracts, local-only resolver module, and PTS/self-heal testable loop scaffolding.
+
+- v0.12.18: Added ChatGPT DOM discovery analyzer (debug-only) with explainable role inference and snapshot harness workflow.
+
+- v0.12.20 stabilization: placeholder host (`example.com`) guard added to export asset resolution; diagnostics events now include explicit tab scope metadata.
+
+- v0.12.20 diagnostics-v3: flight recorder JSONL telemetry (runId/eventId correlation), safe key telemetry toggle, and no-secrets verification gate added.
