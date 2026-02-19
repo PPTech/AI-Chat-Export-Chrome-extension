@@ -203,9 +203,14 @@
                     <label class="setting-row"><span class="setting-label">Advanced: Links as Attachments</span><input type="checkbox" id="check-advanced-links" title="Treat hyperlinks in message text as downloadable attachments (advanced)"></label>
                     <span class="setting-info">Links in text become downloads (use with caution)</span>
                 </div>
+                <div class="setting-item">
+                    <label class="setting-row"><span class="setting-label">Debug Mode</span><input type="checkbox" id="check-debug-mode" title="Enable flight recorder, invariant checks, and forensic diagnostics bundle"></label>
+                    <span class="setting-info">Flight recorder + invariant checks + forensic export</span>
+                </div>
                 <!-- Encryption Removed per Security Audit -->
                 <button id="btn-export-config" title="Download settings as local .cfg file" style="width:100%; padding:8px; border:1px solid var(--border); background:var(--surface); border-radius:6px; cursor:pointer; font-size:11px; margin-bottom:6px;">Export Settings Config (.cfg)</button>
-                <button id="btn-download-logs" title="Download activity/error logs" style="width:100%; padding:8px; border:1px solid var(--border); background:var(--surface); border-radius:6px; cursor:pointer; font-size:11px;">Download Error Logs</button>
+                <button id="btn-download-logs" title="Download activity/error logs" style="width:100%; padding:8px; border:1px solid var(--border); background:var(--surface); border-radius:6px; cursor:pointer; font-size:11px; margin-bottom:6px;">Download Error Logs</button>
+                <button id="btn-download-diagnostics" title="Download diagnostics bundle (debugMode must be ON)" style="width:100%; padding:8px; border:1px solid var(--border); background:var(--surface); border-radius:6px; cursor:pointer; font-size:11px; display:none;">Download Diagnostics</button>
             </div>
             <button class="close-btn" id="btn-save-settings">Save</button>
         </div>

@@ -22,6 +22,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const checkPhotoZip = document.getElementById('check-photo-zip');
   const checkExportFiles = document.getElementById('check-export-files');
   const checkAdvancedLinks = document.getElementById('check-advanced-links');
+  const checkDebugMode = document.getElementById('check-debug-mode');
+  const btnDownloadDiagnostics = document.getElementById('btn-download-diagnostics');
 
   const settingsModal = document.getElementById('settings-modal');
   const errorModal = document.getElementById('error-modal');
@@ -40,7 +42,8 @@ document.addEventListener('DOMContentLoaded', () => {
       zip: false,
       photoZip: true,
       exportFiles: true,
-      advancedLinks: false
+      advancedLinks: false,
+      debugMode: false
     };
   }
 
@@ -53,8 +56,13 @@ document.addEventListener('DOMContentLoaded', () => {
       photoZip: !!checkPhotoZip.checked,
       exportFiles: !!checkExportFiles.checked,
       advancedLinks: !!checkAdvancedLinks.checked,
+      debugMode: !!checkDebugMode.checked,
       updatedAt: new Date().toISOString()
     };
+  }
+
+  function isDebugMode() {
+    return !!checkDebugMode.checked;
   }
 
   function applySettings(settings) {
@@ -66,6 +74,8 @@ document.addEventListener('DOMContentLoaded', () => {
     checkPhotoZip.checked = !!s.photoZip;
     checkExportFiles.checked = !!s.exportFiles;
     checkAdvancedLinks.checked = !!s.advancedLinks;
+    checkDebugMode.checked = !!s.debugMode;
+    if (btnDownloadDiagnostics) btnDownloadDiagnostics.style.display = s.debugMode ? 'block' : 'none';
   }
 
   function saveSettingsToStorage(settings) {
@@ -768,6 +778,13 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-close-about').onclick = document.getElementById('btn-ack-about').onclick = () => closeModal(aboutModal);
   document.getElementById('btn-close-error').onclick = () => closeModal(errorModal);
   document.getElementById('btn-close-preview').onclick = () => closeModal(document.getElementById('preview-modal'));
+
+  // debugMode toggle: show/hide diagnostics download button
+  if (checkDebugMode) {
+    checkDebugMode.addEventListener('change', () => {
+      if (btnDownloadDiagnostics) btnDownloadDiagnostics.style.display = checkDebugMode.checked ? 'block' : 'none';
+    });
+  }
 
   safeInit();
 });
