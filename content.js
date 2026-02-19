@@ -363,7 +363,9 @@
         for (const node of nodes) {
           const marker = `${node.getAttribute('data-testid') || ''} ${node.className || ''}`.toLowerCase();
           const isUser = marker.includes('user');
-          const content = await utils.extractNodeContent(node, options, isUser, this.name, 'claude-node');
+          let content = await utils.extractNodeContent(node, options, isUser, this.name, 'claude-node');
+          // Strip UI HTML contamination unless rawHtml mode
+          if (content && !options.rawHtml) content = normalizeContent(content);
           if (content) messages.push({ role: isUser ? 'User' : 'Claude', content, meta: { platform: this.name, sourceSelector: 'claude-node' } });
         }
         return { platform: this.name, title: document.title, messages };
@@ -534,7 +536,15 @@
       const fileTokens = options.extractFiles ? await this.extractFileTokensFromNode(node) : [];
 
       const clone = node.cloneNode(true);
-      clone.querySelectorAll('script,style,button,svg,[role="tooltip"],.sr-only').forEach((n) => n.remove());
+      // Remove UI scaffolding elements
+      clone.querySelectorAll('script,style,button,svg,nav,aside,header,footer,[role="toolbar"],[role="tooltip"],[aria-hidden="true"],.sr-only').forEach((n) => n.remove());
+      // Remove "Copy", "Show more", etc. leaf buttons/labels
+      clone.querySelectorAll('*').forEach((el) => {
+        const t = (el.textContent || '').trim().toLowerCase();
+        if (/^(copy|copied|show more|show less|share|thumbs up|thumbs down|edit)$/i.test(t) && el.children.length === 0) {
+          el.remove();
+        }
+      });
       clone.querySelectorAll('img').forEach((img) => img.remove());
 
       clone.querySelectorAll('pre').forEach((pre) => {
@@ -659,46 +669,111 @@
     let role = 'unknown';
     let confidence = 0.3;
 
-    const rect = messageEl.getBoundingClientRect();
-    const rootRect = rootEl.getBoundingClientRect();
-    const centerMsg = rect.left + rect.width / 2;
-    const centerRoot = rootRect.left + rootRect.width / 2;
-    const alignmentDelta = centerMsg - centerRoot;
-    if (alignmentDelta > rootRect.width * 0.15) {
-      evidence.push('layout_alignment:right');
+    // 1. Check data-message-author-role on element AND ancestors (ChatGPT primary signal)
+    const authorRole = findAttrUp(messageEl, 'data-message-author-role', 3);
+    if (authorRole === 'user') {
+      evidence.push('attr:data-message-author-role=user');
       role = 'user';
-      confidence += 0.2;
-    } else if (alignmentDelta < -rootRect.width * 0.1) {
-      evidence.push('layout_alignment:left');
+      confidence += 0.5;
+    } else if (authorRole === 'assistant') {
+      evidence.push('attr:data-message-author-role=assistant');
       role = 'assistant';
-      confidence += 0.2;
-    } else {
-      evidence.push('layout_alignment:center-ish');
+      confidence += 0.5;
     }
 
-    const txt = (messageEl.innerText || '').toLowerCase();
-    if (/regenerate|continue generating|thumbs up|thumbs down/.test(txt)) {
-      evidence.push('assistant-control-hints');
-      role = 'assistant';
-      confidence += 0.25;
-    }
-
-    if (/you said|you uploaded|you sent/.test(txt) || (messageEl.getAttribute('data-message-author-role') || '').toLowerCase() === 'user') {
-      evidence.push('user-hint-text-or-attribute');
-      role = 'user';
-      confidence += 0.25;
-    }
-
-    if (/assistant/.test((messageEl.getAttribute('data-message-author-role') || '').toLowerCase())) {
-      evidence.push('assistant-author-attribute');
-      role = 'assistant';
+    // 2. Check data-testid attributes (ChatGPT uses conversation-turn-N patterns)
+    const testId = findAttrUp(messageEl, 'data-testid', 3) || '';
+    if (/user/i.test(testId)) {
+      evidence.push(`testid:${testId}`);
+      if (role === 'unknown') role = 'user';
+      confidence += 0.3;
+    } else if (/assistant|model|response/i.test(testId)) {
+      evidence.push(`testid:${testId}`);
+      if (role === 'unknown') role = 'assistant';
       confidence += 0.3;
     }
 
+    // 3. Check ARIA labels and accessible names
+    const ariaLabel = (messageEl.getAttribute('aria-label') || '').toLowerCase();
+    const ariaRoledesc = (messageEl.getAttribute('aria-roledescription') || '').toLowerCase();
+    const ariaCombo = `${ariaLabel} ${ariaRoledesc}`;
+    if (/\buser\b|human|you said/i.test(ariaCombo)) {
+      evidence.push('aria:user-hint');
+      if (role === 'unknown') role = 'user';
+      confidence += 0.2;
+    } else if (/\bassistant\b|chatgpt|gpt|model|response/i.test(ariaCombo)) {
+      evidence.push('aria:assistant-hint');
+      if (role === 'unknown') role = 'assistant';
+      confidence += 0.2;
+    }
+
+    // 4. Check for avatar/icon patterns indicating role
+    const hasUserAvatar = !!messageEl.querySelector('img[alt*="User" i], img[alt*="avatar" i]:not([alt*="ChatGPT"]):not([alt*="GPT"])');
+    const hasAssistantIcon = !!messageEl.querySelector('img[alt*="ChatGPT" i], img[alt*="GPT" i], svg[class*="gizmo"], [data-testid="bot-avatar"]');
+    if (hasUserAvatar && !hasAssistantIcon) {
+      evidence.push('avatar:user');
+      if (role === 'unknown') role = 'user';
+      confidence += 0.15;
+    } else if (hasAssistantIcon) {
+      evidence.push('avatar:assistant');
+      if (role === 'unknown') role = 'assistant';
+      confidence += 0.15;
+    }
+
+    // 5. Container class/attribute semantics
+    const classAndAttrs = `${messageEl.className || ''} ${messageEl.getAttribute('data-role') || ''}`.toLowerCase();
+    if (/\buser\b/.test(classAndAttrs)) {
+      evidence.push('class:user');
+      if (role === 'unknown') role = 'user';
+      confidence += 0.15;
+    } else if (/\bassistant\b|\bbot\b|\bai\b|\bmodel\b/.test(classAndAttrs)) {
+      evidence.push('class:assistant');
+      if (role === 'unknown') role = 'assistant';
+      confidence += 0.15;
+    }
+
+    // 6. Layout alignment (weakest signal, never overrides stronger signals)
+    if (role === 'unknown') {
+      const rect = messageEl.getBoundingClientRect();
+      const rootRect = rootEl.getBoundingClientRect();
+      const centerMsg = rect.left + rect.width / 2;
+      const centerRoot = rootRect.left + rootRect.width / 2;
+      const alignmentDelta = centerMsg - centerRoot;
+      if (alignmentDelta > rootRect.width * 0.15) {
+        evidence.push('layout:right');
+        role = 'user';
+        confidence += 0.1;
+      } else if (alignmentDelta < -rootRect.width * 0.1) {
+        evidence.push('layout:left');
+        role = 'assistant';
+        confidence += 0.1;
+      }
+    }
+
+    // 7. Content-based hints (assistant controls)
+    const txt = (messageEl.innerText || '').toLowerCase();
+    if (role === 'unknown' && /regenerate|continue generating|thumbs up|thumbs down|copy code/.test(txt)) {
+      evidence.push('content:assistant-controls');
+      role = 'assistant';
+      confidence += 0.15;
+    }
+
     confidence = Math.min(0.99, confidence);
-    if (confidence < 0.5) role = 'unknown';
+    // Lower threshold: 0.35 instead of 0.5 to reduce unknowns
+    if (confidence < 0.35) role = 'unknown';
 
     return { role, confidence: Number(confidence.toFixed(2)), evidence };
+  }
+
+  // Walk up to `maxDepth` ancestors to find an attribute value
+  function findAttrUp(el, attr, maxDepth = 3) {
+    let current = el;
+    for (let i = 0; i <= maxDepth && current; i++) {
+      const val = current.getAttribute?.(attr);
+      if (val) return val.toLowerCase();
+      current = current.parentElement;
+    }
+    return null;
   }
 
   function parseMessageContent(messageEl) {
@@ -807,6 +882,87 @@
     report.stabilized = stable >= stableThreshold;
     report.timingsMs = Math.round(performance.now() - start);
     return report;
+  }
+
+  /**
+   * normalizeContent: strip UI HTML scaffolding from extracted content.
+   * If the string contains HTML tags, parse it and extract semantic text,
+   * code blocks, and links. Drop buttons, SVGs, UI-only elements.
+   */
+  function normalizeContent(content) {
+    if (!content || typeof content !== 'string') return content || '';
+    // Quick check: does it look like it contains HTML?
+    if (!/<[a-z][^>]*>/i.test(content)) return content;
+    // Preserve [[IMG:...]] and [[FILE:...]] tokens before parsing
+    const imgTokens = [];
+    const fileTokens = [];
+    let cleaned = content.replace(/\[\[IMG:([^\]]*)\]\]/g, (m) => { imgTokens.push(m); return `__IMG_TOKEN_${imgTokens.length - 1}__`; });
+    cleaned = cleaned.replace(/\[\[FILE:([^\]]*)\]\]/g, (m) => { fileTokens.push(m); return `__FILE_TOKEN_${fileTokens.length - 1}__`; });
+    // Preserve markdown code blocks
+    const codeBlocks = [];
+    cleaned = cleaned.replace(/```[\s\S]*?```/g, (m) => { codeBlocks.push(m); return `__CODE_BLOCK_${codeBlocks.length - 1}__`; });
+
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(`<div>${cleaned}</div>`, 'text/html');
+      const root = doc.body.querySelector('div') || doc.body;
+
+      // Remove UI-only elements
+      root.querySelectorAll('button, svg, nav, aside, header, footer, [role="toolbar"], [role="tooltip"], .sr-only, [aria-hidden="true"]').forEach((n) => n.remove());
+      // Remove "Show more", "Copy", etc. buttons/links
+      root.querySelectorAll('*').forEach((el) => {
+        const text = (el.textContent || '').trim().toLowerCase();
+        if (/^(show more|show less|copy|copied|share|thumbs up|thumbs down)$/i.test(text) && el.children.length === 0) {
+          el.remove();
+        }
+      });
+
+      const parts = [];
+      // Extract semantic content
+      const walker = doc.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+      const seenCode = new Set();
+      while (walker.nextNode()) {
+        const node = walker.currentNode;
+        if (node.nodeType === Node.TEXT_NODE) {
+          const text = (node.textContent || '').replace(/\s+/g, ' ').trim();
+          if (text) parts.push(text);
+          continue;
+        }
+        const tag = node.tagName?.toLowerCase();
+        if (tag === 'pre' || tag === 'code') {
+          const code = (node.textContent || '').trim();
+          if (code && !seenCode.has(code)) {
+            const langHint = (node.className || '').match(/language-(\w+)/)?.[1] || '';
+            parts.push(`\n\`\`\`${langHint}\n${code}\n\`\`\`\n`);
+            seenCode.add(code);
+          }
+        } else if (tag === 'a') {
+          const href = node.getAttribute('href') || '';
+          const linkText = (node.textContent || '').trim();
+          if (href && linkText) parts.push(`[${linkText}](${href})`);
+        }
+      }
+
+      let result = parts.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+
+      // Restore tokens
+      result = result.replace(/__IMG_TOKEN_(\d+)__/g, (_, i) => imgTokens[parseInt(i)] || '');
+      result = result.replace(/__FILE_TOKEN_(\d+)__/g, (_, i) => fileTokens[parseInt(i)] || '');
+      result = result.replace(/__CODE_BLOCK_(\d+)__/g, (_, i) => codeBlocks[parseInt(i)] || '');
+
+      return result;
+    } catch {
+      // If parsing fails, do a basic regex strip
+      let result = content
+        .replace(/<(button|svg|nav|aside|header|footer)[^>]*>[\s\S]*?<\/\1>/gi, '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      result = result.replace(/__IMG_TOKEN_(\d+)__/g, (_, i) => imgTokens[parseInt(i)] || '');
+      result = result.replace(/__FILE_TOKEN_(\d+)__/g, (_, i) => fileTokens[parseInt(i)] || '');
+      result = result.replace(/__CODE_BLOCK_(\d+)__/g, (_, i) => codeBlocks[parseInt(i)] || '');
+      return result;
+    }
   }
 
   function composeContentFromBlocks(blocks, options) {
