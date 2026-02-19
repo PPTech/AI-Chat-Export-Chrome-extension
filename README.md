@@ -1,10 +1,10 @@
 # 🚀 AI Chat Exporter Ultimate
 
-**Version**: 0.10.26  
+**Version**: 0.10.10  
 **License**: MIT (Ultimate Edition)  
 **Code Source**: Generated with support from CODEX and CODEX CLI.  
 **Owner / Management**: Dr. Babak Sorkhpour ([@Drbabakskr](https://x.com/Drbabakskr))  
-**Author**: Dr. Babak Sorkhpour with support from Gemini, Google AI Studio, ChatGPT, OpenAI Codex and Claude.ai.
+**Author**: Dr. Babak Sorkhpour with support from **Gemini 2.0 Flash (Google)**
 
 ---
 
@@ -26,87 +26,7 @@
 *   **Zero-Dependency**: Operates entirely locally without external API calls.
 *   **Industrial Archiving**: CRC32 validated ZIP archives.
 *   **Embedded Media**: Automatically converts remote images to Base64 for fully offline Word and HTML documents.
-*   **CORS/CSP-safe media embedding**: Popup routes media fetch through page-context proxy to avoid extension-page CORS/connect-src failures.
-*   **Claude content-noise filter**: Extractor prioritizes prose/markdown content containers and removes UI-status noise before parsing text/files.
-*   **Temporary Media Cache Hygiene**: Downloads media to temporary in-memory cache during export, embeds output, then clears cache at begin/finish/close.
 *   **Security Hardened**: Input sanitization prevents XSS in exported files.
-*   **Local Agent (Air-Gapped Ready)**: Visual + semantic local extraction with self-test and recipe fallback; no external AI API required.
-
-## 🧠 Prompt & Extraction Strategy by Service (Summary)
-
-This section documents **what prompt strategy/heuristics** are used for each provider and **why**. It avoids exposing proprietary internal scoring constants while giving technical transparency.
-
-### ChatGPT / OpenAI Codex
-- **Goal:** detect robust message turns and downloadable assets (including `sandbox:/mnt/data/...`).
-- **How:** DOM analyzer + sandbox link scanner (anchor/text/button + shadow traversal).
-- **Why:** ChatGPT often renders downloads as UI actions rather than stable direct URLs.
-- **Short code sample:**
-
-```js
-const refs = discoverSandboxFileRefs(rootEl);
-for (const ref of refs) {
-  const resolved = await resolveFileRef(ref, tabId, rootEl);
-  await downloadResolvedFile(resolved);
-}
-```
-
-### Claude.ai
-- **Goal:** discover and extract user/assistant turns plus file/link presentation diagnostics.
-- **How:** adaptive turn selectors + `discover_claude_files` runtime diagnostics.
-- **Why:** Claude UI variants can change quickly and discovery visibility is required before hardening selectors.
-- **Short code sample:**
-
-```js
-chrome.tabs.sendMessage(tabId, { action: 'discover_claude_files' }, (res) => {
-  console.log(res.findings);
-});
-```
-
-### Gemini
-- **Goal:** parse role, blocks, code, images, and artifact links with explainable evidence.
-- **How:** probe-style extractor and block parser with confidence metadata.
-- **Why:** dynamic Gemini layouts use mixed semantics and require scoring + evidence.
-
-### Google AI Studio
-- **Goal:** capture system instruction + user/model turns + attachments from editor-based UI.
-- **How:** `AIStudioExtractor` with deep shadow traversal, textarea/contenteditable/CodeMirror/ProseMirror heuristics, blob-to-base64 for image attachments.
-- **Why:** user prompts are frequently stored in editor layers, not plain paragraph nodes.
-- **Short code sample:**
-
-```js
-const extractor = new AIStudioExtractor(utils, options);
-const result = await extractor.scrape();
-console.log(result.system_instruction, result.turns.length);
-```
-
-## 🧩 Local Agent Runtime (Offline)
-
-- `visual_walker.js`: strict heuristic `VisualDOMWalker` for selector-agnostic viewport extraction (USER/MODEL/CODE).
-- `asset_processor.js`: `DataProcessor` for robust Base64 embedding and file metadata extraction.
-- `export_manager.js`: single-file HTML/Word export generator with inline styles and offline images.
-- `smart_miner.js`: DOM-agnostic visual mining (TreeWalker traversal + geometry/style/alignment heuristics) and `extractVisualSnapshot()` diagnostics.
-- `smart_agent.js`: visual candidate mining + semantic scoring + clustering.
-- `ai_engine.js` + `offscreen.js`: hidden local planner bridge.
-- `recipes_store.js`: `RecipeManager` IndexedDB wrapper for learned recipes, chat history JSON, and image blobs.
-- `options.html`: local planner/debug toggles.
-
-### VerifierLoop & Self-Healing
-- `ExtractionVerifier` marks extraction as `FAIL` (no messages) or `WARN` (role imbalance), then triggers text-density self-healing.
-- Successful healing stores learned selectors by `domainFingerprint` for faster, more stable future extraction runs.
-
-### Local classifier service
-- Offscreen local classifier supports `Question`, `Code`, and `File Attachment` tagging with regex+embedding fallback.
-- Artifact detector flags `sandbox:/...`, `/mnt/data/...`, and file-like links for debug evidence.
-
-### Privacy / Network Guard
-- Extension pages enforce strict CSP with local script/connect policy.
-- LocalOnlyGuard blocks outbound network in extension contexts for fetch/XHR/WebSocket except local extension/data/blob schemes.
-- Startup log: `[LOCAL-ONLY] AI engine network disabled; offline models only.`
-
-### How to Verify Local-Only
-1. Open extension popup and run `Self-Test`.
-2. In extension DevTools, verify startup log includes `[LOCAL-ONLY] ...`.
-3. Confirm no external requests are emitted from extension pages.
 
 ## 🚀 One-Click Installation
 
@@ -147,7 +67,7 @@ To install the developer preview directly from GitHub:
 
 ## 🛠 Manual Usage (Step-by-step)
 
-1. Open a supported chat tab (`chatgpt.com`, `chat.openai.com`, `claude.ai`, `gemini.google.com`, `aistudio.google.com`).
+1. Open a supported chat tab (`chatgpt.com`, `claude.ai`, `gemini.google.com`, `aistudio.google.com`).
 2. Open extension popup.
 3. If chat is long, click **Fetch Full** and confirm loading from beginning.
 4. Check message count and preview with **Preview**.
@@ -160,13 +80,7 @@ To install the developer preview directly from GitHub:
 7. Click **Generate Package**.
 8. To export only images, click **Export Photos**.
 9. To export chat-generated files, click **Export Files** (ZIP output).
-10. For ChatGPT sandbox files (`sandbox:/mnt/data/...`):
-   - Click **Ping** first to verify extension injection state for the active tab.
-   - Click **Scan File Links** to detect file references and print diagnostic tables in page console.
-   - Click **Resolve + Download All** to dynamically resolve sandbox URLs and download each file sequentially.
-   - Inspect `window.__SANDBOX_FILE_REFS__` and `window.__CHATGPT_FILE_LINKS__` in page DevTools for full explainable diagnostics.
-11. If needed, download logs from Settings for troubleshooting.
-12. For Claude live diagnostics, run the extension message action `discover_claude_files` to inspect detected file/download elements in `window.CLAUDE_FILE_DISCOVERY`.
+10. If needed, download logs from Settings for troubleshooting.
 
 ## 🔬 Manual Engineering Commands
 
@@ -322,103 +236,3 @@ This prevents image token corruption and ensures valid `<img>` tags are emitted 
 - Extraction records file references as `[[FILE:url|name]]` tokens.
 - Click **Export Files** to download all detected files as a single ZIP package.
 
-## Local AI Proof (v0.11.0)
-- Runs a local-only agent loop: observe -> plan -> act -> verify -> learn.
-- Embeddings and learner weights are persisted locally per `{host, domainFingerprint}`.
-- No chat text is sent to external AI APIs; network for assets is allowlisted and user-gesture gated.
-
-## AEGIS-2026 Architecture (Detailed)
-### 1) Visual Cortex (`smart_vision.js`)
-- Geometry-first chat bubble detection (visibility, width, alignment, role signals).
-- Zero-dependency fallback to Shadow DOM DeepScan for resilience against SPA rendering changes.
-- Selector-agnostic extraction by design (no fragile class-name dependency).
-
-### 2) Iron Dome (`security_guard.js`)
-- Runtime network kill-switch for content-context fetch/XHR.
-- Strict allowlist (`blob:`, `data:`, `chrome-extension://`) with block metrics.
-- Anti-tamper freeze utility for extracted payloads before export.
-
-### 3) Local AI Engine (`offline_brain.js`)
-- Local text labeling (`Code`, `Table`, `Prose`, `SystemInstruction`) without external APIs.
-- Auto markdown code wrapping when code-like text appears outside `<pre>`.
-
-### 4) Artifact Factory (`export_core.js`)
-- In-place image base64 embedding for offline portability.
-- Word-compatible MHTML generation with required Office namespaces.
-
-### 5) Black Box Logger (`logger.js`)
-- Session JSON log contract with integrity hash (SHA-256).
-- Data-loss warning heuristic: mismatch between node-detection and visual-element counts.
-
-## Version-Control & Documentation Standard
-- Every release must update: `CHANGELOG.md`, `README.md`, `TECHNICAL_ALGORITHMS.md`, and `MEMORY.md`.
-- Every algorithmic module must document version + rationale + test path.
-- BDD artifacts are maintained in `features/` and regenerated via `npm run gherkin:generate`.
-
-## Agentic Default Execution (v0.11.2)
-- Default analysis now runs `self_test_local_agent` and then `extract_local_agent`.
-- Classic `extract_chat` path is retained only as a controlled fallback for resiliency.
-- Candidate selectors are now persisted to improve cross-run recipe quality.
-
-## Continuity & Non-sensitive Commercial Handover
-- See `docs/PROJECT_CONTINUITY_BRIEF.md` for non-confidential revenue stream summary and safe sample snippets.
-- See `docs/AGENTIC_ARCHITECTURE.md` + `docs/SECURITY.md` + `docs/RELEASE_CHECKLIST.md` for engineer handover runbook.
-
-## Licensing Strategy (v0.11.3)
-- Community usage is governed by AGPLv3 (`LICENSE`).
-- Commercial/proprietary deployment requires separate commercial licensing as documented in `LEGAL_NOTICE.md`.
-- Reusable legal source header template is provided in `COPYRIGHT_HEADER.js`.
-
-## Audit-Driven Improvements (v0.11.4)
-- Version synchronization enforced across runtime metadata files.
-- CI now validates release consistency and required CDN host permissions.
-- Diagnostic logs redact long tokens and URLs to reduce accidental sensitive retention.
-- Optional host permission request is triggered before heavy asset extraction flows.
-
-## Agentic Contract & Governance Gates (v0.11.5)
-- Version source-of-truth is now `version.js`, synchronized by `npm run sync:version`.
-- CI gates enforce local assets, model checksums, release consistency, and tests.
-- Dataset contract includes attachments as canonical export source (token output remains backward-compatible).
-
-## Local Intelligence Signal Integrity (v0.11.6)
-- Trace now distinguishes real local model load from fallback mode with explicit reason fields.
-- Agent diagnostics include prior score and score delta to verify whether extraction quality improved between runs.
-- Export diagnostics bundle now conforms to the required top-level diagnostics contract.
-
-## AEGIS 2026 Validation & Intelligence Score (v0.12.0)
-- Agent payload now includes redacted DOM context + explicit extraction goals for measurable planning.
-- Background now supports user-initiated media proxy fetch with strict allowlist enforcement.
-- See `docs/INTELLIGENCE_SCORECARD.md` for quantified intelligence readiness and brutal self-critique.
-
-- Added threat model and premium local-agent console design docs for roadmap alignment.
-
-
-## Evidence-Gated Version Governance (v0.12.1)
-- `version.js` is SSOT for release version; run `npm run sync:version` to align manifest metadata.
-- `npm run verify:claims` enforces release-script presence, version consistency, and forensic export hooks.
-- For each change window, `FORENSICS/HEAD.txt` captures branch/head/toolchain evidence.
-
-
-## Unified Version Governance (v0.12.2)
-- `sync:version` now aligns `package.json` and selected runtime version-header markers in addition to manifest metadata.
-- `verify:release` now fails when core runtime headers drift from the SSOT version.
-
-
-## Real Integration Checks (v0.12.3)
-- Content script now invokes SecurityGuard kill-switch at runtime and emits AEGIS session logs via logger integration.
-- Image embedding pipeline now uses `embedImageAsBase64` in DataProcessor before HTML/Word export transformations.
-
-
-## Visual Cortex Protocol (v0.12.4)
-- Added `visual_engine.js` with geometry-first, TreeWalker-based extraction and Shadow DOM traversal for selector-agnostic robustness.
-- Added `artifact_builder.js` to produce script-free single-file HTML and multipart MHTML containers for offline Word-compatible artifacts.
-
-
-## Permission De-duplication (v0.12.5)
-- CDN hosts required for media embedding are now requested only through `optional_host_permissions`, eliminating MV3 redundancy errors.
-- Release gates now fail if required and optional host permissions overlap on protected CDN entries.
-
-
-## Neural-Eye Evidence Contracts (v0.12.6)
-- Added local-only canonical extractor/normalizer/resolver/packager modules with diagnostics and reason-code output contracts.
-- Added fixture-driven export contract tests and PTS module mapping to ensure evidence-gated improvements and predictable fallback behavior.

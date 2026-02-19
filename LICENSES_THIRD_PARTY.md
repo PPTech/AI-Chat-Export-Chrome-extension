@@ -2,7 +2,7 @@
 # Code generated with support from CODEX and CODEX CLI.
 # Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 
-# Third-Party Licenses (v0.10.11)
+# Third-Party Licenses (v0.10.10)
 
 ## Runtime
 - No additional third-party runtime extraction libraries are bundled in the extension code path.

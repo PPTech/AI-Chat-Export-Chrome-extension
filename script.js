@@ -1,13 +1,11 @@
 // License: MIT
 // Code generated with support from CODEX and CODEX CLI.
 // Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// نویسنده دکتر بابک سرخپور با کمک ابزار چت جی پی تی.
-// script.js - Main Controller v0.12.6
+// script.js - Main Controller v0.10.10
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
   let activeTabId = null;
-  let gestureProofToken = "";
 
   const btnExport = document.getElementById('btn-export-main');
   const btnLoadFull = document.getElementById('btn-load-full');
@@ -15,11 +13,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnPreview = document.getElementById('btn-preview');
   const btnExportImages = document.getElementById('btn-export-images');
   const btnExportFiles = document.getElementById('btn-export-files');
-  const btnScanFiles = document.getElementById('btn-scan-files');
-  const btnResolveDownload = document.getElementById('btn-resolve-download');
-  const btnPingContent = document.getElementById('btn-ping-content');
-  const btnExtractLocal = document.getElementById('btn-extract-local');
-  const btnSelfTest = document.getElementById('btn-self-test');
   const btnLogs = document.getElementById('btn-download-logs');
   const btnExportConfig = document.getElementById('btn-export-config');
   const checkImages = document.getElementById('check-images');
@@ -28,7 +21,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const checkZip = document.getElementById('check-zip');
   const checkPhotoZip = document.getElementById('check-photo-zip');
   const checkExportFiles = document.getElementById('check-export-files');
-  const checkDebugOverlay = document.getElementById('check-debug-overlay');
 
   const settingsModal = document.getElementById('settings-modal');
   const errorModal = document.getElementById('error-modal');
@@ -38,41 +30,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const errorFix = document.getElementById('error-fix');
 
   const SETTINGS_KEY = 'ai_exporter_settings_v1';
-  const tempMediaCache = createTempMediaCache();
-
-  function installLocalOnlyGuard() {
-    const allow = ['chrome-extension://', 'data:', 'blob:'];
-    const check = (url) => {
-      const u = String(url || '');
-      if (allow.some((p) => u.startsWith(p))) return;
-      throw new Error(`[LOCAL-ONLY] blocked outbound request: ${u}`);
-    };
-    const originalFetch = window.fetch?.bind(window);
-    if (originalFetch) {
-      window.fetch = (input, init) => {
-        const url = typeof input === 'string' ? input : input?.url;
-        check(url);
-        return originalFetch(input, init);
-      };
-    }
-    const XHR = window.XMLHttpRequest;
-    if (XHR) {
-      const open = XHR.prototype.open;
-      XHR.prototype.open = function patchedOpen(method, url, ...rest) {
-        check(url);
-        return open.call(this, method, url, ...rest);
-      };
-    }
-    const WS = window.WebSocket;
-    if (WS) {
-      window.WebSocket = function blockedWS(url, protocols) {
-        check(url);
-        return new WS(url, protocols);
-      };
-    }
-  }
-
-  installLocalOnlyGuard();
 
   function getDefaultSettings() {
     return {
@@ -81,8 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
       rawHtml: false,
       zip: false,
       photoZip: true,
-      exportFiles: true,
-      debugOverlay: false
+      exportFiles: true
     };
   }
 
@@ -94,7 +50,6 @@ document.addEventListener('DOMContentLoaded', () => {
       zip: !!checkZip.checked,
       photoZip: !!checkPhotoZip.checked,
       exportFiles: !!checkExportFiles.checked,
-      debugOverlay: !!checkDebugOverlay?.checked,
       updatedAt: new Date().toISOString()
     };
   }
@@ -107,7 +62,6 @@ document.addEventListener('DOMContentLoaded', () => {
     checkZip.checked = !!s.zip;
     checkPhotoZip.checked = !!s.photoZip;
     checkExportFiles.checked = !!s.exportFiles;
-    if (checkDebugOverlay) checkDebugOverlay.checked = !!s.debugOverlay;
   }
 
   function saveSettingsToStorage(settings) {
@@ -122,7 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function exportSettingsCfg(settings) {
     const lines = Object.entries(settings).map(([k, v]) => `${k}=${String(v)}`);
-    const cfg = `# AI Chat Exporter Settings\n# version=0.10.26\n${lines.join('\n')}\n`;
+    const cfg = `# AI Chat Exporter Settings\n# version=0.10.8\n${lines.join('\n')}\n`;
     const date = new Date().toISOString().slice(0, 10);
     downloadBlob(new Blob([cfg], { type: 'text/plain' }), `ai_chat_exporter_settings_${date}.cfg`);
   }
@@ -138,7 +92,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function init() {
-    tempMediaCache.clear('popup-init');
     loadSettingsFromStorage();
     setAnalyzeProgress(5, 'Initializing');
     updateDetectedSummary([]);
@@ -152,123 +105,18 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  async function requestExtraction() {
+  function requestExtraction() {
     const options = { convertImages: checkImages.checked, rawHtml: checkRawHtml.checked, highlightCode: checkCode.checked, extractFiles: checkExportFiles.checked };
-    await ensureAssetPermissions();
-    setAnalyzeProgress(25, 'Agent self-test');
-
-    const runLegacyFallback = () => {
-      setAnalyzeProgress(40, 'Legacy extraction fallback (mode=legacy_fallback)');
-      chrome.tabs.sendMessage(activeTabId, { action: 'extract_chat', options }, (res) => {
-        if (chrome.runtime.lastError) {
-          if (chrome.scripting?.executeScript) {
-            chrome.scripting.executeScript({ target: { tabId: activeTabId }, files: ['smart_miner.js', 'smart_agent.js', 'content.js'] }, () => {
-              setTimeout(() => chrome.tabs.sendMessage(activeTabId, { action: 'extract_chat', options }, processData), 600);
-            });
-          } else {
-            setAnalyzeProgress(0, 'Content script unavailable');
-          }
-          return;
-        }
-        processData(res);
-      });
-    };
-
-    const selfTest = await sendToActiveTab({ action: 'self_test_local_agent', options: { debug: !!checkDebugOverlay?.checked } });
-    if (!selfTest?.success || selfTest?.status === 'FAIL') {
-      runLegacyFallback();
-      return;
-    }
-
-    setAnalyzeProgress(55, 'Agentic extraction');
-    const local = await sendToActiveTab({ action: 'extract_local_agent', options: { debug: !!checkDebugOverlay?.checked, requireModel: true } });
-    if (!local?.success) {
-      runLegacyFallback();
-      return;
-    }
-
-    const dataset = buildChatExportDatasetFromItems(local.result?.items || [], local.result?.trace || null);
-    const normalized = {
-      success: true,
-      platform: 'LocalAgent',
-      dataset,
-      messages: dataset.messages.map((m, idx) => {
-        const parts = [
-          ...(m.contentBlocks || []).map((b) => String(b.text || '')),
-          ...(m.attachments || []).map((a) => a.kind === 'image' ? `[[IMG:${a.sourceUrl || ''}]]` : `[[FILE:${a.sourceUrl || ''}|${a.displayName || 'File'}]]`)
-        ].filter(Boolean);
-        return { role: m.role, content: parts.join('
-'), order: idx, attachments: m.attachments || [] };
-      }),
-      diagnostics: buildDiagnosticsBundle(dataset, "LocalAgent")
-    };
-
-    processData(normalized);
-  }
-
-
-  function buildChatExportDatasetFromItems(items = [], trace = null) {
-    const messages = [];
-    const artifacts = [];
-    let current = null;
-    let messageSeq = 0;
-
-    for (const item of items) {
-      if (item.type === 'USER_TURN' || item.type === 'MODEL_TURN' || item.type === 'CODE_BLOCK') {
-        current = {
-          id: `m_${messageSeq += 1}`,
-          role: item.type === 'USER_TURN' ? 'user' : 'assistant',
-          timestamp: null,
-          contentBlocks: [{ kind: item.type === 'CODE_BLOCK' ? 'code' : 'text', text: String(item.text || '') }],
-          attachments: []
-        };
-        messages.push(current);
-      } else if ((item.type === 'IMAGE_BLOCK' || item.type === 'FILE_CARD') && current) {
-        const kind = item.type === 'IMAGE_BLOCK' ? 'image' : 'file';
-        const sourceUrl = item.src || item.href || '';
-        const attach = {
-          kind,
-          sourceUrl,
-          resolved: { mime: null, bytesSha256: null, byteLength: null, dataUri: null },
-          fileNameSafe: kind === 'image' ? 'image.bin' : 'file.bin',
-          displayName: kind === 'image' ? 'Image' : 'File',
-          caption: '',
-          messageId: current.id
-        };
-        current.attachments.push(attach);
-        artifacts.push({ ...attach });
+    setAnalyzeProgress(30, 'Extracting');
+    chrome.tabs.sendMessage(activeTabId, { action: 'extract_chat', options }, (res) => {
+      if (chrome.runtime.lastError) {
+        chrome.scripting.executeScript({ target: { tabId: activeTabId }, files: ['content.js'] }, () => {
+          setTimeout(() => chrome.tabs.sendMessage(activeTabId, { action: 'extract_chat', options }, processData), 600);
+        });
+        return;
       }
-    }
-
-    return {
-      schemaVersion: '0.12.0',
-      messages,
-      attachments: artifacts,
-      artifacts,
-      diagnostics: trace || null,
-      raw: { items }
-    };
-  }
-
-
-  function buildDiagnosticsBundle(dataset, platform = 'LocalAgent') {
-    const now = new Date().toISOString();
-    const runId = `run_${Date.now()}`;
-    const diag = dataset?.diagnostics || {};
-    return {
-      runId,
-      version: '0.12.0',
-      host: location.hostname || 'unknown',
-      pageUrl: location.href || '',
-      timestamp: now,
-      ai: { model: diag.model || { name: 'unknown', loaded: false }, embeddingMs: diag.embeddingMs || 0, embeddingsCount: diag.embeddingsCount || 0 },
-      extraction: { candidateCount: (dataset?.raw?.items || []).length, planAttempts: diag.attempts || [], bestPlanId: diag.chosenPlanId || null, bestPlanScore: diag.bestPlanScore || 0 },
-      assets: { totalImagesDetected: (dataset?.attachments || []).filter((a) => a.kind === 'image').length, totalFilesDetected: (dataset?.attachments || []).filter((a) => a.kind === 'file').length },
-      security: { blockedOutboundCount: 0, allowlistMode: 'default' },
-      learning: { scoreDelta: diag?.learned?.scoreDelta || 0, updates: diag?.learned?.updates || 0 },
-      perf: { elapsedMs: diag.elapsedMs || 0 },
-      platform
-    };
+      processData(res);
+    });
   }
 
   function processData(res) {
@@ -316,44 +164,29 @@ document.addEventListener('DOMContentLoaded', () => {
     const el = document.getElementById('analyze-progress');
     if (!el) return;
     const bounded = Math.max(0, Math.min(100, Math.round(percent)));
-    el.textContent = `Analysis Progress (messages/images/files): ${bounded}% (${label})`;
+    el.textContent = `Analysis Progress: ${bounded}% (${label})`;
   }
 
   function computeDetectedCounts(messages = []) {
     let photos = 0;
     let files = 0;
     let others = 0;
-    let otherCodeBlocks = 0;
-    let otherLinks = 0;
-    let otherQuotes = 0;
     const imgRegex = /\[\[IMG:[\s\S]*?\]\]|!\[[^\]]*\]\((data:image\/[^)]+|https?:\/\/[^)]+)\)/g;
     const fileRegex = /\[\[FILE:([^|\]]+)\|([^\]]+)\]\]/g;
-    const linkRegex = /https?:\/\/[^\s)]+/g;
     for (const m of messages) {
       const content = m.content || '';
       photos += (content.match(imgRegex) || []).length;
       files += (content.match(fileRegex) || []).length;
-      otherCodeBlocks += (content.match(/```/g) || []).length / 2;
-      otherLinks += Math.max(0, (content.match(linkRegex) || []).length - (content.match(fileRegex) || []).length);
-      otherQuotes += (content.match(/^>\s+/gm) || []).length;
+      others += (content.match(/```/g) || []).length / 2;
     }
-    others = Math.round(otherCodeBlocks + otherLinks + otherQuotes);
-    return {
-      messages: messages.length,
-      photos: Math.round(photos),
-      files: Math.round(files),
-      others,
-      otherCodeBlocks: Math.round(otherCodeBlocks),
-      otherLinks: Math.round(otherLinks),
-      otherQuotes: Math.round(otherQuotes)
-    };
+    return { messages: messages.length, photos: Math.round(photos), files: Math.round(files), others: Math.round(others) };
   }
 
   function updateDetectedSummary(messages = []) {
     const el = document.getElementById('detected-summary');
     if (!el) return;
     const c = computeDetectedCounts(messages);
-    el.textContent = `Detected: ${c.messages} messages • ${c.photos} photos • ${c.files} files • ${c.others} others (code:${c.otherCodeBlocks}, links:${c.otherLinks}, quotes:${c.otherQuotes})`;
+    el.textContent = `Detected: ${c.messages} messages • ${c.photos} photos • ${c.files} files • ${c.others} others`;
   }
 
   btnExport.onclick = async () => {
@@ -363,7 +196,6 @@ document.addEventListener('DOMContentLoaded', () => {
     setProcessingProgress(2);
 
     try {
-      tempMediaCache.clear('export-begin');
       const date = new Date().toISOString().slice(0, 10);
       const baseName = `${(currentChatData.platform || 'Export').replace(/[^a-zA-Z0-9]/g, '')}_${date}`;
       const files = [];
@@ -375,20 +207,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const percent = 10 + ((i + 1) / Math.max(1, formats.length)) * 75;
         setProcessingProgress(percent, `Processing ${fmt.toUpperCase()}`);
       }
-
-
-      const bundleManifest = {
-        generatedAt: new Date().toISOString(),
-        version: '0.12.0',
-        fileCount: files.length,
-        files: files.map((f) => ({ name: f.name, mime: f.mime || 'application/octet-stream', byteLength: (typeof f.content === 'string' ? f.content.length : (f.content?.length || 0)) })),
-        datasetSummary: {
-          messages: currentChatData?.dataset?.messages?.length || currentChatData?.messages?.length || 0,
-          attachments: currentChatData?.dataset?.attachments?.length || 0
-        }
-      };
-      files.push({ name: `${baseName}.diagnostics.json`, content: JSON.stringify(currentChatData?.diagnostics || {}, null, 2), mime: 'application/json' });
-      files.push({ name: `${baseName}.export_bundle_manifest.json`, content: JSON.stringify(bundleManifest, null, 2), mime: 'application/json' });
 
       if (files.length === 1 && !checkZip.checked) {
         setProcessingProgress(95, 'Finalizing');
@@ -403,7 +221,6 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (error) {
       showError(error);
     } finally {
-      tempMediaCache.clear('export-finish');
       updateExportBtn();
     }
   };
@@ -447,31 +264,22 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.runtime.sendMessage({ action: 'GET_LOGS' }, (logs) => {
       downloadBlob(new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' }), 'ai_exporter_logs.json');
     });
-    chrome.runtime.sendMessage({ action: 'GET_DIAGNOSTICS_JSONL' }, (diag) => {
-      if (diag?.success) downloadBlob(new Blob([(diag.lines || []).join('\n')], { type: 'application/x-ndjson' }), 'ai_exporter_diagnostics.jsonl');
-    });
   };
 
   btnExportImages.onclick = async () => {
     if (!currentChatData) return;
-    const imageList = extractAllImageSources(currentChatData.messages, currentChatData.dataset);
+    const imageList = extractAllImageSources(currentChatData.messages);
     if (!imageList.length) return showError(new Error('No images found in extracted chat data.'));
 
     const packMode = !!checkPhotoZip.checked;
     const date = new Date().toISOString().slice(0, 10);
     const platformPrefix = (currentChatData.platform || 'Export').replace(/[^a-zA-Z0-9]/g, '');
-    await ensureAssetPermissions();
-    const processor = window.DataProcessor ? new window.DataProcessor() : null;
-    const textCorpus = (currentChatData.messages || []).map((m) => m.content || '').join('\n');
 
     if (!packMode) {
       let idx = 1;
       for (const src of imageList) {
-        console.log(`[IMG][${idx}/${imageList.length}] Fetching: ${src.slice(0, 80)}`);
-        const blob = await fetchFileBlob(src);
-        const extGuess = blob ? sniffImageExtension(blob) : 'jpg';
-        const ok = await downloadByUrlOrBlob(src, `ai_chat_exporter/${platformPrefix}_${date}_photo_${String(idx).padStart(3, '0')}.${extGuess}`);
-        if (!ok) console.warn(`[IMG] failed: ${src}`);
+        const extGuess = src.includes('png') ? 'png' : (src.includes('webp') ? 'webp' : 'jpg');
+        chrome.downloads.download({ url: src, filename: `ai_chat_exporter/${platformPrefix}_${date}_photo_${String(idx).padStart(3, '0')}.${extGuess}`, saveAs: false });
         idx += 1;
       }
       return;
@@ -480,17 +288,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const files = [];
     let idx = 1;
     for (const src of imageList) {
-      const b = processor ? await processor.fetchWithRetry(src, fetchFileBlob) : await fetchFileBlob(src);
-      if (!b) {
-        console.warn(`[IMG] failed: ${src}`);
+      try {
+        const b = await fetch(src).then((r) => r.blob());
+        const ext = (b.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+        const data = new Uint8Array(await b.arrayBuffer());
+        files.push({ name: `photo_${String(idx).padStart(3, '0')}.${ext}`, content: data, mime: b.type || 'application/octet-stream' });
         idx += 1;
-        continue;
+      } catch {
+        // skip failed image
       }
-      const ext = sniffImageExtension(b);
-      const data = new Uint8Array(await b.arrayBuffer());
-      files.push({ name: `photo_${String(idx).padStart(3, '0')}.${ext}`, content: data, mime: b.type || 'application/octet-stream' });
-      console.log(`[IMG] embedded ${idx}/${imageList.length}: ${files[files.length - 1].name} (${b.size} bytes)`);
-      idx += 1;
     }
 
     if (files.length) {
@@ -502,106 +308,28 @@ document.addEventListener('DOMContentLoaded', () => {
   btnExportFiles.onclick = async () => {
     if (!currentChatData) return;
     if (!checkExportFiles.checked) return showInfo('Files Export Disabled', 'Enable "Extract and ZIP Chat Files" in Settings first.');
-
-    await ensureAssetPermissions();
-    const processor = window.DataProcessor ? new window.DataProcessor() : null;
-    const textCorpus = (currentChatData.messages || []).map((m) => m.content || '').join('\n');
-    const metaFiles = processor ? processor.extractDownloadMetadata(textCorpus) : [];
-    const legacyFiles = extractAllFileSources(currentChatData.messages, currentChatData.dataset).map((f) => ({ fileName: f.name, url: f.url, type: /^sandbox:/i.test(f.url) ? 'sandbox' : 'text_reference', needsResolution: /^sandbox:/i.test(f.url) }));
-    const filesFound = processor ? processor.deduplicateFiles([...legacyFiles, ...metaFiles]) : legacyFiles;
-
+    const filesFound = extractAllFileSources(currentChatData.messages);
     if (!filesFound.length) return showError(new Error('No chat-generated file links were detected.'));
-    console.log(`[FILES] Found ${filesFound.length} references`);
-
-    const result = processor
-      ? await processor.downloadAllFiles(filesFound, fetchFileBlob, async (path) => {
-        const resolved = await resolveAssetViaBroker(path);
-        return resolved?.sourceUrl || resolved?.download_url || null;
-      }, (progress) => {
-        if (progress.status === 'ok') console.log(`[FILES][${progress.index}/${progress.total}] ✓ ${progress.fileName}`);
-        else console.warn(`[FILES][${progress.index}/${progress.total}] ✗ ${progress.fileName}: ${progress.error || 'failed'}`);
-      })
-      : { succeeded: [], failed: filesFound, total: filesFound.length };
-
-    if (!result.succeeded.length) {
-      return showError(new Error('Detected files could not be downloaded from current session.'));
-    }
 
     const packed = [];
     let i = 1;
-    for (const f of result.succeeded) {
-      const ext = (f.type.split('/')[1] || 'bin').replace('jpeg', 'jpg');
-      const rawName = (f.fileName || `file_${i}`).includes('.') ? (f.fileName || `file_${i}`) : `${f.fileName || `file_${i}`}.${ext}`;
-      const name = sanitizeZipName(rawName);
-      const data = new Uint8Array(await f.blob.arrayBuffer());
-      packed.push({ name: `${String(i).padStart(3, '0')}_${name}`, content: data, mime: f.type || 'application/octet-stream' });
-      i += 1;
+    for (const file of filesFound) {
+      try {
+        const blob = await fetch(file.url).then((r) => r.blob());
+        const ext = (blob.type.split('/')[1] || 'bin').replace('jpeg', 'jpg');
+        const name = file.name.includes('.') ? file.name : `${file.name}.${ext}`;
+        const data = new Uint8Array(await blob.arrayBuffer());
+        packed.push({ name: `${String(i).padStart(3, '0')}_${name}`, content: data, mime: blob.type || 'application/octet-stream' });
+        i += 1;
+      } catch {
+        // skip failed file
+      }
     }
-
+    if (!packed.length) return showError(new Error('Detected files could not be downloaded from current session.'));
     const zip = await createRobustZip(packed);
     const date = new Date().toISOString().slice(0, 10);
     const platformPrefix = (currentChatData.platform || 'Export').replace(/[^a-zA-Z0-9]/g, '');
     downloadBlob(zip, `${platformPrefix}_${date}_chat_files.zip`);
-    showInfo('Files Export Summary', `Total: ${result.total}, Succeeded: ${result.succeeded.length}, Failed: ${result.failed.length}`);
-  };
-
-  btnScanFiles.onclick = async () => {
-    if (!activeTabId) return;
-    setAnalyzeProgress(35, 'Scanning file links');
-    const response = await sendToActiveTab({ action: 'scan_chatgpt_file_links' });
-    if (!response?.success) {
-      showError(new Error(response?.error || 'Scan failed for current page.'));
-      setAnalyzeProgress(100, 'Completed');
-      return;
-    }
-    const summary = response.summary || { total: 0, sandbox: 0, direct: 0 };
-    showInfo('Scan Complete', `Detected ${summary.total} file link(s). sandbox=${summary.sandbox}, direct=${summary.direct}. Open page DevTools console for detailed table.`);
-    setAnalyzeProgress(100, 'Completed');
-  };
-
-  btnResolveDownload.onclick = async () => {
-    if (!activeTabId) return;
-    setAnalyzeProgress(40, 'Resolving file links');
-    const response = await sendToActiveTab({ action: 'resolve_download_chatgpt_file_links' });
-    if (!response?.success) {
-      showError(new Error(response?.error || 'Resolve + Download failed.'));
-      setAnalyzeProgress(100, 'Completed');
-      return;
-    }
-    const stats = response.stats || { total: 0, downloaded: 0, failed: 0 };
-    showInfo('Resolve + Download Finished', `[${stats.downloaded === stats.total ? 'PASS' : (stats.downloaded > 0 ? 'WARN' : 'FAIL')}] downloaded ${stats.downloaded}/${stats.total}, failed ${stats.failed}.`);
-    setAnalyzeProgress(100, 'Completed');
-  };
-
-  btnPingContent.onclick = async () => {
-    if (!activeTabId) return;
-    const response = await sendToActiveTab({ action: 'ping_content' });
-    if (!response?.injected) {
-      showError(new Error(response?.error || 'Ping failed: content script unavailable on current tab.'));
-      return;
-    }
-    showInfo('Ping OK', `injected=${response.injected}, domain=${response.domain}, href=${response.href}`);
-  };
-
-  btnExtractLocal.onclick = async () => {
-    if (!activeTabId) return;
-    const response = await sendToActiveTab({ action: 'extract_local_agent', options: { debug: !!checkDebugOverlay?.checked } });
-    if (!response?.success) {
-      showError(new Error(response?.error || 'Local extract failed. Check Ping + Self-Test and open page console for [SmartMiner]/[SCAN]/[DL] diagnostics.'));
-      return;
-    }
-    const summary = response.summary || { messages: 0, images: 0, files: 0 };
-    showInfo('Local Extract', `messages=${summary.messages}, images=${summary.images}, files=${summary.files}`);
-  };
-
-  btnSelfTest.onclick = async () => {
-    if (!activeTabId) return;
-    const response = await sendToActiveTab({ action: 'self_test_local_agent', options: { debug: !!checkDebugOverlay?.checked } });
-    if (!response?.success) {
-      showError(new Error(response?.error || 'Self-test failed.'));
-      return;
-    }
-    showInfo('Self-Test', `${response.status}: ${response.details}`);
   };
 
   document.getElementById('link-legal').onclick = () => showInfo('Legal', 'This is a local-processing developer version. Users remain responsible for lawful and compliant use in their jurisdiction.');
@@ -626,26 +354,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function normalizeImageSrc(src) {
     if (!src) return '';
-    const normalized = sanitizeTokenUrl(src);
-    if (/^data:image\//i.test(normalized)) return normalized;
-    if (/^https?:\/\//i.test(normalized) && isLikelyImageUrl(normalized)) return normalized;
+    if (/^data:image\//i.test(src)) return src;
+    if (/^https?:\/\//i.test(src)) return src;
     return '';
-  }
-
-  function sanitizeTokenUrl(url) {
-    return String(url || '').trim().replace(/[\]\)>'"\s]+$/g, '');
-  }
-
-  function isLikelyImageUrl(url) {
-    try {
-      const u = new URL(url);
-      const path = (u.pathname || '').toLowerCase();
-      if (/\.(jpg|jpeg|png|gif|webp|bmp|svg)$/.test(path)) return true;
-      if (/image|img|photo|picture|googleusercontent|gstatic|ggpht/.test(url.toLowerCase())) return true;
-      return false;
-    } catch {
-      return false;
-    }
   }
 
   function stripImageTokens(content) {
@@ -682,14 +393,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }).join('');
   }
 
-  function extractAllImageSources(messages, dataset = null) {
+  function extractAllImageSources(messages) {
     const set = new Set();
-    const canonical = (dataset?.attachments || []).filter((a) => a.kind === 'image').map((a) => a?.resolved?.dataUri || a?.sourceUrl || '').filter(Boolean);
-    canonical.forEach((src) => {
-      const norm = normalizeImageSrc(src);
-      if (norm) set.add(norm);
-    });
-
     const tokenRegex = /\[\[IMG:([\s\S]*?)\]\]/g;
     const mdRegex = /!\[[^\]]*\]\((data:image\/[^)]+|https?:\/\/[^)]+)\)/g;
     for (const m of messages || []) {
@@ -706,15 +411,8 @@ document.addEventListener('DOMContentLoaded', () => {
     return Array.from(set);
   }
 
-  function extractAllFileSources(messages, dataset = null) {
+  function extractAllFileSources(messages) {
     const files = [];
-    (dataset?.attachments || []).filter((a) => a.kind === 'file').forEach((a) => {
-      const url = String(a?.sourceUrl || '').trim();
-      if (!url) return;
-      const safeName = String(a?.fileNameSafe || a?.displayName || 'file.bin').replace(/[\/:*?"<>|]+/g, '_') || 'file.bin';
-      files.push({ url, name: safeName });
-    });
-
     const fileRegex = /\[\[FILE:([^|\]]+)\|([^\]]+)\]\]/g;
     for (const m of messages || []) {
       let match;
@@ -731,130 +429,6 @@ document.addEventListener('DOMContentLoaded', () => {
     return Array.from(uniq.values());
   }
 
-
-  class GeminiArtifactGenerator {
-    constructor(chatData) {
-      this.data = JSON.parse(JSON.stringify(chatData || { messages: [] }));
-      this.fileLinks = [];
-    }
-
-    async toBase64(url) {
-      try {
-        if (!url) return '';
-        const clean = sanitizeTokenUrl(url);
-        if (/^data:/i.test(clean)) return clean;
-        const blob = await fetchFileBlob(clean);
-        if (!blob) return clean;
-        return await new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(String(reader.result || clean));
-          reader.readAsDataURL(blob);
-        });
-      } catch {
-        return sanitizeTokenUrl(url);
-      }
-    }
-
-    async processImages() {
-      const imgUrlRegex = /https?:\/\/[^\s)"']*(googleusercontent\.com|gstatic\.com|ggpht\.com|lh3\.googleusercontent\.com)[^\s)"']*/gi;
-      for (const message of this.data.messages || []) {
-        const found = (message.content || '').match(imgUrlRegex) || [];
-        let content = message.content || '';
-        for (const url of [...new Set(found)]) {
-          const base64 = await this.toBase64(url);
-          content = content.split(url).join(base64);
-        }
-        content = replaceImageTokensForHtml(content);
-        message.content = content;
-      }
-      return this.data;
-    }
-
-    scanAndDownloadFiles() {
-      const linkRegex = /(sandbox:\/\/[^\s"')]+|https?:\/\/[^\s"')]+\.(?:csv|pdf|docx|xlsx|pptx|py|js|ts|json|xml|txt|zip))/gi;
-      const found = [];
-      for (const message of this.data.messages || []) {
-        const hits = (message.content || '').match(linkRegex) || [];
-        for (const hit of hits) found.push(hit);
-      }
-      const uniq = [...new Set(found)];
-      this.fileLinks = uniq;
-      uniq.forEach((url, index) => {
-        try {
-          chrome.downloads.download({ url, filename: `ai_chat_exporter/gemini_file_${String(index + 1).padStart(3, '0')}`, saveAs: false });
-        } catch {
-          // no-op
-        }
-      });
-      return uniq;
-    }
-
-    markdownToHtml(input) {
-      return String(input || '')
-        .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/`([^`]+)`/g, '<code>$1</code>')
-        .replace(/\n/g, '<br>');
-    }
-
-    generateStaticHTMLString() {
-      const style = `
-        body{background:#1f1f1f;color:#ececec;font-family:Arial,sans-serif;padding:20px}
-        .wrap{max-width:980px;margin:auto}
-        .msg{padding:12px;border-radius:12px;margin:10px 0;background:#2a2a2a;border:1px solid #3a3a3a}
-        .role{font-weight:700;color:#8ab4f8;margin-bottom:8px}
-        pre,code{font-family:monospace}
-        pre{background:#111;padding:10px;border-radius:8px;overflow:auto}
-        img{max-width:100%;height:auto;border-radius:8px}
-      `;
-      const body = (this.data.messages || []).map((m) => `<div class="msg"><div class="role">${escapeHtml(m.role)}</div><div>${this.markdownToHtml(m.content)}</div></div>`).join('');
-      return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${style}</style></head><body><div class="wrap">${body}</div></body></html>`;
-    }
-
-    generateStaticHTML() {
-      return new Blob([this.generateStaticHTMLString()], { type: 'text/html' });
-    }
-
-    generateHTML() {
-      return this.generateStaticHTML();
-    }
-
-    generateWord() {
-      const inner = this.generateStaticHTMLString();
-      const body = inner.replace(/^[\s\S]*<body[^>]*>/i, '').replace(/<\/body>[\s\S]*$/i, '');
-      const doc = `<!DOCTYPE html><html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><style>img{max-width:100%;height:auto} pre{background:#111;color:#fff;padding:8px} .msg{page-break-inside:avoid}</style></head><body>${body}</body></html>`;
-      return new Blob([doc], { type: 'application/msword' });
-    }
-  }
-
-  async function embedImagesAsDataUris(messages = []) {
-    const cache = new Map();
-    const tokenRegex = /\[\[IMG:([\s\S]*?)\]\]|!\[[^\]]*\]\((data:image\/[^)]+|https?:\/\/[^)]+)\)/g;
-    return Promise.all((messages || []).map(async (message) => {
-      const msg = { ...message };
-      let content = String(msg.content || '');
-      const found = [];
-      let match;
-      while ((match = tokenRegex.exec(content)) !== null) {
-        const src = (match[1] || match[2] || '').trim();
-        if (src && /^https?:\/\//i.test(src)) found.push(src);
-      }
-      for (const src of [...new Set(found)]) {
-        if (!cache.has(src)) {
-          try {
-            const dataUrl = await tempMediaCache.fetchDataUrl(sanitizeTokenUrl(src));
-            cache.set(src, dataUrl);
-          } catch {
-            cache.set(src, src);
-          }
-        }
-        content = content.split(src).join(cache.get(src));
-      }
-      msg.content = content;
-      return msg;
-    }));
-  }
-
   async function generateContent(fmt, data) {
     const msgs = data.messages || [];
     const title = data.title || 'Export';
@@ -865,31 +439,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (fmt === 'doc' || fmt === 'html') {
-      let richMsgs = msgs;
-      if (window.DataProcessor) {
-        const processor = new window.DataProcessor();
-        richMsgs = await processor.embedImages(msgs, fetchFileBlob);
-      } else {
-        richMsgs = await embedImagesAsDataUris(msgs);
-      }
-
-      if (window.ExportManager) {
-        const manager = new window.ExportManager();
-        const htmlOut = manager.buildSelfContainedHtml(title, richMsgs);
-        if (fmt === 'doc') {
-          return { content: manager.buildWordDocument(title, richMsgs), mime: 'application/msword' };
-        }
-        return { content: htmlOut, mime: 'text/html' };
-      }
-
       const style = 'body{font-family:Arial,sans-serif;max-width:900px;margin:auto;padding:20px;line-height:1.6}img{max-width:100%;height:auto}.msg{margin-bottom:20px;padding:12px;border:1px solid #e5e7eb;border-radius:8px}.role{font-weight:700;margin-bottom:8px}';
-      const body = richMsgs.map((m) => `<div class="msg"><div class="role">${escapeHtml(m.role)}</div><div>${renderRichMessageHtml(m.content)}</div></div>`).join('');
+      const body = msgs.map((m) => {
+        return `<div class="msg"><div class="role">${escapeHtml(m.role)}</div><div>${renderRichMessageHtml(m.content)}</div></div>`;
+      }).join('');
       const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><style>${style}</style></head><body><h1>${escapeHtml(title)}</h1>${body}</body></html>`;
-      if (fmt === 'doc') {
-        const docHtml = `<!DOCTYPE html><html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'><head><meta charset='utf-8'><style>${style}</style></head><body><h1>${escapeHtml(title)}</h1>${body}</body></html>`;
-        return { content: docHtml, mime: 'application/msword' };
-      }
-      return { content: html, mime: 'text/html' };
+      return { content: html, mime: fmt === 'doc' ? 'application/msword' : 'text/html' };
     }
 
     if (fmt === 'json') return { content: JSON.stringify({ platform: data.platform, messages: msgs.map((m) => ({ role: m.role, content: stripImageTokens(m.content).replace(/\n/g, ' ') })) }, null, 2), mime: 'application/json' };
@@ -1184,10 +739,6 @@ document.addEventListener('DOMContentLoaded', () => {
     return new Blob([...parts, ...cd, end], { type: 'application/zip' });
   }
 
-  function sanitizeZipName(name = "artifact.bin") {
-    return String(name || "artifact.bin").replace(/\.\.+/g, '.').replace(/[\\/:*?"<>|]/g, "_").slice(0, 120);
-  }
-
   function downloadBlob(blob, name) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1195,158 +746,6 @@ document.addEventListener('DOMContentLoaded', () => {
     a.download = name;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
-  }
-
-  function createTempMediaCache() {
-    const blobCache = new Map();
-    const objectUrls = new Set();
-    return {
-      async fetchBlob(url) {
-        if (!url) return null;
-        const clean = sanitizeTokenUrl(url);
-        if (blobCache.has(clean)) return blobCache.get(clean);
-        try {
-          const blob = await fetchFileBlob(clean);
-          if (blob) blobCache.set(clean, blob);
-          return blob;
-        } catch {
-          return null;
-        }
-      },
-      async fetchDataUrl(url) {
-        if (!url) return '';
-        if (/^data:/i.test(url)) return url;
-        const blob = await this.fetchBlob(url);
-        if (!blob) return url;
-        return await new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(String(reader.result || url));
-          reader.readAsDataURL(blob);
-        });
-      },
-      async fetchObjectUrl(url) {
-        const blob = await this.fetchBlob(url);
-        if (!blob) return url;
-        const objectUrl = URL.createObjectURL(blob);
-        objectUrls.add(objectUrl);
-        return objectUrl;
-      },
-      clear(reason = 'cleanup') {
-        blobCache.clear();
-        objectUrls.forEach((u) => URL.revokeObjectURL(u));
-        objectUrls.clear();
-        console.log(`[TempMediaCache] cleared (${reason})`);
-      }
-    };
-  }
-
-  function sendToActiveTab(payload) {
-    return new Promise((resolve) => {
-      chrome.tabs.sendMessage(activeTabId, payload, (res) => {
-        if (chrome.runtime.lastError) {
-          resolve({ success: false, error: chrome.runtime.lastError.message });
-          return;
-        }
-        resolve(res || { success: false, error: 'No response from content script.' });
-      });
-    });
-  }
-
-  function ensureGestureProofToken() {
-    if (!gestureProofToken) gestureProofToken = `gesture_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
-    return gestureProofToken;
-  }
-
-  async function resolveAssetViaBroker(url) {
-    const token = ensureGestureProofToken();
-    return sendToActiveTab({ action: "fetch_blob_page", url, gestureToken: token });
-  }
-
-
-  async function ensureAssetPermissions() {
-    const origins = [
-      'https://*.oaiusercontent.com/*',
-      'https://*.oaistatic.com/*',
-      'https://*.openai.com/*',
-      'https://*.googleusercontent.com/*',
-      'https://*.gstatic.com/*',
-      'https://*.anthropic.com/*'
-    ];
-    return new Promise((resolve) => {
-      chrome.permissions.contains({ origins }, (has) => {
-        if (has) {
-          resolve(true);
-          return;
-        }
-        chrome.permissions.request({ origins }, (granted) => resolve(!!granted));
-      });
-    });
-  }
-
-  async function fetchMediaViaBackgroundProxy(url) {
-    return new Promise((resolve) => {
-      chrome.runtime.sendMessage({ action: "MEDIA_FETCH_PROXY", payload: { url, userInitiated: true } }, (res) => resolve(res || { success: false }));
-    });
-  }
-
-  async function fetchFileBlob(url) {
-    if (!url) return null;
-    if (!activeTabId) return null;
-    const clean = sanitizeTokenUrl(url);
-    if (/^data:/i.test(clean)) return dataUrlToBlob(clean);
-    if (/^blob:/i.test(clean)) {
-      const pageBlob = await resolveAssetViaBroker(clean);
-      if (!pageBlob?.success) return null;
-      return dataUrlToBlob(pageBlob.dataUrl);
-    }
-    const pageBlob = await resolveAssetViaBroker(clean);
-    if (pageBlob?.success) return dataUrlToBlob(pageBlob.dataUrl);
-    const bgProxy = await fetchMediaViaBackgroundProxy(clean);
-    if (!bgProxy?.success) return null;
-    return dataUrlToBlob(bgProxy.dataUrl);
-  }
-
-  function dataUrlToBlob(dataUrl) {
-    try {
-      const [meta, b64] = String(dataUrl || '').split(',');
-      if (!meta || !b64) return null;
-      const mime = meta.match(/data:([^;]+)/)?.[1] || 'application/octet-stream';
-      const bin = atob(b64);
-      const bytes = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
-      return new Blob([bytes], { type: mime });
-    } catch {
-      return null;
-    }
-  }
-
-  function sniffImageExtension(blob) {
-    const mime = (blob?.type || '').toLowerCase();
-    if (mime.includes('png')) return 'png';
-    if (mime.includes('webp')) return 'webp';
-    if (mime.includes('gif')) return 'gif';
-    if (mime.includes('bmp')) return 'bmp';
-    if (mime.includes('svg')) return 'svg';
-    if (mime.includes('jpeg') || mime.includes('jpg')) return 'jpg';
-    return 'jpg';
-  }
-
-  async function downloadByUrlOrBlob(url, filename) {
-    try {
-      if (/^data:|^blob:/i.test(url)) {
-        chrome.downloads.download({ url, filename, saveAs: false });
-        return true;
-      }
-      const blob = await fetchFileBlob(url);
-      if (!blob) {
-        chrome.downloads.download({ url, filename, saveAs: false });
-        return true;
-      }
-      downloadBlob(blob, filename.split('/').pop() || 'file.bin');
-      return true;
-    } catch {
-      return false;
-    }
   }
 
   const openModal = (m) => { if (m) m.style.display = 'flex'; };
@@ -1365,7 +764,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-close-about').onclick = document.getElementById('btn-ack-about').onclick = () => closeModal(aboutModal);
   document.getElementById('btn-close-error').onclick = () => closeModal(errorModal);
   document.getElementById('btn-close-preview').onclick = () => closeModal(document.getElementById('preview-modal'));
-  window.addEventListener('beforeunload', () => tempMediaCache.clear('popup-close'));
 
   safeInit();
 });

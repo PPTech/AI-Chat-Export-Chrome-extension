@@ -2,14 +2,10 @@
 # Code generated with support from CODEX and CODEX CLI.
 # Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 
-# Platform Engine Architecture (v0.10.26)
+# Platform Engine Architecture (v0.10.10)
 
 ## Objective
 Build one dedicated extraction engine per chat platform, then normalize all outputs to a secure shared model for export.
-
-## Local Agent Layer
-- Shared local agent (`smart_agent.js`) runs visual+semantic extraction independent of brittle CSS classes.
-- Offscreen local planner (`ai_engine.js`) provides deterministic repair path and recipe-based reuse.
 
 ## Engine Separation
 
@@ -42,22 +38,7 @@ Build one dedicated extraction engine per chat platform, then normalize all outp
 
 ### 4) AI Studio Engine
 - Trigger: `aistudio.google.com`.
-- Uses `AIStudioExtractor`:
-  - deep shadow-root traversal,
-  - hydration wait,
-  - system-instruction extraction,
-  - turn parsing from textarea/contenteditable/editor layers,
-  - attachment extraction (images/files).
-
-### 5) Cross-Service Link Discovery Engine
-- Shared scanner action for ChatGPT, Claude, Gemini, AI Studio.
-- Detects file links from:
-  - anchors (raw + absolute href),
-  - text-node sandbox patterns,
-  - button/card widgets.
-- Exposes explainable diagnostics:
-  - `window.__SANDBOX_FILE_REFS__` for scan evidence,
-  - `window.__CHATGPT_FILE_LINKS__` for download job results.
+- Uses multi-selector adaptive fallback strategy with role hints from attributes and structure.
 
 ## Shared Message Contract
 ```json

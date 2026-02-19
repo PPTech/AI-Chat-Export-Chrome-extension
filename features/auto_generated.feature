@@ -25,16 +25,6 @@ Feature: Auto-generated platform and export coverage
     When user exports pdf
     Then output file content is generated without runtime errors
 
-  Scenario: DOC export is generated
-    Given extracted normalized messages exist
-    When user exports doc
-    Then output file content is generated without runtime errors
-
-  Scenario: DOC export is generated
-    Given extracted normalized messages exist
-    When user exports doc
-    Then output file content is generated without runtime errors
-
   Scenario: JSON export is generated
     Given extracted normalized messages exist
     When user exports json
