@@ -22,6 +22,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnExtractLocal = document.getElementById('btn-extract-local');
   const btnSelfTest = document.getElementById('btn-self-test');
   const btnLogs = document.getElementById('btn-download-logs');
+  const btnCopyLastError = document.getElementById('btn-copy-last-error');
+  const btnPurgeLogs = document.getElementById('btn-purge-logs');
   const btnExportConfig = document.getElementById('btn-export-config');
   const checkImages = document.getElementById('check-images');
   const checkCode = document.getElementById('check-code');
@@ -31,6 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const checkExportFiles = document.getElementById('check-export-files');
   const checkExternalLinks = document.getElementById('check-external-links');
   const checkDebugLogging = document.getElementById('check-debug-logging');
+  const checkSafeKeyTelemetry = document.getElementById('check-safe-key-telemetry');
 
   const settingsModal = document.getElementById('settings-modal');
   const errorModal = document.getElementById('error-modal');
@@ -38,6 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const infoModal = document.getElementById('info-modal');
   const errorMsg = document.getElementById('error-msg');
   const errorFix = document.getElementById('error-fix');
+  const diagRunCard = document.getElementById('diag-run-card');
 
   const SETTINGS_KEY = 'ai_exporter_settings_v1';
   const tempMediaCache = createTempMediaCache();
@@ -58,6 +62,7 @@ document.addEventListener('DOMContentLoaded', () => {
       fn(`[ACTIVITY][${direction}] ${action}`, entry.payload || '');
       const withScope = { ...entry, tabId: activeTabId ?? null, tabScope: activeTabId ? 'tab' : 'global' };
       chrome.runtime.sendMessage({ action: 'LOG_EVENT', level, message: `${direction}:${action}`, details: withScope, tabId: activeTabId ?? null }, () => void chrome.runtime.lastError);
+      window.FlightRecorderToolkit?.record?.({ lvl: String(level || 'INFO').toUpperCase(), event: `${direction}.${action}`, tabId: activeTabId ?? null, tabScope: activeTabId ? 'tab' : 'global', platform: detectPlatform(), module: 'popup', phase: 'export', result: level === 'ERROR' ? 'fail' : 'ok', reason: 'activity' });
     }
   }
 
@@ -104,7 +109,10 @@ document.addEventListener('DOMContentLoaded', () => {
       photoZip: true,
       exportFiles: true,
       includeExternalLinks: false,
-      debugLogging: false
+      debugLogging: false,
+      safeKeyTelemetry: false,
+      includeRedactedPreviews: false,
+      persistLogs: false
     };
   }
 
@@ -118,6 +126,9 @@ document.addEventListener('DOMContentLoaded', () => {
       exportFiles: !!checkExportFiles.checked,
       includeExternalLinks: !!checkExternalLinks?.checked,
       debugLogging: !!checkDebugLogging?.checked,
+      safeKeyTelemetry: !!checkSafeKeyTelemetry?.checked,
+      includeRedactedPreviews: false,
+      persistLogs: false,
       updatedAt: new Date().toISOString()
     };
   }
@@ -404,7 +415,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   btnExport.onclick = async () => {
-    logActivity('ui', 'export.main.click', { formatCount: getSelectedFormats().length });
+    const runId = window.FlightRecorderToolkit?.startRun?.() || 'run_unknown';
+    logActivity('ui', 'export.main.click', { formatCount: getSelectedFormats().length, runId });
+    if (diagRunCard) diagRunCard.textContent = `RunId: ${runId} | Errors: 0`;
     const formats = Array.from(document.querySelectorAll('.format-item.selected')).map((i) => i.dataset.ext);
     if (!formats.length || !currentChatData) return;
     btnExport.disabled = true;
@@ -484,10 +497,25 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.runtime.sendMessage({ action: 'GET_LOGS' }, (logs) => {
       downloadBlob(new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' }), 'ai_exporter_logs.json');
     });
-    chrome.runtime.sendMessage({ action: 'GET_DIAGNOSTICS_JSONL' }, (diag) => {
-      if (diag?.success) downloadBlob(new Blob([(diag.lines || []).join('\n')], { type: 'application/x-ndjson' }), 'ai_exporter_diagnostics.jsonl');
+    chrome.runtime.sendMessage({ action: 'GET_DIAGNOSTICS_V3_JSONL' }, (diag) => {
+      const payload = (diag?.success && typeof diag.jsonl === 'string') ? diag.jsonl : JSON.stringify(diag || {}, null, 2);
+      downloadBlob(new Blob([payload], { type: 'application/x-ndjson' }), 'ai_exporter_diagnostics_v3.jsonl');
     });
   };
+
+  btnCopyLastError?.addEventListener('click', () => {
+    chrome.runtime.sendMessage({ action: 'GET_LOGS' }, async (logs) => {
+      const arr = Array.isArray(logs) ? logs : [];
+      const row = [...arr].reverse().find((x) => String(x?.level || '').toUpperCase() === 'ERROR');
+      const summary = row ? `${row.timestamp} | ${row.message}` : 'No ERROR entries.';
+      try { await navigator.clipboard.writeText(summary); } catch {}
+    });
+  });
+
+  btnPurgeLogs?.addEventListener('click', () => {
+    chrome.runtime.sendMessage({ action: 'PURGE_DIAGNOSTICS_V3' }, () => void chrome.runtime.lastError);
+    if (diagRunCard) diagRunCard.textContent = 'RunId: - | Errors: 0';
+  });
 
   btnExportImages.onclick = async () => {
     logActivity('ui', 'export.images.click', { tabId: activeTabId });
@@ -997,6 +1025,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const title = data.title || 'Export';
 
     if (fmt === 'pdf') {
+      logActivity('export', 'pdf.mode', { mode: 'textBased' });
       const pdf = await buildRichPdf(title, msgs);
       return { content: pdf, mime: 'application/pdf' };
     }
@@ -1014,6 +1043,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const manager = new window.ExportManager();
         const htmlOut = manager.buildSelfContainedHtml(title, richMsgs);
         if (fmt === 'doc') {
+      logActivity('export', 'doc.kind', { kind: 'docx' });
           return { content: manager.buildWordDocument(title, richMsgs), mime: 'application/msword' };
         }
         return { content: htmlOut, mime: 'text/html' };
@@ -1023,6 +1053,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const body = richMsgs.map((m) => `<div class="msg"><div class="role">${escapeHtml(m.role)}</div><div>${renderRichMessageHtml(m.content)}</div></div>`).join('');
       const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><style>${style}</style></head><body><h1>${escapeHtml(title)}</h1>${body}</body></html>`;
       if (fmt === 'doc') {
+      logActivity('export', 'doc.kind', { kind: 'docx' });
         const docHtml = `<!DOCTYPE html><html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'><head><meta charset='utf-8'><style>${style}</style></head><body><h1>${escapeHtml(title)}</h1>${body}</body></html>`;
         return { content: docHtml, mime: 'application/msword' };
       }
@@ -1532,6 +1563,46 @@ document.addEventListener('DOMContentLoaded', () => {
       return false;
     }
   }
+
+
+  function keyClassForEvent(e) {
+    const c = String(e?.code || '');
+    if (/Arrow|Tab|Page|Home|End|Escape/.test(c)) return 'nav';
+    if (/Enter|NumpadEnter/.test(c)) return 'submit';
+    if (/Backspace|Delete/.test(c)) return 'edit';
+    if (e?.ctrlKey || e?.metaKey || e?.altKey) return 'shortcut';
+    return 'other';
+  }
+
+  function installSafeKeyTelemetry() {
+    const onKey = (e) => {
+      if (!checkSafeKeyTelemetry?.checked) return;
+      const target = e.target;
+      const targetType = target?.tagName ? String(target.tagName).toLowerCase() : 'document';
+      const typeAttr = String(target?.getAttribute?.('type') || '').toLowerCase();
+      const isSensitiveField = ['password', 'email', 'tel'].includes(typeAttr)
+        || String(target?.getAttribute?.('autocomplete') || '').includes('password')
+        || !!target?.hasAttribute?.('data-sensitive');
+      const beforeLen = Number(target?.dataset?.lastLen || 0);
+      const nowLen = Number((target?.value || '').length);
+      if (target?.dataset) target.dataset.lastLen = String(nowLen);
+      logActivity('ui', 'key', {
+        keyClass: keyClassForEvent(e),
+        code: String(e.code || ''),
+        ctrl: !!e.ctrlKey,
+        alt: !!e.altKey,
+        shift: !!e.shiftKey,
+        meta: !!e.metaKey,
+        targetType,
+        isSensitiveField,
+        valueLenDelta: nowLen - beforeLen
+      });
+    };
+    document.addEventListener('keydown', onKey, true);
+    document.addEventListener('keyup', onKey, true);
+  }
+
+  installSafeKeyTelemetry();
 
   const openModal = (m) => { if (m) m.style.display = 'flex'; };
   const closeModal = (m) => { if (m) m.style.display = 'none'; };

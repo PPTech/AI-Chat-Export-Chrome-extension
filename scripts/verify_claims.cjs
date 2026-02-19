@@ -18,7 +18,8 @@ const requiredScripts = [
   'verify:claims',
   'test',
   'gherkin:generate',
-  'build'
+  'build',
+  'verify:no-secrets'
 ];
 
 const missingScripts = requiredScripts.filter((name) => !pkg.scripts || !pkg.scripts[name]);
@@ -74,3 +75,9 @@ if (missingScripts.length || claims.length) {
 }
 
 console.log(`Claim verification passed for version ${appVersion}.`);
+
+for (const token of ['FlightRecorderToolkit', 'DIAG_V3_CONFIG', 'GET_DIAGNOSTICS_V3_JSONL']) {
+  if (!fs.readFileSync('background.js', 'utf8').includes(token)) {
+    claims.push(`background diagnostics v3 token missing: ${token}`);
+  }
+}

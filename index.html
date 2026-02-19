@@ -138,6 +138,7 @@
           <div class="message-label">Messages Ready</div>
           <div class="message-label" id="detected-summary" style="margin-top:2px;">Detected: 0 messages | 0 photos | 0 files | 0 others</div>
           <div id="analyze-progress" class="message-label" style="margin-top:4px;">Analysis Progress: 0%</div>
+          <div id="diag-run-card" class="message-label" style="margin-top:4px;">RunId: - | Errors: 0</div>
           <div class="action-row">
             <button id="btn-preview" class="action-btn" title="Preview extracted messages before export">Preview</button>
             <button id="btn-load-full" class="action-btn" title="Load full chat history from beginning">Fetch Full</button>
@@ -216,10 +217,13 @@
                 <div class="setting-item">
                     <label class="setting-row"><span class="setting-label">Extract and ZIP Chat Files</span><input type="checkbox" id="check-export-files" checked title="If enabled, detected chat file links are exported and packed into ZIP."></label>
                     <label class="setting-row"><span class="setting-label">Include external hyperlinks as downloads (advanced)</span><input type="checkbox" id="check-external-links" title="Disabled by default. When enabled, plain external links can be treated as downloadable files."></label>
+                    <label class="setting-row"><span class="setting-label">Debug: capture UI key telemetry (safe)</span><input type="checkbox" id="check-safe-key-telemetry" title="Logs key class and metadata only; no raw key values."></label>
                 </div>
                 <!-- Encryption Removed per Security Audit -->
                 <button id="btn-export-config" title="Download settings as local .cfg file" style="width:100%; padding:8px; border:1px solid var(--border); background:var(--surface); border-radius:6px; cursor:pointer; font-size:11px; margin-bottom:6px;">Export Settings Config (.cfg)</button>
                 <button id="btn-download-logs" title="Download activity/error logs" style="width:100%; padding:8px; border:1px solid var(--border); background:var(--surface); border-radius:6px; cursor:pointer; font-size:11px;">Download Error Logs</button>
+                <button id="btn-copy-last-error" title="Copy last error summary" style="width:100%; padding:8px; border:1px solid var(--border); background:var(--surface); border-radius:6px; cursor:pointer; font-size:11px; margin-top:6px;">Copy Last Error Summary</button>
+                <button id="btn-purge-logs" title="Purge in-memory diagnostics ring" style="width:100%; padding:8px; border:1px solid var(--border); background:var(--surface); border-radius:6px; cursor:pointer; font-size:11px; margin-top:6px;">Purge Logs</button>
             </div>
             <button class="close-btn" id="btn-save-settings">Save</button>
         </div>
@@ -255,6 +259,8 @@
     <div id="preview-modal" class="modal-overlay"><div class="modal-content"><h2>Preview</h2><pre id="preview-content" style="height:200px;overflow:auto;font-size:10px;border:1px solid var(--border);padding:10px;border-radius:6px;"></pre><button class="close-btn" id="btn-close-preview">Close</button></div></div>
     <div id="info-modal" class="modal-overlay"><div class="modal-content"><h2 id="info-title"></h2><p id="info-body" style="font-size:12px;color:var(--text-sub);"></p><button class="close-btn" id="btn-close-info">OK</button></div></div>
   </div>
+  <script src="diagnostics/redact.js"></script>
+  <script src="diagnostics/flight_recorder.js"></script>
   <script src="asset_processor.js"></script>
   <script src="export_manager.js"></script>
   <script src="mhtml_generator.js"></script>

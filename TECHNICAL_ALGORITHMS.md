@@ -330,3 +330,13 @@
 1. Classifier rejects framework/script assets (`.js/.mjs/.cjs/.map`, react bundle names, extension resources).
 2. Only keeps likely user-download assets (`sandbox`, `blob`, or user-file extensions).
 3. Gesture-path guard verifies permission request placement before first async await in export click handlers.
+
+
+## Diagnostics v3 Flight Recorder Algorithm (v0.12.20)
+1. Initialize a bounded ring buffer (`MAX_EVENTS=5000`) with debug logging default OFF.
+2. Generate a `runId` per export flow and unique `eventId` per recorded event.
+3. Normalize each event to required fields (`ts/lvl/event/runId/eventId/tabId|tabScope/platform/module/phase/result/reason`).
+4. For URL diagnostics, store only `scheme`, `host`, and `pathHash` (SHA-256 of path+query) and never the raw URL.
+5. Redact sensitive patterns (Bearer/JWT/email/phone/long-hex) before enqueueing.
+6. Optionally persist redacted ring snapshots in `chrome.storage.local` when explicitly enabled.
+7. Export diagnostics only on explicit user action as JSONL forensic output.

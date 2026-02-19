@@ -1443,6 +1443,7 @@
     }
 
     chrome.runtime.sendMessage({ action: 'LOG_EVENT', level: 'INFO', message: 'Extraction Result', details: `${engine.name} found ${messages.length} messages.` });
+    window.FlightRecorderToolkit?.record?.({ lvl: 'INFO', event: 'extract.finish', module: 'content', phase: 'finalize', platform: engine?.name?.toLowerCase?.() || 'unknown', tabScope: 'tab', result: 'ok', reason: 'extraction_complete' });
     chrome.runtime.sendMessage({ action: 'LOG_EVENT', level: 'INFO', message: 'Adaptive Analyzer', details: `Engine=${engine.name}; normalized=${messages.length}` });
 
     return { success: messages.length > 0, platform: extracted.platform, title: extracted.title, messages };
@@ -2455,6 +2456,7 @@
         visualElementsCount: (items || []).length
       });
       sendRuntime({ action: 'LOG_EVENT', level: 'INFO', message: 'AEGIS Session Log', details: JSON.stringify(sessionLog) }).catch(() => null);
+      window.FlightRecorderToolkit?.record?.({ lvl: 'INFO', event: 'extract.dom.snapshot', module: 'content', phase: 'detect', platform: 'unknown', tabScope: 'tab', result: 'ok', reason: 'session_log' });
       return sessionLog;
     } catch (error) {
       console.warn('[LOGGER] failed to emit session diagnostics', error?.message || error);

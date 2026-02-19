@@ -29,9 +29,10 @@
 // Author: Dr. Babak Sorkhpour with support from ChatGPT tools.
 // background.js - State & Log Manager v0.12.20
 
-importScripts('network_policy.js');
+importScripts('diagnostics/redact.js', 'diagnostics/flight_recorder.js', 'network_policy.js');
 console.log('[LOCAL-ONLY] AI engine network disabled; offline models only.');
 const nativeBackgroundFetch = globalThis.fetch?.bind(globalThis);
+globalThis.FlightRecorderToolkit?.configure?.({ debugLogging: false, persistLogs: false });
 
 
 function isAllowedMediaHost(url) {
@@ -359,6 +360,16 @@ function log(level, message, details = null) {
   if (appLogs.length > 1000) appLogs.shift();
   if (runtimeJsonlLogs.length > 2000) runtimeJsonlLogs.shift();
   console.log(`[${level}] ${message}`, details || '');
+  globalThis.FlightRecorderToolkit?.record?.({
+    lvl: String(level || 'INFO').toUpperCase(),
+    event: String(message || 'event'),
+    tabId: entry?.details?.tabId ?? null,
+    tabScope: entry?.details?.tabScope || (entry?.details?.tabId == null ? 'global' : 'tab'),
+    module: 'sw',
+    phase: 'export',
+    result: String(level || '').toUpperCase() === 'ERROR' ? 'fail' : 'ok',
+    reason: 'log'
+  });
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -405,6 +416,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         break;
       }
 
+
+      case 'DIAG_V3_CONFIG':
+        globalThis.FlightRecorderToolkit?.configure?.(message.config || {});
+        sendResponse({ success: true, config: globalThis.FlightRecorderToolkit?.config?.() || null });
+        break;
+
+      case 'GET_DIAGNOSTICS_V3_JSONL':
+        sendResponse({ success: true, jsonl: globalThis.FlightRecorderToolkit?.exportJsonl?.() || '' });
+        break;
+
+      case 'PURGE_DIAGNOSTICS_V3':
+        globalThis.FlightRecorderToolkit?.clear?.();
+        sendResponse({ success: true });
+        break;
       case 'GET_LOGS':
         sendResponse(appLogs);
         break;

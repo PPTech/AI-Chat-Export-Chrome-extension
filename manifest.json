@@ -39,6 +39,8 @@
         "*://*.chatgpt.com/*"
       ],
       "js": [
+        "diagnostics/redact.js",
+        "diagnostics/flight_recorder.js",
         "security_guard.js",
         "smart_vision.js",
         "offline_brain.js",
@@ -75,7 +77,9 @@
         "artifact_builder.js",
         "network_policy.js",
         "chatgpt_backend_utils.js",
-        "attachment_classifier.js"
+        "attachment_classifier.js",
+        "diagnostics/redact.js",
+        "diagnostics/flight_recorder.js"
       ],
       "matches": [
         "https://chatgpt.com/*",

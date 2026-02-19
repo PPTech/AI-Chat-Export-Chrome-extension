@@ -1,5 +1,8 @@
 
 ## 0.12.20 - 2026-02-19
+- Added diagnostics v3 flight recorder module with bounded ring buffer, run correlation IDs, and redaction-safe structured JSONL export.
+- Added safe UI key telemetry toggle (metadata-only, no raw key capture), diagnostics panel actions (download/copy/purge), and IPC-safe logging metadata.
+- Added `verify:no-secrets` gate and diagnostics v3 contract tests/BDD coverage.
 - Stabilization sprint: blocked placeholder `example.com` attachment URLs in production fetch paths and emit `placeholder_url_detected` warnings for diagnostics.
 - Added diagnostics scope normalization so LOG_EVENT entries always include `tabId` or `tabScope`.
 - Added CI scoped-change gate (`verify:scoped`) to prevent accidental UI churn outside `fix(ui):`/`feat(ui):` commits.

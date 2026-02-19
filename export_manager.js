@@ -45,6 +45,14 @@
       return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${this.escapeHtml(title)}</title><style>${this.inlineStyle}</style></head><body><h1>${this.escapeHtml(title)}</h1>${body}</body></html>`;
     }
 
+    describeExportKind(format = '') {
+      const f = String(format || '').toLowerCase();
+      if (f === 'doc' || f === 'docx') return 'docx';
+      if (f === 'mhtml') return 'mhtml';
+      if (f === 'pdf') return 'pdf';
+      return 'html';
+    }
+
     buildWordDocument(title = 'Export', messages = []) {
       const cleanHtmlContent = this.buildSelfContainedHtml(title, messages)
         .replace(/^.*?<body>/is, '')
