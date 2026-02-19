@@ -319,16 +319,19 @@
 
         // Strategy 2: DOM analysis (controlled scroll if fullLoad)
         const analysis = await runChatGptDomAnalysis(options.fullLoad ? 'full' : 'visible', options, utils);
-        let messages = analysis.messages.map((m) => ({
-          role: m.inferredRole.role === 'assistant' ? 'Assistant' : (m.inferredRole.role === 'user' ? 'User' : 'Unknown'),
-          content: composeContentFromBlocks(m.parsed.blocks, options),
-          meta: {
-            platform: this.name,
-            sourceSelector: m.signature,
-            confidence: m.inferredRole.confidence,
-            evidence: m.inferredRole.evidence
-          }
-        }));
+        let messages = [];
+        for (const m of analysis.messages) {
+          messages.push({
+            role: m.inferredRole.role === 'assistant' ? 'Assistant' : (m.inferredRole.role === 'user' ? 'User' : 'Unknown'),
+            content: await composeContentFromBlocks(m.parsed.blocks, options),
+            meta: {
+              platform: this.name,
+              sourceSelector: m.signature,
+              confidence: m.inferredRole.confidence,
+              evidence: m.inferredRole.evidence
+            }
+          });
+        }
 
         // Strategy 3: Fallback selectors
         if (!messages.length) {
@@ -383,7 +386,7 @@
         const messages = [];
         for (const m of analysis.messages) {
           const role = m.inferredRole.role === 'assistant' ? 'Gemini' : (m.inferredRole.role === 'user' ? 'User' : 'Unknown');
-          const content = composeContentFromBlocks(m.parsed.blocks, options);
+          const content = await composeContentFromBlocks(m.parsed.blocks, options);
           if (content) {
             messages.push({ role, content, meta: { platform: this.name, sourceSelector: m.signature, confidence: m.inferredRole.confidence, evidence: m.inferredRole.evidence } });
           }
@@ -970,7 +973,7 @@
     }
   }
 
-  function composeContentFromBlocks(blocks, options) {
+  async function composeContentFromBlocks(blocks, options) {
     const out = [];
     for (const b of blocks) {
       if (b.type === 'text') out.push(b.text);
@@ -981,8 +984,9 @@
       }
       else if (b.type === 'quote') out.push(`> ${b.text}`);
       else if (b.type === 'image') {
-        const src = options.convertImages ? b.src : b.src;
-        out.push(`[[IMG:${src}]]`);
+        // Embed image as base64 when convertImages is enabled
+        const src = (options.convertImages && b.src && !b.src.startsWith('data:')) ? await utils.urlToBase64(b.src) : b.src;
+        if (src) out.push(`[[IMG:${src}]]`);
       }
       else if (b.type === 'link') out.push(`[${b.text || b.href}](${b.href})`);
     }
