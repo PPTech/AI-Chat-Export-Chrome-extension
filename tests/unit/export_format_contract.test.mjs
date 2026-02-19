@@ -9,15 +9,20 @@ import { join } from 'node:path';
 const ROOT = new URL('../../', import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1');
 const scriptContent = readFileSync(join(ROOT, 'script.js'), 'utf8');
 
-test('Word Doc format outputs as MHTML not fake .doc', () => {
-  // The doc format handler should produce MHTML with correct ext
+test('Word Doc format outputs as honest HTML .doc (no fake MHTML)', () => {
+  // The doc format handler must produce honest HTML with .doc ext
   assert.ok(
-    scriptContent.includes("ext: 'mhtml'"),
-    'doc format must set ext to mhtml for truthful output'
+    scriptContent.includes("ext: 'doc'"),
+    'doc format must set ext to doc'
   );
   assert.ok(
-    scriptContent.includes("multipart/related"),
-    'doc format must use multipart/related MIME type'
+    scriptContent.includes("application/msword"),
+    'doc format must use application/msword MIME type'
+  );
+  // Must NOT have fake MHTML multipart wrapper
+  assert.ok(
+    !scriptContent.includes("multipart/related"),
+    'doc format must NOT use fake MHTML multipart/related'
   );
 });
 
@@ -63,6 +68,31 @@ test('SQL export includes platform and timestamp columns', () => {
   assert.ok(
     scriptContent.includes('exported_at TIMESTAMP'),
     'SQL must include exported_at column'
+  );
+});
+
+test('PDF builder strips HTML tags from content', () => {
+  assert.ok(
+    scriptContent.includes('stripHtmlTags'),
+    'PDF must strip HTML tags via stripHtmlTags before rendering'
+  );
+});
+
+test('PDF builder warns about non-Latin characters', () => {
+  assert.ok(
+    scriptContent.includes('hasNonLatinChars'),
+    'PDF must detect non-Latin characters and add warning'
+  );
+  assert.ok(
+    scriptContent.includes('For full Unicode support'),
+    'PDF must suggest HTML/MD for Unicode content'
+  );
+});
+
+test('No external favicon service calls in codebase', () => {
+  assert.ok(
+    !scriptContent.includes('google.com/s2/favicons'),
+    'Must not reference external favicon services'
   );
 });
 

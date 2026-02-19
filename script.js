@@ -245,7 +245,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return { messages_total: total, unknown_role_ratio: Number(ratio.toFixed(4)), unknown_role_pass: ratio <= 0.05, has_messages: total > 0 };
   }
 
-  btnExport.onclick = async () => {
+  btnExport.onclick = withGesture(async () => {
     const formats = Array.from(document.querySelectorAll('.format-item.selected')).map((i) => i.dataset.ext);
     if (!formats.length || !currentChatData) return;
     btnExport.disabled = true;
@@ -302,7 +302,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } finally {
       updateExportBtn();
     }
-  };
+  });
 
   btnLoadFull.onclick = () => {
     if (!activeTabId) return;
@@ -333,19 +333,19 @@ document.addEventListener('DOMContentLoaded', () => {
     openModal(document.getElementById('preview-modal'));
   };
 
-  btnExportConfig.onclick = () => {
+  btnExportConfig.onclick = withGesture(() => {
     const settings = collectSettings();
     saveSettingsToStorage(settings);
     exportSettingsCfg(settings);
-  };
+  });
 
-  btnLogs.onclick = () => {
+  btnLogs.onclick = withGesture(() => {
     chrome.runtime.sendMessage({ action: 'GET_LOGS' }, (logs) => {
       downloadBlob(new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' }), 'ai_exporter_logs.json');
     });
-  };
+  });
 
-  btnExportImages.onclick = async () => {
+  btnExportImages.onclick = withGesture(async () => {
     if (!currentChatData) return;
     const imageList = extractAllImageSources(currentChatData.messages);
     if (!imageList.length) return showError(new Error('No images found in extracted chat data.'));
@@ -382,9 +382,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const zip = await createRobustZip(files);
       downloadBlob(zip, `${platformPrefix}_${date}_photos.zip`);
     }
-  };
+  });
 
-  btnExportFiles.onclick = async () => {
+  btnExportFiles.onclick = withGesture(async () => {
     if (!currentChatData) return;
     if (!checkExportFiles.checked) return showInfo('Files Export Disabled', 'Enable "Extract and ZIP Chat Files" in Settings first.');
     const filesFound = extractAllFileSources(currentChatData.messages);
@@ -409,7 +409,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const date = new Date().toISOString().slice(0, 10);
     const platformPrefix = (currentChatData.platform || 'Export').replace(/[^a-zA-Z0-9]/g, '');
     downloadBlob(zip, `${platformPrefix}_${date}_chat_files.zip`);
-  };
+  });
 
   document.getElementById('link-legal').onclick = () => showInfo('Legal', 'This is a local-processing developer version. Users remain responsible for lawful and compliant use in their jurisdiction.');
   document.getElementById('link-security').onclick = () => showInfo('Security', 'Security baseline: local-only processing, sanitized exports, no eval, and optional risky Raw HTML mode.');
@@ -844,7 +844,29 @@ document.addEventListener('DOMContentLoaded', () => {
     return new Blob([...parts, ...cd, end], { type: 'application/zip' });
   }
 
+  // --- GestureToken enforcement ---
+  // Tracks whether we're inside a user-gesture call stack.
+  // Downloads and permission requests MUST only happen within gesture scope.
+  let _gestureActive = false;
+
+  function withGesture(fn) {
+    return async function (...args) {
+      _gestureActive = true;
+      try { return await fn.apply(this, args); }
+      finally { _gestureActive = false; }
+    };
+  }
+
+  function assertGesture(action) {
+    if (!_gestureActive) {
+      console.warn(`[GestureToken] Blocked ${action} outside user gesture.`);
+      return false;
+    }
+    return true;
+  }
+
   function downloadBlob(blob, name) {
+    if (!assertGesture('downloadBlob')) return;
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -878,7 +900,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Forensic bundle export: 3-file download (diagnostics.jsonl, run_summary.json, asset_failures.json)
   if (btnDownloadDiagnostics) {
-    btnDownloadDiagnostics.onclick = async () => {
+    btnDownloadDiagnostics.onclick = withGesture(async () => {
       if (!lastDiagnostics) {
         showInfo('No Diagnostics', 'Run an export with Debug Mode enabled first.');
         return;
@@ -911,7 +933,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const zip = await createRobustZip(bundleFiles);
       downloadBlob(zip, `${prefix}_diagnostics_bundle.zip`);
-    };
+    });
   }
 
   safeInit();

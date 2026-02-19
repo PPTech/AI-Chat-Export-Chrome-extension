@@ -14,6 +14,11 @@
   "host_permissions": [
     "<all_urls>"
   ],
+  "optional_host_permissions": [
+    "*://gemini.google.com/*",
+    "*://lh3.googleusercontent.com/*",
+    "*://aistudio.google.com/*"
+  ],
   "content_scripts": [
     {
       "matches": [

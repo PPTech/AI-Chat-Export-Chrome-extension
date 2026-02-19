@@ -885,11 +885,41 @@
     rootEl.scrollTop = rootEl.scrollHeight;
     await new Promise((r) => setTimeout(r, 500));
 
+    // Media lazy-load warmup: scroll through to trigger IntersectionObserver-based lazy loading
+    await warmupLazyMedia(rootEl);
+
     report.finalMessageCount = collectMessageNodes(rootEl).length;
     report.finalScrollHeight = rootEl.scrollHeight;
     report.stabilized = stable >= stableThreshold;
     report.timingsMs = Math.round(performance.now() - start);
     return report;
+  }
+
+  /**
+   * Slowly scroll through the chat container to trigger lazy-loaded images/media.
+   * Many platforms use IntersectionObserver to lazy-load images — this ensures
+   * all images are loaded into the DOM before extraction.
+   */
+  async function warmupLazyMedia(rootEl) {
+    if (!rootEl || rootEl.scrollHeight <= rootEl.clientHeight) return;
+    const step = Math.max(200, Math.floor(rootEl.clientHeight * 0.8));
+    const maxSteps = Math.min(60, Math.ceil(rootEl.scrollHeight / step));
+
+    // Scroll top-to-bottom in steps
+    for (let i = 0; i < maxSteps; i++) {
+      rootEl.scrollTop = i * step;
+      await new Promise((r) => setTimeout(r, 150));
+    }
+    // Final: scroll to bottom and wait for any pending loads
+    rootEl.scrollTop = rootEl.scrollHeight;
+    await new Promise((r) => setTimeout(r, 400));
+
+    // Force any lazy images with data-src to load
+    rootEl.querySelectorAll('img[data-src]:not([src]), img[loading="lazy"]').forEach((img) => {
+      const dataSrc = img.getAttribute('data-src');
+      if (dataSrc && !img.src) img.src = dataSrc;
+    });
+    await new Promise((r) => setTimeout(r, 300));
   }
 
   /**
