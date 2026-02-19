@@ -77,7 +77,8 @@ document.addEventListener('DOMContentLoaded', () => {
     checkExportFiles.checked = !!s.exportFiles;
     checkAdvancedLinks.checked = !!s.advancedLinks;
     checkDebugMode.checked = !!s.debugMode;
-    if (btnDownloadDiagnostics) btnDownloadDiagnostics.style.display = s.debugMode ? 'block' : 'none';
+    // B) Diagnostics button always visible (diagnostics always exist)
+    if (btnDownloadDiagnostics) btnDownloadDiagnostics.style.display = 'block';
   }
 
   function saveSettingsToStorage(settings) {
@@ -205,8 +206,10 @@ document.addEventListener('DOMContentLoaded', () => {
     el.textContent = `Detected: ${c.messages} messages • ${c.photos} photos • ${c.files} files • ${c.others} others`;
   }
 
-  // --- Inline flight recorder (popup context, no ES modules) ---
-  function createPopupFlightRecorder(runId, platform) {
+  // --- Flight recorder: ALWAYS-ON minimal + verbose in debug mode ---
+  // B) Diagnostics ALWAYS exist. C) Debug = smart logger with event tree.
+
+  function createPopupFlightRecorder(runId, platform, verbose) {
     const entries = [];
     const startedAt = new Date().toISOString();
     let counter = 0;
@@ -218,33 +221,48 @@ document.addEventListener('DOMContentLoaded', () => {
         tabScope: activeTabId != null ? `tab:${activeTabId}` : 'global',
         platform: platform || 'unknown', module: opts.module || 'popup',
         phase: opts.phase || 'unknown', result: opts.result || null,
-        details: opts.details || null,
+        details: verbose ? (opts.details || null) : null, // minimal mode omits details
       };
       entries.push(entry);
       if (entries.length > 2000) entries.shift();
       return entry;
     }
-    function finish(counts = {}, failures = []) {
+    function finish(counts = {}, failures = [], invariantResult = null) {
       const endedAt = new Date().toISOString();
+      // Compute anomaly score 0..100
+      const total = counts.messages_total || 0;
+      const unknown = counts.messages_unknown || 0;
+      const failedAssets = counts.assets_failed || 0;
+      const unknownRatio = total > 0 ? unknown / total : 0;
+      const anomalyScore = Math.min(100, Math.round(
+        (unknownRatio > 0.05 ? 30 : 0) +
+        (total === 0 ? 40 : 0) +
+        (failedAssets > 0 ? Math.min(20, failedAssets * 5) : 0) +
+        (invariantResult && !invariantResult.pass ? 10 : 0)
+      ));
       return {
-        schema_version: 'diagnostics.v4',
+        schema_version: 'diagnostics.v5',
         run: { run_id: runId, started_at_utc: startedAt, ended_at_utc: endedAt, tool_version: '0.10.11', platform },
         tabScope: activeTabId != null ? `tab:${activeTabId}` : 'global',
-        entries, counts, failures,
-        scorecard: buildDiagScorecard(counts),
+        entries: verbose ? entries : [], // minimal mode: no entry dump
+        counts, failures,
+        scorecard: {
+          messages_total: total,
+          unknown_role_ratio: Number(unknownRatio.toFixed(4)),
+          unknown_role_pass: unknownRatio <= 0.05,
+          has_messages: total > 0,
+          anomalyScore,
+        },
+        invariants: invariantResult || null,
+        gestureValid: _gestureTokenValid,
+        verbose,
       };
     }
     function toJsonl() { return entries.map((e) => JSON.stringify(e)).join('\n'); }
     return { record, finish, toJsonl, entries };
   }
 
-  function buildDiagScorecard(counts) {
-    const total = counts.messages_total || 0;
-    const unknown = counts.messages_unknown || 0;
-    const ratio = total > 0 ? unknown / total : 0;
-    return { messages_total: total, unknown_role_ratio: Number(ratio.toFixed(4)), unknown_role_pass: ratio <= 0.05, has_messages: total > 0 };
-  }
-
+  // A) FAIL-SOFT EXPORT + B) ALWAYS-ON DIAGNOSTICS + C) SMART LOGGER + D) GESTURE GUARANTEE
   btnExport.onclick = withGesture(async () => {
     const formats = Array.from(document.querySelectorAll('.format-item.selected')).map((i) => i.dataset.ext);
     if (!formats.length || !currentChatData) return;
@@ -253,55 +271,107 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const debug = isDebugMode();
     const runId = `export-${Date.now()}`;
-    const recorder = debug ? createPopupFlightRecorder(runId, currentChatData.platform) : null;
+    // B) ALWAYS create a recorder — minimal (debug OFF) or verbose (debug ON)
+    const recorder = createPopupFlightRecorder(runId, currentChatData.platform, debug);
     lastAssetFailures = [];
 
-    try {
-      if (recorder) recorder.record({ event: 'export.start', module: 'popup', phase: 'assemble', result: 'ok', details: { formats, messageCount: (currentChatData.messages || []).length } });
+    const exportStartEvent = recorder.record({ event: 'export.start', module: 'popup', phase: 'assemble', result: 'ok', details: { formats, messageCount: (currentChatData.messages || []).length, debugMode: debug, gestureValid: _gestureTokenValid } });
 
-      const date = new Date().toISOString().slice(0, 10);
-      const baseName = `${(currentChatData.platform || 'Export').replace(/[^a-zA-Z0-9]/g, '')}_${date}`;
-      const files = [];
+    const date = new Date().toISOString().slice(0, 10);
+    const baseName = `${(currentChatData.platform || 'Export').replace(/[^a-zA-Z0-9]/g, '')}_${date}`;
+    const files = [];
+    const formatErrors = [];
 
-      for (let i = 0; i < formats.length; i += 1) {
-        const fmt = formats[i];
-        if (recorder) recorder.record({ event: `export.format.${fmt}`, module: 'export', phase: 'assemble', result: 'ok' });
+    // A) FAIL-SOFT: try each format independently; never abort entire export
+    for (let i = 0; i < formats.length; i += 1) {
+      const fmt = formats[i];
+      try {
+        recorder.record({ event: `export.format.start`, module: 'export', phase: 'assemble', result: 'ok', parentEventId: exportStartEvent.eventId, details: { format: fmt } });
         const generated = await generateContent(fmt, currentChatData);
         const fileExt = generated.ext || fmt;
         files.push({ name: `${baseName}.${fileExt}`, content: generated.content, mime: generated.mime });
-        const percent = 10 + ((i + 1) / Math.max(1, formats.length)) * 75;
-        setProcessingProgress(percent, `Processing ${fmt.toUpperCase()}`);
+        recorder.record({ event: `export.format.done`, module: 'export', phase: 'assemble', result: 'ok', parentEventId: exportStartEvent.eventId, details: { format: fmt } });
+      } catch (fmtErr) {
+        // A) Format failure is not fatal — record and continue
+        formatErrors.push({ format: fmt, error: (fmtErr?.message || '').slice(0, 200) });
+        recorder.record({ lvl: 'ERROR', event: `export.format.fail`, module: 'export', phase: 'assemble', result: 'fail', parentEventId: exportStartEvent.eventId, details: { format: fmt, error: (fmtErr?.message || '').slice(0, 200) } });
       }
+      const percent = 10 + ((i + 1) / Math.max(1, formats.length)) * 75;
+      setProcessingProgress(percent, `Processing ${fmt.toUpperCase()}`);
+    }
 
+    // A) Always include a canonical JSON manifest of what was exported
+    const exportManifest = {
+      schema: 'export-manifest.v1',
+      runId,
+      platform: currentChatData.platform,
+      title: currentChatData.title,
+      messageCount: (currentChatData.messages || []).length,
+      formatsRequested: formats,
+      formatsSucceeded: files.map((f) => f.name),
+      formatErrors,
+      assetFailures: lastAssetFailures.length,
+      exportedAt: new Date().toISOString(),
+      debugMode: debug,
+    };
+    files.push({ name: `${baseName}.export_manifest.json`, content: JSON.stringify(exportManifest, null, 2), mime: 'application/json' });
+
+    // C) Run inline invariant checks
+    const msgs = currentChatData.messages || [];
+    const unknownCount = msgs.filter((m) => /unknown/i.test(m.role)).length;
+    const emptyContent = msgs.filter((m) => !(m.content || '').trim()).length;
+    const invariantResult = {
+      pass: msgs.length > 0 && unknownCount / Math.max(1, msgs.length) <= 0.05 && formatErrors.length === 0,
+      messages_total: msgs.length,
+      unknown_ratio: msgs.length > 0 ? Number((unknownCount / msgs.length).toFixed(4)) : 0,
+      empty_content: emptyContent,
+      format_errors: formatErrors.length,
+      asset_failures: lastAssetFailures.length,
+    };
+    recorder.record({ event: 'export.invariants', module: 'popup', phase: 'finalize', result: invariantResult.pass ? 'ok' : 'fail', parentEventId: exportStartEvent.eventId, details: invariantResult });
+
+    try {
+      // A) Even if some formats failed, emit what we have (fail-soft)
       if (files.length === 1 && !checkZip.checked) {
         setProcessingProgress(95, 'Finalizing');
         downloadBlob(new Blob([files[0].content], { type: files[0].mime }), files[0].name);
       } else {
         setProcessingProgress(90, 'Packaging');
+        // B) Include minimal diagnostics summary in ZIP when debug is OFF
+        const diagSummary = {
+          runId, platform: currentChatData.platform,
+          counts: { messages_total: msgs.length, messages_unknown: unknownCount, assets_failed: lastAssetFailures.length },
+          invariants: invariantResult,
+          formatErrors,
+          gestureValid: _gestureTokenValid,
+        };
+        files.push({ name: `${baseName}.diagnostics_summary.json`, content: JSON.stringify(diagSummary, null, 2), mime: 'application/json' });
+
         const zip = await createRobustZip(files);
         setProcessingProgress(98, 'Downloading');
         downloadBlob(zip, `${baseName}.zip`);
       }
 
-      if (recorder) {
-        recorder.record({ event: 'export.end', module: 'popup', phase: 'finalize', result: 'ok', details: { fileCount: files.length } });
-        const msgs = currentChatData.messages || [];
-        const unknownCount = msgs.filter((m) => /unknown/i.test(m.role)).length;
-        lastDiagnostics = recorder.finish({ messages_total: msgs.length, messages_unknown: unknownCount }, lastAssetFailures);
-      }
-
+      recorder.record({ event: 'export.end', module: 'popup', phase: 'finalize', result: 'ok', parentEventId: exportStartEvent.eventId, details: { fileCount: files.length, formatErrors: formatErrors.length } });
       setProcessingProgress(100, 'Done');
-    } catch (error) {
-      if (recorder) recorder.record({ lvl: 'ERROR', event: 'export.error', module: 'popup', phase: 'finalize', result: 'fail', details: { error: (error?.message || '').slice(0, 200) } });
-      if (recorder) {
-        const msgs = currentChatData?.messages || [];
-        const unknownCount = msgs.filter((m) => /unknown/i.test(m.role)).length;
-        lastDiagnostics = recorder.finish({ messages_total: msgs.length, messages_unknown: unknownCount }, lastAssetFailures);
-      }
-      showError(error);
-    } finally {
-      updateExportBtn();
+    } catch (downloadErr) {
+      recorder.record({ lvl: 'ERROR', event: 'export.download.fail', module: 'popup', phase: 'finalize', result: 'fail', details: { error: (downloadErr?.message || '').slice(0, 200) } });
+      showError(downloadErr);
     }
+
+    // B) ALWAYS persist diagnostics (regardless of debug mode)
+    lastDiagnostics = recorder.finish(
+      { messages_total: msgs.length, messages_unknown: unknownCount, assets_failed: lastAssetFailures.length },
+      lastAssetFailures,
+      invariantResult
+    );
+
+    // Show warning if formats failed but export continued
+    if (formatErrors.length > 0) {
+      showInfo('Partial Export', `${formatErrors.length} format(s) failed: ${formatErrors.map((e) => e.format).join(', ')}. Other formats exported successfully. Check export_manifest.json for details.`);
+    }
+
+    updateExportBtn();
   });
 
   btnLoadFull.onclick = () => {
@@ -726,9 +796,8 @@ document.addEventListener('DOMContentLoaded', () => {
     return out;
   }
 
-  // detectScriptProfile removed: was only used by the old canvas PDF builder.
-
-  function _unused_detectScriptProfile(text) {
+  // E) Dead code: _unused_detectScriptProfile kept for reference, not called anywhere.
+  function _unused_detectScriptProfile() {
     const s = String(text || '');
     const isRtl = /[֐-ࣿיִ-﷽ﹰ-ﻼ]/.test(s);
     const isCjk = /[぀-ヿ㐀-鿿豈-﫿]/.test(s);
@@ -844,22 +913,33 @@ document.addEventListener('DOMContentLoaded', () => {
     return new Blob([...parts, ...cd, end], { type: 'application/zip' });
   }
 
-  // --- GestureToken enforcement ---
-  // Tracks whether we're inside a user-gesture call stack.
-  // Downloads and permission requests MUST only happen within gesture scope.
-  let _gestureActive = false;
+  // --- D) GestureToken enforcement ---
+  // Chrome loses user gesture context after first await. We use a time-windowed
+  // token: gesture is valid for 30s after user click (covers async export).
+  // permissions.request and chrome.downloads.download must be called
+  // synchronously in the click handler BEFORE any await.
+  let _gestureTokenTs = 0;
+  let _gestureTokenValid = false;
+  const GESTURE_TTL_MS = 30_000; // 30 seconds
 
   function withGesture(fn) {
     return async function (...args) {
-      _gestureActive = true;
+      // D) Issue gesture token synchronously in the click handler
+      _gestureTokenTs = Date.now();
+      _gestureTokenValid = true;
       try { return await fn.apply(this, args); }
-      finally { _gestureActive = false; }
+      finally {
+        _gestureTokenValid = false;
+        _gestureTokenTs = 0;
+      }
     };
   }
 
   function assertGesture(action) {
-    if (!_gestureActive) {
-      console.warn(`[GestureToken] Blocked ${action} outside user gesture.`);
+    const elapsed = Date.now() - _gestureTokenTs;
+    if (!_gestureTokenValid || elapsed > GESTURE_TTL_MS) {
+      console.warn(`[GestureToken] Blocked ${action}: token expired (${elapsed}ms elapsed, TTL=${GESTURE_TTL_MS}ms).`);
+      _gestureTokenValid = false;
       return false;
     }
     return true;
@@ -891,10 +971,11 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-close-error').onclick = () => closeModal(errorModal);
   document.getElementById('btn-close-preview').onclick = () => closeModal(document.getElementById('preview-modal'));
 
-  // debugMode toggle: show/hide diagnostics download button
+  // debugMode toggle: debug mode controls verbose JSONL vs minimal diagnostics
+  // B) Diagnostics button is always visible (minimal diagnostics always captured)
   if (checkDebugMode) {
     checkDebugMode.addEventListener('change', () => {
-      if (btnDownloadDiagnostics) btnDownloadDiagnostics.style.display = checkDebugMode.checked ? 'block' : 'none';
+      console.log(`[DebugMode] ${checkDebugMode.checked ? 'ON (verbose JSONL)' : 'OFF (minimal summary)'}`);
     });
   }
 
@@ -902,7 +983,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnDownloadDiagnostics) {
     btnDownloadDiagnostics.onclick = withGesture(async () => {
       if (!lastDiagnostics) {
-        showInfo('No Diagnostics', 'Run an export with Debug Mode enabled first.');
+        showInfo('No Diagnostics', 'Run an export first (diagnostics are always captured).');
         return;
       }
       const date = new Date().toISOString().slice(0, 10);
