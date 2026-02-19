@@ -38,17 +38,64 @@ function isAllowedMediaHost(url) {
   return !!globalThis.NetworkPolicyToolkit?.isAllowedHost?.(url);
 }
 
-function logPolicyDenial(details = {}) {
-  log('ERROR', 'NETWORK_POLICY_DENY', {
-    urlHost: details.urlHost || 'unknown',
+function getUrlHost(url) {
+  try { return new URL(String(url || '')).hostname || 'unknown'; } catch { return 'unknown'; }
+}
+
+function getUrlScheme(url) {
+  const txt = String(url || '');
+  const idx = txt.indexOf(':');
+  return idx > 0 ? txt.slice(0, idx).toLowerCase() : 'unknown';
+}
+
+async function sha256Hex(input = '') {
+  const data = new TextEncoder().encode(String(input || ''));
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function buildDiagnosticsV2(payload = {}) {
+  return {
+    schema: 'diagnostics_v2',
+    eventId: `evt_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
+    tabId: payload.tabId ?? -1,
+    phase: payload.phase || 'resolve',
+    urlHost: getUrlHost(payload.url),
+    urlPathHash: await sha256Hex((() => { try { const u = new URL(String(payload.url || '')); return `${u.pathname}${u.search}`; } catch { return String(payload.url || ''); } })()),
+    scheme: getUrlScheme(payload.url),
+    strategy: payload.strategy || 'SW_FETCH',
+    result: payload.result || 'fail',
+    statusCode: payload.statusCode ?? null,
+    errorName: payload.errorName || null,
+    errorCode: payload.errorCode || null,
+    permissionState: payload.permissionState || 'unknown',
+    userGesture: payload.userGesture || 'missing',
+    category: payload.category || 'unknown',
+    callingModule: payload.callingModule || 'unknown'
+  };
+}
+
+async function logPolicyDenial(details = {}) {
+  const diag = await buildDiagnosticsV2({
+    url: details.url || '',
+    tabId: details.tabId,
+    phase: 'resolve',
+    strategy: details.strategy || 'SW_FETCH',
+    result: 'fail',
+    statusCode: details.statusCode ?? null,
+    errorName: 'NETWORK_POLICY_DENY',
+    errorCode: details.reason || 'unknown',
+    permissionState: details.permissionState || 'unknown',
+    userGesture: details.userGesture || 'missing',
     category: details.category || 'unknown',
-    reason: details.reason || 'unknown',
     callingModule: details.callingModule || 'unknown'
   });
+  log('ERROR', 'NETWORK_POLICY_DENY', diag);
 }
 
 async function mediaFetchProxy(payload = {}) {
   const url = String(payload.url || '');
+  const tabId = payload.tabId ?? null;
   const category = payload.category || (globalThis.NetworkPolicyToolkit?.CATEGORIES?.ASSET_FETCH || 'ASSET_FETCH');
   const policy = await globalThis.NetworkPolicyToolkit.validateAssetRequest({
     url,
@@ -57,13 +104,16 @@ async function mediaFetchProxy(payload = {}) {
   });
   if (!policy.ok) {
     const reason = (policy.reason === 'missingGesture' || policy.reason === 'gestureExpired') ? 'user_initiation_required' : policy.reason;
-    logPolicyDenial({ urlHost: (() => { try { return new URL(url).hostname; } catch { return 'invalid'; } })(), category, reason, callingModule: 'mediaFetchProxy' });
+    await logPolicyDenial({ url, tabId, category, reason, callingModule: 'mediaFetchProxy', permissionState: reason === 'permissionsMissing' ? 'denied' : 'granted', userGesture: reason === 'user_initiation_required' ? 'missing' : 'present' });
     return { success: false, error: reason };
   }
   if (!nativeBackgroundFetch) return { success: false, error: 'fetch_unavailable' };
   try {
     const res = await nativeBackgroundFetch(url, { credentials: payload.credentials === 'include' ? 'include' : 'omit', redirect: 'follow' });
-    if (!res.ok) return { success: false, error: `HTTP_${res.status}` };
+    if (!res.ok) {
+      await logPolicyDenial({ url, tabId, category, reason: `HTTP_${res.status}`, statusCode: res.status, callingModule: 'mediaFetchProxy', permissionState: 'granted', userGesture: 'present' });
+      return { success: false, error: `HTTP_${res.status}` };
+    }
     const buf = await res.arrayBuffer();
     const bytes = new Uint8Array(buf);
     const b64 = Buffer.from(bytes).toString('base64');
@@ -76,7 +126,7 @@ async function mediaFetchProxy(payload = {}) {
       strategy: 'SW_FETCH'
     };
   } catch (e) {
-    logPolicyDenial({ urlHost: (() => { try { return new URL(url).hostname; } catch { return 'invalid'; } })(), category, reason: e.message || 'fetch_failed', callingModule: 'mediaFetchProxy' });
+    await logPolicyDenial({ url, tabId, category, reason: e.message || 'fetch_failed', callingModule: 'mediaFetchProxy', permissionState: 'granted', userGesture: 'present' });
     return { success: false, error: e.message || 'media_fetch_failed' };
   }
 }

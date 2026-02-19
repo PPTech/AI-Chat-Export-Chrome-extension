@@ -45,6 +45,7 @@
         "logger.js",
         "export_core.js",
         "visual_walker.js",
+        "attachment_classifier.js",
         "asset_processor.js",
         "smart_miner.js",
         "smart_agent.js",
@@ -73,7 +74,8 @@
         "visual_engine.js",
         "artifact_builder.js",
         "network_policy.js",
-        "chatgpt_backend_utils.js"
+        "chatgpt_backend_utils.js",
+        "attachment_classifier.js"
       ],
       "matches": [
         "https://chatgpt.com/*",

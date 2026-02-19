@@ -43,12 +43,24 @@ if (metadata.version !== appVersion) claims.push(`metadata.json mismatch: ${meta
 if (packageJson.version !== appVersion) claims.push(`package.json mismatch: ${packageJson.version} != ${appVersion}`);
 
 const scriptSource = fs.readFileSync('script.js', 'utf8');
+const contentSource = fs.readFileSync('content.js', 'utf8');
 for (const token of ['.diagnostics.json', '.export_bundle_manifest.json']) {
   if (scriptSource.includes(token)) claims.push(`internal export token must not be present: ${token}`);
 }
 
 if (!fs.existsSync('FORENSICS/HEAD.txt')) {
   claims.push('FORENSICS/HEAD.txt missing');
+}
+
+
+for (const bad of ["LOG_ERROR', message: 'Extraction Result'", "LOG_ERROR', message: 'Adaptive Analyzer'"]) {
+  if (contentSource.includes(bad)) claims.push(`error-level success log pattern present: ${bad}`);
+}
+
+for (const token of ['diagnostics_v2', 'urlPathHash', 'permissionState', 'userGesture']) {
+  if (!fs.readFileSync('background.js', 'utf8').includes(token)) {
+    claims.push(`background diagnostics field missing: ${token}`);
+  }
 }
 
 if (missingScripts.length || claims.length) {

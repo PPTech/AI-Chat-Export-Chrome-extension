@@ -9,7 +9,8 @@
 
   class DataProcessor {
     constructor(options = {}) {
-      this.options = { minImageSize: 50, maxRetries: 2, ...options };
+      this.options = { minImageSize: 50, maxRetries: 2, includeExternalLinks: false, ...options };
+      this.diagnostics = { ignored: { externalLinks: 0, scriptAssets: 0, docsLinks: 0, frameworkBundles: 0 } };
     }
 
     sanitizeUrl(url = '') {
@@ -47,6 +48,19 @@
     }
 
 
+
+    classifyAttachmentUrl(url = '') {
+      const classifier = window.AttachmentClassifier;
+      const result = classifier?.classifyAttachmentUrl ? classifier.classifyAttachmentUrl(url, { includeExternalLinks: !!this.options.includeExternalLinks }) : { accepted: !this.isIgnoredAttachmentUrl(url), reason: 'legacy' };
+      if (!result.accepted) {
+        if (result.reason === 'external_link_blocked' || result.reason === 'plain_hyperlink') this.diagnostics.ignored.externalLinks += 1;
+        if (result.reason === 'script_asset') this.diagnostics.ignored.scriptAssets += 1;
+        if (result.reason === 'docs_link') this.diagnostics.ignored.docsLinks += 1;
+        if (/react(?:-dom)?\.production\.min\.js/i.test(String(url || ''))) this.diagnostics.ignored.frameworkBundles += 1;
+      }
+      return result;
+    }
+
     isIgnoredAttachmentUrl(url = '') {
       const clean = String(url || '').toLowerCase();
       if (!clean) return true;
@@ -70,7 +84,8 @@
       while ((m = regex.exec(String(text || ''))) !== null) {
         const u = this.sanitizeUrl(m[1]);
         const fileName = decodeURIComponent(u.split('/').pop() || 'file.bin');
-        if (!this.isLikelyUserDownload(u, fileName) || this.isIgnoredAttachmentUrl(u)) continue;
+        const classified = this.classifyAttachmentUrl(u);
+        if (!this.isLikelyUserDownload(u, fileName) || !classified.accepted || this.isIgnoredAttachmentUrl(u)) continue;
         links.push({
           type: /^sandbox:/i.test(u) ? 'sandbox' : (/^blob:/i.test(u) ? 'blob_url' : 'text_reference'),
           fileName,
@@ -282,5 +297,6 @@
     }
   }
 
+  DataProcessor.prototype.getDiagnostics = function getDiagnostics() { return this.diagnostics; };
   window.DataProcessor = DataProcessor;
 })();

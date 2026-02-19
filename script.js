@@ -29,6 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const checkZip = document.getElementById('check-zip');
   const checkPhotoZip = document.getElementById('check-photo-zip');
   const checkExportFiles = document.getElementById('check-export-files');
+  const checkExternalLinks = document.getElementById('check-external-links');
   const checkDebugLogging = document.getElementById('check-debug-logging');
 
   const settingsModal = document.getElementById('settings-modal');
@@ -101,6 +102,7 @@ document.addEventListener('DOMContentLoaded', () => {
       zip: false,
       photoZip: true,
       exportFiles: true,
+      includeExternalLinks: false,
       debugLogging: false
     };
   }
@@ -113,6 +115,7 @@ document.addEventListener('DOMContentLoaded', () => {
       zip: !!checkZip.checked,
       photoZip: !!checkPhotoZip.checked,
       exportFiles: !!checkExportFiles.checked,
+      includeExternalLinks: !!checkExternalLinks?.checked,
       debugLogging: !!checkDebugLogging?.checked,
       updatedAt: new Date().toISOString()
     };
@@ -126,6 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
     checkZip.checked = !!s.zip;
     checkPhotoZip.checked = !!s.photoZip;
     checkExportFiles.checked = !!s.exportFiles;
+    if (checkExternalLinks) checkExternalLinks.checked = !!s.includeExternalLinks;
     if (checkDebugLogging) checkDebugLogging.checked = !!(s.debugLogging ?? s.debugOverlay);
   }
 
@@ -495,7 +499,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const packMode = !!checkPhotoZip.checked;
     const date = new Date().toISOString().slice(0, 10);
     const platformPrefix = (currentChatData.platform || 'Export').replace(/[^a-zA-Z0-9]/g, '');
-    const processor = window.DataProcessor ? new window.DataProcessor() : null;
+    const processor = window.DataProcessor ? new window.DataProcessor({ includeExternalLinks: !!checkExternalLinks?.checked }) : null;
     const textCorpus = (currentChatData.messages || []).map((m) => m.content || '').join('\n');
 
     if (!packMode) {
@@ -539,7 +543,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!checkExportFiles.checked) return showInfo('Files Export Disabled', 'Enable "Extract and ZIP Chat Files" in Settings first.');
 
     const permPromise = requestAssetPermissionsFromGesture();
-    const processor = window.DataProcessor ? new window.DataProcessor() : null;
+    const processor = window.DataProcessor ? new window.DataProcessor({ includeExternalLinks: !!checkExternalLinks?.checked }) : null;
     const textCorpus = (currentChatData.messages || []).map((m) => m.content || '').join('\n');
     const metaFiles = processor ? processor.extractDownloadMetadata(textCorpus) : [];
     const legacyFiles = extractAllFileSources(currentChatData.messages, currentChatData.dataset).map((f) => ({ fileName: f.name, url: f.url, type: /^sandbox:/i.test(f.url) ? 'sandbox' : 'text_reference', needsResolution: /^sandbox:/i.test(f.url) }));
@@ -948,7 +952,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (fmt === 'doc' || fmt === 'html') {
       let richMsgs = msgs;
       if (window.DataProcessor) {
-        const processor = new window.DataProcessor();
+        const processor = new window.DataProcessor({ includeExternalLinks: !!checkExternalLinks?.checked });
         richMsgs = await processor.embedImages(msgs, fetchFileBlob);
       } else {
         richMsgs = await embedImagesAsDataUris(msgs);
@@ -1401,7 +1405,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function fetchMediaViaBackgroundProxy(url) {
     const token = ensureGestureProofToken();
     return new Promise((resolve) => {
-      chrome.runtime.sendMessage({ action: "ASSET_FETCH", payload: { url, gestureToken: token, category: 'ASSET_FETCH', userInitiated: true } }, (res) => resolve(res || { success: false }));
+      chrome.runtime.sendMessage({ action: "ASSET_FETCH", payload: { url, tabId: activeTabId, gestureToken: token, category: 'ASSET_FETCH', userInitiated: true } }, (res) => resolve(res || { success: false }));
     });
   }
 
@@ -1409,12 +1413,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!url) return null;
     if (!activeTabId) return null;
     const clean = sanitizeTokenUrl(url);
-    if (/^data:/i.test(clean)) return dataUrlToBlob(clean);
+    if (/^data:/i.test(clean)) {
+      const direct = dataUrlToBlob(clean);
+      return direct;
+    }
     if (/^blob:/i.test(clean)) {
       const pageBlob = await resolveAssetViaBroker(clean);
       if (!pageBlob?.success) return null;
       return dataUrlToBlob(pageBlob.dataUrl);
     }
+    if (!/^https?:/i.test(clean)) return null;
     const pageBlob = await resolveAssetViaBroker(clean);
     if (pageBlob?.success) return dataUrlToBlob(pageBlob.dataUrl);
     const bgProxy = await fetchMediaViaBackgroundProxy(clean);

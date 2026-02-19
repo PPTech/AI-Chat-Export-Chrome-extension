@@ -1442,8 +1442,8 @@
       }
     }
 
-    chrome.runtime.sendMessage({ action: 'LOG_ERROR', message: 'Extraction Result', details: `${engine.name} found ${messages.length} messages.` });
-    chrome.runtime.sendMessage({ action: 'LOG_ERROR', message: 'Adaptive Analyzer', details: `Engine=${engine.name}; normalized=${messages.length}` });
+    chrome.runtime.sendMessage({ action: 'LOG_EVENT', level: 'INFO', message: 'Extraction Result', details: `${engine.name} found ${messages.length} messages.` });
+    chrome.runtime.sendMessage({ action: 'LOG_EVENT', level: 'INFO', message: 'Adaptive Analyzer', details: `Engine=${engine.name}; normalized=${messages.length}` });
 
     return { success: messages.length > 0, platform: extracted.platform, title: extracted.title, messages };
   }
@@ -2432,7 +2432,7 @@
         exportedContent,
         visualElementsCount: (items || []).length
       });
-      sendRuntime({ action: 'LOG_ERROR', message: 'AEGIS Session Log', details: JSON.stringify(sessionLog) }).catch(() => null);
+      sendRuntime({ action: 'LOG_EVENT', level: 'INFO', message: 'AEGIS Session Log', details: JSON.stringify(sessionLog) }).catch(() => null);
       return sessionLog;
     } catch (error) {
       console.warn('[LOGGER] failed to emit session diagnostics', error?.message || error);
