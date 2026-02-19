@@ -233,11 +233,91 @@
     }
   }
 
+  function tryChatGptSsotExtraction() {
+    // Attempt 1: __NEXT_DATA__ (older ChatGPT builds)
+    try {
+      const nextDataEl = document.getElementById('__NEXT_DATA__');
+      if (nextDataEl) {
+        const payload = JSON.parse(nextDataEl.textContent || '{}');
+        const serverResp = payload?.props?.pageProps?.serverResponse;
+        if (serverResp?.body?.mapping) {
+          const mapping = serverResp.body.mapping;
+          const ordered = Object.values(mapping)
+            .filter((n) => n.message?.content?.parts?.length)
+            .sort((a, b) => (a.message?.create_time || 0) - (b.message?.create_time || 0));
+          if (ordered.length > 0) {
+            return {
+              strategy: 'ssot:__NEXT_DATA__',
+              messages: ordered.map((n) => ({
+                role: n.message.author?.role === 'user' ? 'User' : 'Assistant',
+                content: n.message.content.parts.join('\n'),
+                meta: { platform: 'ChatGPT', sourceSelector: 'ssot:__NEXT_DATA__', confidence: 0.99, evidence: ['ssot-server-data'] }
+              }))
+            };
+          }
+        }
+      }
+    } catch { /* SSOT path unavailable */ }
+
+    // Attempt 2: Remix route data (newer ChatGPT builds)
+    try {
+      const remixCtx = window.__remixContext;
+      if (remixCtx?.state?.loaderData) {
+        for (const [, loaderData] of Object.entries(remixCtx.state.loaderData)) {
+          const mapping = loaderData?.serverResponse?.body?.mapping;
+          if (!mapping) continue;
+          const ordered = Object.values(mapping)
+            .filter((n) => n.message?.content?.parts?.length)
+            .sort((a, b) => (a.message?.create_time || 0) - (b.message?.create_time || 0));
+          if (ordered.length > 0) {
+            return {
+              strategy: 'ssot:__remixContext',
+              messages: ordered.map((n) => ({
+                role: n.message.author?.role === 'user' ? 'User' : 'Assistant',
+                content: n.message.content.parts.join('\n'),
+                meta: { platform: 'ChatGPT', sourceSelector: 'ssot:__remixContext', confidence: 0.99, evidence: ['ssot-remix-data'] }
+              }))
+            };
+          }
+        }
+      }
+    } catch { /* Remix data unavailable */ }
+
+    return null;
+  }
+
+  function computeCoverageMetrics(messages, domNodeCount) {
+    const user = messages.filter((m) => m.role === 'User').length;
+    const assistant = messages.filter((m) => m.role === 'Assistant' || m.role === 'Claude' || m.role === 'Gemini' || m.role === 'Model').length;
+    const unknown = messages.filter((m) => m.role === 'Unknown').length;
+    const total = messages.length;
+    return {
+      messages_total: total,
+      messages_user: user,
+      messages_assistant: assistant,
+      messages_unknown: unknown,
+      unknown_role_ratio: total > 0 ? (unknown / total).toFixed(3) : '0.000',
+      dom_candidates: domNodeCount,
+      coverage_ratio: domNodeCount > 0 ? (total / domNodeCount).toFixed(3) : '0.000'
+    };
+  }
+
   const PlatformEngines = {
     chatgpt: {
       name: 'ChatGPT',
       matches: () => location.hostname.includes('chatgpt.com') || location.hostname.includes('chat.openai.com'),
       async extract(options, utils) {
+        // Strategy 1: SSOT extraction from embedded JSON data
+        const ssot = tryChatGptSsotExtraction();
+        if (ssot && ssot.messages.length > 0) {
+          const isCodex = /chatgpt\.com\/codex/i.test(location.href);
+          const platformName = isCodex ? 'ChatGPT Codex' : this.name;
+          const coverage = computeCoverageMetrics(ssot.messages, ssot.messages.length);
+          console.log(`[ChatGPT] SSOT extraction via ${ssot.strategy}: ${ssot.messages.length} messages`, coverage);
+          return { platform: platformName, title: document.title, messages: ssot.messages, _extraction: { strategy: ssot.strategy, coverage } };
+        }
+
+        // Strategy 2: DOM analysis (controlled scroll if fullLoad)
         const analysis = await runChatGptDomAnalysis(options.fullLoad ? 'full' : 'visible', options, utils);
         let messages = analysis.messages.map((m) => ({
           role: m.inferredRole.role === 'assistant' ? 'Assistant' : (m.inferredRole.role === 'user' ? 'User' : 'Unknown'),
@@ -250,6 +330,7 @@
           }
         }));
 
+        // Strategy 3: Fallback selectors
         if (!messages.length) {
           const fallbackNodes = utils.adaptiveQuery('main [data-message-author-role], main article, main [data-testid*="message"], main section', 1)
             .filter((n) => utils.hasMeaningfulContent(n));
@@ -264,7 +345,11 @@
 
         const isCodex = /chatgpt\.com\/codex/i.test(location.href);
         const platformName = isCodex ? 'ChatGPT Codex' : this.name;
-        return { platform: platformName, title: document.title, messages };
+        const domCandidateCount = analysis.messages?.length || 0;
+        const strategy = messages.length ? 'dom-analysis' : 'fallback-selectors';
+        const coverage = computeCoverageMetrics(messages, domCandidateCount);
+        console.log(`[ChatGPT] ${strategy}: ${messages.length} messages`, coverage);
+        return { platform: platformName, title: document.title, messages, _extraction: { strategy, coverage, loadReport: analysis.loadReport } };
       }
     },
 
