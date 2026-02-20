@@ -251,8 +251,72 @@ document.addEventListener('DOMContentLoaded', () => {
     el.textContent = `Detected: ${c.messages} messages • ${c.photos} photos • ${c.files} files • ${c.others} others`;
   }
 
-  // --- Flight recorder: ALWAYS-ON minimal + verbose in debug mode ---
-  // B) Diagnostics ALWAYS exist. C) Debug = smart logger with event tree.
+  // --- D7: Flight Recorder v3 — structured events + run correlation + redaction ---
+  // Always-on minimal recording. Debug ON = verbose with raw details.
+  // Redaction: in non-verbose mode, content is hashed (length + first 8 chars of SHA-256).
+
+  async function hashForRedaction(text) {
+    if (!text) return { len: 0, hash: 'empty' };
+    try {
+      const data = new TextEncoder().encode(String(text));
+      const buf = await crypto.subtle.digest('SHA-256', data);
+      const arr = Array.from(new Uint8Array(buf));
+      return { len: text.length, hash: arr.map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 16) };
+    } catch { return { len: text.length, hash: 'unavailable' }; }
+  }
+
+  function redactDetails(details, verbose) {
+    if (!details || verbose) return details;
+    // In minimal mode: keep structure but redact any 'content', 'text', 'data' fields
+    const redacted = {};
+    for (const [k, v] of Object.entries(details)) {
+      if (/^(content|text|data|raw|body)$/i.test(k) && typeof v === 'string' && v.length > 50) {
+        redacted[k] = `[redacted: ${v.length} chars]`;
+      } else if (typeof v === 'object' && v !== null) {
+        redacted[k] = Array.isArray(v) ? `[array: ${v.length} items]` : '[object]';
+      } else {
+        redacted[k] = v;
+      }
+    }
+    return redacted;
+  }
+
+  // Structured event types for D7
+  const EVENT_TYPES = {
+    // UI events
+    UI_CLICK_EXPORT: 'ui.click.export',
+    UI_TOGGLE_DEBUG: 'ui.toggle.debug',
+    UI_SELECT_FORMAT: 'ui.select.format',
+    // Bus events (popup <-> SW <-> content)
+    BUS_SEND: 'bus.send',
+    BUS_RECV: 'bus.recv',
+    // Extraction events
+    EXTRACT_START: 'extract.start',
+    EXTRACT_END: 'extract.end',
+    EXTRACT_STRATEGY: 'extract.strategy_selected',
+    EXTRACT_SCORECARD: 'extract.scorecard',
+    // Asset events
+    ASSET_DISCOVER: 'asset.discover',
+    ASSET_FETCH_START: 'asset.fetch.start',
+    ASSET_FETCH_END: 'asset.fetch.end',
+    ASSET_REDIRECT: 'asset.redirect_chain',
+    ASSET_FAIL: 'asset.fail',
+    // Export events
+    EXPORT_START: 'export.start',
+    EXPORT_END: 'export.end',
+    EXPORT_FORMAT_START: 'export.format.start',
+    EXPORT_FORMAT_DONE: 'export.format.done',
+    EXPORT_FORMAT_FAIL: 'export.format.fail',
+    EXPORT_FILE_WRITTEN: 'export.file_written',
+    EXPORT_INVARIANTS: 'export.invariants',
+    EXPORT_DOWNLOAD_FAIL: 'export.download.fail',
+    // Asset resolution
+    ASSET_RESOLVE_START: 'asset.resolve.start',
+    ASSET_RESOLVE_DONE: 'asset.resolve.done',
+    ASSET_RESOLVE_FAIL: 'asset.resolve.fail',
+    ASSET_RESOLVED: 'asset.resolved',
+    ASSET_SKIP: 'asset.skip.not_allowed',
+  };
 
   function createPopupFlightRecorder(runId, platform, verbose) {
     const entries = [];
@@ -266,7 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tabScope: activeTabId != null ? `tab:${activeTabId}` : 'global',
         platform: platform || 'unknown', module: opts.module || 'popup',
         phase: opts.phase || 'unknown', result: opts.result || null,
-        details: verbose ? (opts.details || null) : null, // minimal mode omits details
+        details: redactDetails(opts.details || null, verbose),
       };
       entries.push(entry);
       if (entries.length > 2000) entries.shift();
@@ -274,30 +338,41 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     function finish(counts = {}, failures = [], invariantResult = null) {
       const endedAt = new Date().toISOString();
-      // Compute anomaly score 0..100
       const total = counts.messages_total || 0;
       const unknown = counts.messages_unknown || 0;
       const failedAssets = counts.assets_failed || 0;
+      const resolvedAssets = counts.assets_resolved || 0;
       const unknownRatio = total > 0 ? unknown / total : 0;
+      const assetRate = (resolvedAssets + failedAssets) > 0 ? resolvedAssets / (resolvedAssets + failedAssets) : 1;
       const anomalyScore = Math.min(100, Math.round(
         (unknownRatio > 0.05 ? 30 : 0) +
         (total === 0 ? 40 : 0) +
         (failedAssets > 0 ? Math.min(20, failedAssets * 5) : 0) +
         (invariantResult && !invariantResult.pass ? 10 : 0)
       ));
+      // D7: Top failure reasons summary
+      const failureReasons = {};
+      for (const f of failures) {
+        const reason = f.reason || 'unknown';
+        failureReasons[reason] = (failureReasons[reason] || 0) + 1;
+      }
       return {
-        schema_version: 'diagnostics.v5',
+        schema_version: 'diagnostics.v6',
         run: { run_id: runId, started_at_utc: startedAt, ended_at_utc: endedAt, tool_version: '0.11.0', platform },
         tabScope: activeTabId != null ? `tab:${activeTabId}` : 'global',
-        entries: verbose ? entries : [], // minimal mode: no entry dump
-        counts, failures,
+        entries: verbose ? entries : entries.filter((e) => e.lvl === 'ERROR' || e.lvl === 'WARN'),
+        entryCount: entries.length,
+        counts: { ...counts, assets_resolved: resolvedAssets },
+        failures: verbose ? failures : failures.slice(0, 5), // minimal: top 5 only
         scorecard: {
           messages_total: total,
           unknown_role_ratio: Number(unknownRatio.toFixed(4)),
           unknown_role_pass: unknownRatio <= 0.05,
           has_messages: total > 0,
+          asset_resolution_rate: Number(assetRate.toFixed(4)),
           anomalyScore,
         },
+        failureReasons,
         invariants: invariantResult || null,
         gestureValid: _gestureTokenValid,
         verbose,
@@ -409,7 +484,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // B) Include minimal diagnostics summary in ZIP when debug is OFF
         const diagSummary = {
           runId, platform: currentChatData.platform,
-          counts: { messages_total: msgs.length, messages_unknown: unknownCount, assets_failed: lastAssetFailures.length },
+          counts: { messages_total: msgs.length, messages_unknown: unknownCount, assets_failed: lastAssetFailures.length, assets_resolved: assetResult.urlMap.size },
           invariants: invariantResult,
           formatErrors,
           gestureValid: _gestureTokenValid,
@@ -430,7 +505,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // B) ALWAYS persist diagnostics (regardless of debug mode)
     lastDiagnostics = recorder.finish(
-      { messages_total: msgs.length, messages_unknown: unknownCount, assets_failed: lastAssetFailures.length },
+      { messages_total: msgs.length, messages_unknown: unknownCount, assets_failed: lastAssetFailures.length, assets_resolved: assetResult.urlMap.size },
       lastAssetFailures,
       invariantResult
     );
