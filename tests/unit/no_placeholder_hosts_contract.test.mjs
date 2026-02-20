@@ -1,4 +1,4 @@
-// License: MIT
+// License: AGPL-3.0
 // Contract test: production source files must never reference placeholder hosts.
 // This prevents accidental fetches to example.com or other test-only domains.
 

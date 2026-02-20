@@ -1,4 +1,4 @@
-// License: MIT
+// License: AGPL-3.0
 // Contract test: export output format truthfulness.
 
 import test from 'node:test';

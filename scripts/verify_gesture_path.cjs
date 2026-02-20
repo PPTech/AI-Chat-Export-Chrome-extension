@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// License: MIT
+// License: AGPL-3.0
 // Author: Dr. Babak Sorkhpour (with help of AI)
 // verify_gesture_path.cjs — CI gate: ensures no await before permissions.request
 // or downloads.download inside gesture handlers in the popup script.

@@ -1,4 +1,4 @@
-// License: MIT
+// License: AGPL-3.0
 // Contract test for attachment classifier.
 
 import test from 'node:test';

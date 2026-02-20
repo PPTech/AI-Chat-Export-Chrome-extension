@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// License: MIT
+// License: AGPL-3.0
 // verify_version.cjs - CI gate that enforces version SSOT.
 // Checks: lib/version.mjs, manifest.json, script.js all agree.
 // Exit 1 on mismatch.

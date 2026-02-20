@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// License: MIT
+// License: AGPL-3.0
 // Author: Dr. Babak Sorkhpour (with help of AI)
 // verify_claims.mjs - CI gate that verifies export truthfulness claims.
 // Exit code 0 = pass, 1 = fail.

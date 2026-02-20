@@ -1,4 +1,4 @@
-// License: MIT
+// License: AGPL-3.0
 // Smoke test: popup HTML structure is valid and self-contained.
 
 import test from 'node:test';

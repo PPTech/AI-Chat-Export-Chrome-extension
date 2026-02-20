@@ -1,4 +1,4 @@
-// License: MIT
+// License: AGPL-3.0
 // Contract test for diagnostics v4 flight recorder (full JSONL schema).
 
 import test from 'node:test';

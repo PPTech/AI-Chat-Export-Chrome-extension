@@ -1,4 +1,4 @@
-// License: MIT
+// License: AGPL-3.0
 // Contract tests for: A) fail-soft, B) always-on diagnostics, C) smart logger, D) gesture, E) version SSOT.
 
 import test from 'node:test';

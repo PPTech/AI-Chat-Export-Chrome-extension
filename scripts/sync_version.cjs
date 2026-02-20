@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// License: MIT
+// License: AGPL-3.0
 // Author: Dr. Babak Sorkhpour (with help of AI)
 // sync_version.cjs — Reads VERSION from lib/version.mjs (SSOT) and updates
 // manifest.json, package.json, and all runtime JS file headers.

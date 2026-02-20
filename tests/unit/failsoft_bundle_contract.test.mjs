@@ -1,4 +1,4 @@
-// License: MIT
+// License: AGPL-3.0
 // Contract test: fail-soft bundle always includes manifest + diagnostics.
 
 import test from 'node:test';

@@ -1,4 +1,4 @@
-// License: MIT
+// License: AGPL-3.0
 // Author: Dr. Babak Sorkhpour (with help of AI)
 // background.js - Service Worker: State Manager + Diagnostics Broker v0.12.0
 //

@@ -1,4 +1,4 @@
-// License: MIT
+// License: AGPL-3.0
 // Author: Dr. Babak Sorkhpour (with help of AI)
 
 const fs = require('fs');

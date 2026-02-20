@@ -1,4 +1,4 @@
-// License: MIT
+// License: AGPL-3.0
 // Contract tests enforcing user gesture rules, attachment rules,
 // and output truthfulness across the extension.
 

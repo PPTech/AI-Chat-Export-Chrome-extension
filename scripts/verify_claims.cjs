@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// License: MIT
+// License: AGPL-3.0
 // Author: Dr. Babak Sorkhpour (with help of AI)
 // verify_claims.cjs — Verify that the codebase actually delivers what it claims.
 //

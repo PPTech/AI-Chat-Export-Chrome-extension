@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// License: MIT
+// License: AGPL-3.0
 // compare_exports.cjs - Cross-platform export quality comparator.
 // Loads JSON exports and computes quality metrics.
 // Usage: node scripts/compare_exports.cjs [dir-with-json-exports]

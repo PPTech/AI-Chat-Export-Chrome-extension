@@ -1,4 +1,4 @@
-// License: MIT
+// License: AGPL-3.0
 // Contract test: every action case in background.js calls sendResponse().
 
 import test from 'node:test';
