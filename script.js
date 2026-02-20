@@ -1,6 +1,6 @@
 // License: MIT
 // Author: Dr. Babak Sorkhpour (with help of AI)
-// script.js - Main Controller v0.10.11
+// script.js - Main Controller v0.11.0
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
@@ -92,7 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function exportSettingsCfg(settings) {
     const lines = Object.entries(settings).map(([k, v]) => `${k}=${String(v)}`);
-    const cfg = `# AI Chat Exporter Settings\n# version=0.10.8\n${lines.join('\n')}\n`;
+    const cfg = `# AI Chat Exporter Settings\n# version=0.11.0\n${lines.join('\n')}\n`;
     const date = new Date().toISOString().slice(0, 10);
     downloadBlob(new Blob([cfg], { type: 'text/plain' }), `ai_chat_exporter_settings_${date}.cfg`);
   }
@@ -246,7 +246,7 @@ document.addEventListener('DOMContentLoaded', () => {
       ));
       return {
         schema_version: 'diagnostics.v5',
-        run: { run_id: runId, started_at_utc: startedAt, ended_at_utc: endedAt, tool_version: '0.10.11', platform },
+        run: { run_id: runId, started_at_utc: startedAt, ended_at_utc: endedAt, tool_version: '0.11.0', platform },
         tabScope: activeTabId != null ? `tab:${activeTabId}` : 'global',
         entries: verbose ? entries : [], // minimal mode: no entry dump
         counts, failures,
@@ -431,11 +431,31 @@ document.addEventListener('DOMContentLoaded', () => {
     const logs = await new Promise((resolve) => {
       chrome.runtime.sendMessage({ action: 'GET_LOGS' }, (resp) => resolve(resp));
     });
+    // Build comprehensive log report
+    const report = {
+      schema: 'log-report.v2',
+      exportedAt: new Date().toISOString(),
+      toolVersion: '0.11.0',
+      platform: currentChatData?.platform || 'N/A',
+      messageCount: currentChatData?.messages?.length || 0,
+      title: currentChatData?.title || 'N/A',
+      debugMode: isDebugMode(),
+      lastDiagnosticsAvailable: !!lastDiagnostics,
+      lastDiagnosticsSummary: lastDiagnostics ? {
+        runId: lastDiagnostics.run?.run_id,
+        anomalyScore: lastDiagnostics.scorecard?.anomalyScore,
+        unknownRoleRatio: lastDiagnostics.scorecard?.unknown_role_ratio,
+        entryCount: (lastDiagnostics.entries || []).length,
+      } : null,
+      activityLog: logs || [],
+      logCount: Array.isArray(logs) ? logs.length : 0,
+    };
     if (!logs || (Array.isArray(logs) && logs.length === 0)) {
       showInfo('No Logs', 'No activity logs recorded yet. Logs are created during extraction and export operations.');
       return;
     }
-    downloadBlob(new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' }), 'ai_exporter_logs.json');
+    const date = new Date().toISOString().slice(0, 10);
+    downloadBlob(new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }), `ai_exporter_logs_${date}.json`);
   });
 
   btnExportImages.onclick = withGesture(async () => {
@@ -631,7 +651,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const exportDate = new Date().toISOString();
 
     if (fmt === 'pdf') {
-      const pdf = buildTextPdf(title, msgs);
+      // Use canvas PDF for Unicode content (Arabic, Persian, CJK, etc.)
+      // Fall back to text PDF for ASCII-only content (smaller file size)
+      const allText = msgs.map((m) => m.content || '').join(' ');
+      const needsCanvasPdf = hasNonLatinChars(allText) || extractAllImageSources(msgs).length > 0;
+      const pdf = needsCanvasPdf ? await buildCanvasPdf(title, msgs) : buildTextPdf(title, msgs);
       return { content: pdf, mime: 'application/pdf' };
     }
 
@@ -1107,9 +1131,8 @@ document.addEventListener('DOMContentLoaded', () => {
     return out;
   }
 
-  // E) Dead code: _unused_detectScriptProfile kept for reference, not called anywhere.
   function _unused_detectScriptProfile() {
-    const s = String(text || '');
+    const s = String('');
     const isRtl = /[֐-ࣿיִ-﷽ﹰ-ﻼ]/.test(s);
     const isCjk = /[぀-ヿ㐀-鿿豈-﫿]/.test(s);
     return { isRtl, isCjk };

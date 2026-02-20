@@ -1,6 +1,6 @@
 // License: MIT
 // Author: Dr. Babak Sorkhpour (with help of AI)
-// background.js - Service Worker: State Manager + Diagnostics Broker v0.10.11
+// background.js - Service Worker: State Manager + Diagnostics Broker v0.11.0
 //
 // MV3 message rule: every handler MUST call sendResponse() and the listener
 // MUST return true so Chrome keeps the message channel open for async replies.
