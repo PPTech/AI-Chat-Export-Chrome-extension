@@ -1,7 +1,0 @@
-{
-  "version": "0.11.5",
-  "files": {
-    "lib/transformers.min.js": "bfbd6621bc2da20e5488081a90e43c2c145d1f306e4c455e124b7d8e58f5b74c",
-    "models/minilm-l3-quantized/model.json": "85b362517e517e6c3d16d77a3d04aed6eefbbc35845b64420e9574578d7c5dfa"
-  }
-}

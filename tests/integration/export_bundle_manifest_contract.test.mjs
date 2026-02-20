@@ -1,7 +1,5 @@
 // License: MIT
-// Code generated with support from CODEX and CODEX CLI.
-// Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// نویسنده دکتر بابک سرخپور با کمک ابزار چت جی پی تی.
+// Author: Dr. Babak Sorkhpour (with help of AI)
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -9,8 +7,18 @@ import fs from 'node:fs';
 
 const script = fs.readFileSync('script.js', 'utf8');
 
-test('Export pipeline appends diagnostics and bundle manifest entries', () => {
-  assert.match(script, /export_bundle_manifest\.json/);
-  assert.match(script, /diagnostics\.json/);
-  assert.match(script, /bundleManifest/);
+test('Export pipeline always emits export_manifest.json', () => {
+  assert.match(script, /export_manifest\.json/);
+});
+
+test('Export pipeline always emits diagnostics_summary.json in ZIP', () => {
+  assert.match(script, /diagnostics_summary\.json/);
+});
+
+test('Export manifest uses v1 schema', () => {
+  assert.match(script, /export-manifest\.v1/);
+});
+
+test('Export pipeline records per-format errors (fail-soft)', () => {
+  assert.match(script, /formatErrors/);
 });

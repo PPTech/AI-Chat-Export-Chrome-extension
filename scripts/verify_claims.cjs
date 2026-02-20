@@ -1,64 +1,76 @@
+#!/usr/bin/env node
 // License: MIT
-// Code generated with support from CODEX and CODEX CLI.
-// Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// نویسنده دکتر بابک سرخپور با کمک ابزار چت جی پی تی.
+// Author: Dr. Babak Sorkhpour (with help of AI)
+// verify_claims.cjs — Verify that the codebase actually delivers what it claims.
+//
+// Checks:
+// 1. Version SSOT exists and is consistent
+// 2. Export pipeline includes diagnostics + manifest artifacts
+// 3. FORENSICS/HEAD.txt exists
+// 4. No dead-code AI agent files remain
+
+'use strict';
 
 const fs = require('fs');
+const path = require('path');
 
-function readJson(path) {
-  return JSON.parse(fs.readFileSync(path, 'utf8'));
-}
-
-const pkg = readJson('package.json');
-const requiredScripts = [
-  'sync:version',
-  'verify:local-assets',
-  'verify:model',
-  'verify:release',
-  'verify:claims',
-  'test',
-  'gherkin:generate',
-  'build'
-];
-
-const missingScripts = requiredScripts.filter((name) => !pkg.scripts || !pkg.scripts[name]);
-
-const versionFile = fs.readFileSync('version.js', 'utf8');
-const versionMatch = versionFile.match(/APP_VERSION\s*=\s*'([^']+)'/);
-const markerMatch = versionFile.match(/version v(\d+\.\d+\.\d+)/i);
-const manifest = readJson('manifest.json');
-const versionJson = readJson('VERSION.json');
-const metadata = readJson('metadata.json');
-const packageJson = readJson('package.json');
-
+const root = path.join(__dirname, '..');
 const claims = [];
-if (!versionMatch) claims.push('APP_VERSION missing from version.js');
-const appVersion = versionMatch ? versionMatch[1] : '';
-if (markerMatch && markerMatch[1] !== appVersion) {
-  claims.push(`version.js header marker mismatch: v${markerMatch[1]} != ${appVersion}`);
-}
-if (manifest.version !== appVersion) claims.push(`manifest version mismatch: ${manifest.version} != ${appVersion}`);
-if (versionJson.version !== appVersion) claims.push(`VERSION.json mismatch: ${versionJson.version} != ${appVersion}`);
-if (metadata.version !== appVersion) claims.push(`metadata.json mismatch: ${metadata.version} != ${appVersion}`);
-if (packageJson.version !== appVersion) claims.push(`package.json mismatch: ${packageJson.version} != ${appVersion}`);
 
-const scriptSource = fs.readFileSync('script.js', 'utf8');
-for (const token of ['.diagnostics.json', '.export_bundle_manifest.json', 'bundleManifest']) {
-  if (!scriptSource.includes(token)) claims.push(`export forensic artifact hook missing token: ${token}`);
+// 1. Version SSOT
+const versionSrc = fs.readFileSync(path.join(root, 'lib', 'version.mjs'), 'utf8');
+const versionMatch = versionSrc.match(/VERSION\s*=\s*'([^']+)'/);
+if (!versionMatch) {
+  claims.push('VERSION constant missing from lib/version.mjs');
+} else {
+  const v = versionMatch[1];
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8'));
+  if (manifest.version !== v) claims.push(`manifest.json version ${manifest.version} != SSOT ${v}`);
 }
 
-if (!fs.existsSync('FORENSICS/HEAD.txt')) {
+// 2. Export pipeline forensic artifacts
+const scriptSrc = fs.readFileSync(path.join(root, 'script.js'), 'utf8');
+for (const token of ['export_manifest.json', 'diagnostics_summary.json', 'createPopupFlightRecorder']) {
+  if (!scriptSrc.includes(token)) claims.push(`script.js missing forensic artifact: ${token}`);
+}
+
+// 3. Always-on diagnostics (not gated by debug)
+if (scriptSrc.includes('debug ? createPopupFlightRecorder') || scriptSrc.includes('debug ? new')) {
+  claims.push('Diagnostics must not be gated by debug flag (always-on requirement)');
+}
+
+// 4. Gesture enforcement
+if (!scriptSrc.includes('withGesture')) claims.push('withGesture() wrapper missing');
+if (!scriptSrc.includes('assertGesture')) claims.push('assertGesture() check missing');
+if (!scriptSrc.includes('GESTURE_TTL_MS')) claims.push('GESTURE_TTL_MS constant missing');
+
+// 5. FORENSICS directory
+if (!fs.existsSync(path.join(root, 'FORENSICS', 'HEAD.txt'))) {
   claims.push('FORENSICS/HEAD.txt missing');
 }
 
-if (missingScripts.length || claims.length) {
-  if (missingScripts.length) {
-    console.error('Missing package scripts:\n' + missingScripts.join('\n'));
+// 6. Dead code check — these directories/files should NOT exist
+const deadPaths = [
+  'agent/', 'models/', 'ai_engine.js', 'smart_agent.js', 'smart_miner.js',
+  'smart_vision.js', 'visual_engine.js', 'visual_walker.js', 'offline_brain.js',
+  'offscreen.js', 'offscreen.html'
+];
+for (const dp of deadPaths) {
+  if (fs.existsSync(path.join(root, dp))) {
+    claims.push(`Dead code still present: ${dp} (should be removed)`);
   }
-  if (claims.length) {
-    console.error('Claim verification failures:\n' + claims.join('\n'));
-  }
+}
+
+// 7. Background.js message handler coverage
+const bgSrc = fs.readFileSync(path.join(root, 'background.js'), 'utf8');
+for (const handler of ['GET_DIAGNOSTICS_JSONL', 'STORE_DIAGNOSTICS', 'VALIDATE_GESTURE']) {
+  if (!bgSrc.includes(handler)) claims.push(`background.js missing handler: ${handler}`);
+}
+
+if (claims.length) {
+  console.error('[verify_claims] FAIL: Claim verification failures:');
+  claims.forEach((c) => console.error(`  - ${c}`));
   process.exit(1);
 }
 
-console.log(`Claim verification passed for version ${appVersion}.`);
+console.log(`[verify_claims] PASS: All claims verified for version ${versionMatch[1]}.`);

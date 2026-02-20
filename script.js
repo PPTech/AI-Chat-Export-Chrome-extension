@@ -1,11 +1,12 @@
 // License: MIT
-// Code generated with support from CODEX and CODEX CLI.
-// Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// script.js - Main Controller v0.10.10
+// Author: Dr. Babak Sorkhpour (with help of AI)
+// script.js - Main Controller v0.11.0
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
   let activeTabId = null;
+  let lastDiagnostics = null; // stores last export's flight recorder data
+  let lastAssetFailures = []; // stores last export's asset resolution failures
 
   const btnExport = document.getElementById('btn-export-main');
   const btnLoadFull = document.getElementById('btn-load-full');
@@ -21,6 +22,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const checkZip = document.getElementById('check-zip');
   const checkPhotoZip = document.getElementById('check-photo-zip');
   const checkExportFiles = document.getElementById('check-export-files');
+  const checkAdvancedLinks = document.getElementById('check-advanced-links');
+  const checkDebugMode = document.getElementById('check-debug-mode');
+  const btnDownloadDiagnostics = document.getElementById('btn-download-diagnostics');
 
   const settingsModal = document.getElementById('settings-modal');
   const errorModal = document.getElementById('error-modal');
@@ -38,7 +42,9 @@ document.addEventListener('DOMContentLoaded', () => {
       rawHtml: false,
       zip: false,
       photoZip: true,
-      exportFiles: true
+      exportFiles: true,
+      advancedLinks: false,
+      debugMode: false
     };
   }
 
@@ -50,8 +56,14 @@ document.addEventListener('DOMContentLoaded', () => {
       zip: !!checkZip.checked,
       photoZip: !!checkPhotoZip.checked,
       exportFiles: !!checkExportFiles.checked,
+      advancedLinks: !!checkAdvancedLinks.checked,
+      debugMode: !!checkDebugMode.checked,
       updatedAt: new Date().toISOString()
     };
+  }
+
+  function isDebugMode() {
+    return !!checkDebugMode.checked;
   }
 
   function applySettings(settings) {
@@ -62,6 +74,10 @@ document.addEventListener('DOMContentLoaded', () => {
     checkZip.checked = !!s.zip;
     checkPhotoZip.checked = !!s.photoZip;
     checkExportFiles.checked = !!s.exportFiles;
+    checkAdvancedLinks.checked = !!s.advancedLinks;
+    checkDebugMode.checked = !!s.debugMode;
+    // B) Diagnostics button always visible (diagnostics always exist)
+    if (btnDownloadDiagnostics) btnDownloadDiagnostics.style.display = 'block';
   }
 
   function saveSettingsToStorage(settings) {
@@ -76,7 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function exportSettingsCfg(settings) {
     const lines = Object.entries(settings).map(([k, v]) => `${k}=${String(v)}`);
-    const cfg = `# AI Chat Exporter Settings\n# version=0.10.8\n${lines.join('\n')}\n`;
+    const cfg = `# AI Chat Exporter Settings\n# version=0.11.0\n${lines.join('\n')}\n`;
     const date = new Date().toISOString().slice(0, 10);
     downloadBlob(new Blob([cfg], { type: 'text/plain' }), `ai_chat_exporter_settings_${date}.cfg`);
   }
@@ -123,6 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!res) {
       document.getElementById('platform-badge').textContent = 'No Data (Retrying)';
       setAnalyzeProgress(0, 'Retrying');
+      persistExtractionDiagnostics(null, 'no-response');
       return;
     }
     if (res?.success) {
@@ -134,11 +151,51 @@ document.addEventListener('DOMContentLoaded', () => {
       updateDetectedSummary(res.messages || []);
       setAnalyzeProgress(100, 'Completed');
       chrome.runtime.sendMessage({ action: 'SET_DATA', tabId: activeTabId, data: res });
+      persistExtractionDiagnostics(res, 'ok');
       updateExportBtn();
       return;
     }
     document.getElementById('platform-badge').textContent = `${res?.platform || 'Unknown'} (Waiting)`;
     setAnalyzeProgress(0, 'Waiting');
+    persistExtractionDiagnostics(res, 'fail');
+  }
+
+  /**
+   * D2: Persist extraction diagnostics after EVERY extraction attempt (success or fail).
+   * This ensures "Download Diagnostics" always has data, even when export never runs.
+   */
+  function persistExtractionDiagnostics(res, status) {
+    const runId = `extraction-${Date.now()}`;
+    const msgs = res?.messages || [];
+    const unknownCount = msgs.filter((m) => /unknown/i.test(m.role)).length;
+    const total = msgs.length;
+    const diag = {
+      schema_version: 'diagnostics.v5',
+      run: { run_id: runId, started_at_utc: new Date().toISOString(), ended_at_utc: new Date().toISOString(), tool_version: '0.11.0', platform: res?.platform || 'unknown' },
+      tabScope: activeTabId != null ? `tab:${activeTabId}` : 'global',
+      phase: 'extraction',
+      status,
+      entries: [],
+      counts: { messages_total: total, messages_unknown: unknownCount, assets_failed: 0 },
+      failures: [],
+      scorecard: {
+        messages_total: total,
+        unknown_role_ratio: total > 0 ? Number((unknownCount / total).toFixed(4)) : 0,
+        unknown_role_pass: total > 0 ? unknownCount / total <= 0.05 : false,
+        has_messages: total > 0,
+        anomalyScore: total === 0 ? 40 : (unknownCount / Math.max(1, total) > 0.05 ? 30 : 0),
+      },
+      invariants: null,
+      verbose: false,
+    };
+    // Store as lastDiagnostics so Download Diagnostics works immediately
+    if (!lastDiagnostics) lastDiagnostics = diag;
+    // Persist to SW
+    try {
+      chrome.runtime.sendMessage({ action: 'STORE_DIAGNOSTICS', runId, payload: diag }, () => {
+        if (chrome.runtime.lastError) console.warn('[Diagnostics] SW store failed:', chrome.runtime.lastError.message);
+      });
+    } catch (_) { /* SW may be inactive */ }
   }
 
   document.querySelectorAll('.format-item').forEach((item) => {
@@ -162,9 +219,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function setAnalyzeProgress(percent, label = 'Analyzing') {
     const el = document.getElementById('analyze-progress');
+    const bar = document.getElementById('analyze-progress-bar');
     if (!el) return;
     const bounded = Math.max(0, Math.min(100, Math.round(percent)));
-    el.textContent = `Analysis Progress: ${bounded}% (${label})`;
+    el.textContent = `Analysis: ${bounded}% — ${label}`;
+    if (bar) {
+      bar.style.width = `${bounded}%`;
+      bar.style.background = bounded >= 100 ? 'var(--success, #10b981)' : 'var(--primary, #2563eb)';
+    }
   }
 
   function computeDetectedCounts(messages = []) {
@@ -189,50 +251,294 @@ document.addEventListener('DOMContentLoaded', () => {
     el.textContent = `Detected: ${c.messages} messages • ${c.photos} photos • ${c.files} files • ${c.others} others`;
   }
 
-  btnExport.onclick = async () => {
+  // --- D7: Flight Recorder v3 — structured events + run correlation + redaction ---
+  // Always-on minimal recording. Debug ON = verbose with raw details.
+  // Redaction: in non-verbose mode, content is hashed (length + first 8 chars of SHA-256).
+
+  async function hashForRedaction(text) {
+    if (!text) return { len: 0, hash: 'empty' };
+    try {
+      const data = new TextEncoder().encode(String(text));
+      const buf = await crypto.subtle.digest('SHA-256', data);
+      const arr = Array.from(new Uint8Array(buf));
+      return { len: text.length, hash: arr.map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 16) };
+    } catch { return { len: text.length, hash: 'unavailable' }; }
+  }
+
+  function redactDetails(details, verbose) {
+    if (!details || verbose) return details;
+    // In minimal mode: keep structure but redact any 'content', 'text', 'data' fields
+    const redacted = {};
+    for (const [k, v] of Object.entries(details)) {
+      if (/^(content|text|data|raw|body)$/i.test(k) && typeof v === 'string' && v.length > 50) {
+        redacted[k] = `[redacted: ${v.length} chars]`;
+      } else if (typeof v === 'object' && v !== null) {
+        redacted[k] = Array.isArray(v) ? `[array: ${v.length} items]` : '[object]';
+      } else {
+        redacted[k] = v;
+      }
+    }
+    return redacted;
+  }
+
+  // Structured event types for D7
+  const EVENT_TYPES = {
+    // UI events
+    UI_CLICK_EXPORT: 'ui.click.export',
+    UI_TOGGLE_DEBUG: 'ui.toggle.debug',
+    UI_SELECT_FORMAT: 'ui.select.format',
+    // Bus events (popup <-> SW <-> content)
+    BUS_SEND: 'bus.send',
+    BUS_RECV: 'bus.recv',
+    // Extraction events
+    EXTRACT_START: 'extract.start',
+    EXTRACT_END: 'extract.end',
+    EXTRACT_STRATEGY: 'extract.strategy_selected',
+    EXTRACT_SCORECARD: 'extract.scorecard',
+    // Asset events
+    ASSET_DISCOVER: 'asset.discover',
+    ASSET_FETCH_START: 'asset.fetch.start',
+    ASSET_FETCH_END: 'asset.fetch.end',
+    ASSET_REDIRECT: 'asset.redirect_chain',
+    ASSET_FAIL: 'asset.fail',
+    // Export events
+    EXPORT_START: 'export.start',
+    EXPORT_END: 'export.end',
+    EXPORT_FORMAT_START: 'export.format.start',
+    EXPORT_FORMAT_DONE: 'export.format.done',
+    EXPORT_FORMAT_FAIL: 'export.format.fail',
+    EXPORT_FILE_WRITTEN: 'export.file_written',
+    EXPORT_INVARIANTS: 'export.invariants',
+    EXPORT_DOWNLOAD_FAIL: 'export.download.fail',
+    // Asset resolution
+    ASSET_RESOLVE_START: 'asset.resolve.start',
+    ASSET_RESOLVE_DONE: 'asset.resolve.done',
+    ASSET_RESOLVE_FAIL: 'asset.resolve.fail',
+    ASSET_RESOLVED: 'asset.resolved',
+    ASSET_SKIP: 'asset.skip.not_allowed',
+  };
+
+  function createPopupFlightRecorder(runId, platform, verbose) {
+    const entries = [];
+    const startedAt = new Date().toISOString();
+    let counter = 0;
+    function makeId() { counter++; return `${runId}-${counter}-${Date.now()}`; }
+    function record(opts = {}) {
+      const entry = {
+        ts: Date.now(), lvl: opts.lvl || 'INFO', event: opts.event || 'unknown',
+        runId, eventId: makeId(), parentEventId: opts.parentEventId || null,
+        tabScope: activeTabId != null ? `tab:${activeTabId}` : 'global',
+        platform: platform || 'unknown', module: opts.module || 'popup',
+        phase: opts.phase || 'unknown', result: opts.result || null,
+        details: redactDetails(opts.details || null, verbose),
+      };
+      entries.push(entry);
+      if (entries.length > 2000) entries.shift();
+      return entry;
+    }
+    function finish(counts = {}, failures = [], invariantResult = null) {
+      const endedAt = new Date().toISOString();
+      const total = counts.messages_total || 0;
+      const unknown = counts.messages_unknown || 0;
+      const failedAssets = counts.assets_failed || 0;
+      const resolvedAssets = counts.assets_resolved || 0;
+      const unknownRatio = total > 0 ? unknown / total : 0;
+      const assetRate = (resolvedAssets + failedAssets) > 0 ? resolvedAssets / (resolvedAssets + failedAssets) : 1;
+      const anomalyScore = Math.min(100, Math.round(
+        (unknownRatio > 0.05 ? 30 : 0) +
+        (total === 0 ? 40 : 0) +
+        (failedAssets > 0 ? Math.min(20, failedAssets * 5) : 0) +
+        (invariantResult && !invariantResult.pass ? 10 : 0)
+      ));
+      // D7: Top failure reasons summary
+      const failureReasons = {};
+      for (const f of failures) {
+        const reason = f.reason || 'unknown';
+        failureReasons[reason] = (failureReasons[reason] || 0) + 1;
+      }
+      return {
+        schema_version: 'diagnostics.v6',
+        run: { run_id: runId, started_at_utc: startedAt, ended_at_utc: endedAt, tool_version: '0.11.0', platform },
+        tabScope: activeTabId != null ? `tab:${activeTabId}` : 'global',
+        entries: verbose ? entries : entries.filter((e) => e.lvl === 'ERROR' || e.lvl === 'WARN'),
+        entryCount: entries.length,
+        counts: { ...counts, assets_resolved: resolvedAssets },
+        failures: verbose ? failures : failures.slice(0, 5), // minimal: top 5 only
+        scorecard: {
+          messages_total: total,
+          unknown_role_ratio: Number(unknownRatio.toFixed(4)),
+          unknown_role_pass: unknownRatio <= 0.05,
+          has_messages: total > 0,
+          asset_resolution_rate: Number(assetRate.toFixed(4)),
+          anomalyScore,
+        },
+        failureReasons,
+        invariants: invariantResult || null,
+        gestureValid: _gestureTokenValid,
+        verbose,
+      };
+    }
+    function toJsonl() { return entries.map((e) => JSON.stringify(e)).join('\n'); }
+    return { record, finish, toJsonl, entries };
+  }
+
+  // A) FAIL-SOFT EXPORT + B) ALWAYS-ON DIAGNOSTICS + C) SMART LOGGER + D) GESTURE GUARANTEE
+  btnExport.onclick = withGesture(async () => {
     const formats = Array.from(document.querySelectorAll('.format-item.selected')).map((i) => i.dataset.ext);
     if (!formats.length || !currentChatData) return;
     btnExport.disabled = true;
     setProcessingProgress(2);
 
-    try {
-      const date = new Date().toISOString().slice(0, 10);
-      const baseName = `${(currentChatData.platform || 'Export').replace(/[^a-zA-Z0-9]/g, '')}_${date}`;
-      const files = [];
+    const debug = isDebugMode();
+    const runId = `export-${Date.now()}`;
+    // B) ALWAYS create a recorder — minimal (debug OFF) or verbose (debug ON)
+    const recorder = createPopupFlightRecorder(runId, currentChatData.platform, debug);
+    lastAssetFailures = [];
 
-      for (let i = 0; i < formats.length; i += 1) {
-        const fmt = formats[i];
-        const generated = await generateContent(fmt, currentChatData);
-        files.push({ name: `${baseName}.${fmt}`, content: generated.content, mime: generated.mime });
-        const percent = 10 + ((i + 1) / Math.max(1, formats.length)) * 75;
-        setProcessingProgress(percent, `Processing ${fmt.toUpperCase()}`);
+    const exportStartEvent = recorder.record({ event: 'export.start', module: 'popup', phase: 'assemble', result: 'ok', details: { formats, messageCount: (currentChatData.messages || []).length, debugMode: debug, gestureValid: _gestureTokenValid } });
+
+    const date = new Date().toISOString().slice(0, 10);
+    const baseName = `${(currentChatData.platform || 'Export').replace(/[^a-zA-Z0-9]/g, '')}_${date}`;
+    const files = [];
+    const formatErrors = [];
+
+    // D6: Resolve and embed assets (images/files) before generating formats
+    let assetResult = { assetFiles: [], urlMap: new Map(), failures: [] };
+    const hasImageFormats = formats.some((f) => ['html', 'doc', 'md', 'pdf'].includes(f));
+    if (hasImageFormats && checkImages.checked) {
+      try {
+        setProcessingProgress(5, 'Resolving assets');
+        recorder.record({ event: 'asset.resolve.start', module: 'export', phase: 'assets', result: 'ok', parentEventId: exportStartEvent.eventId });
+        assetResult = await resolveAndEmbedAssets(currentChatData.messages, recorder, exportStartEvent.eventId);
+        lastAssetFailures = assetResult.failures;
+        recorder.record({ event: 'asset.resolve.done', module: 'export', phase: 'assets', result: 'ok', parentEventId: exportStartEvent.eventId, details: { resolved: assetResult.urlMap.size, failed: assetResult.failures.length } });
+      } catch (assetErr) {
+        recorder.record({ lvl: 'WARN', event: 'asset.resolve.fail', module: 'export', phase: 'assets', result: 'fail', parentEventId: exportStartEvent.eventId, details: { error: (assetErr?.message || '').slice(0, 200) } });
+        // Asset failure is not fatal — continue without local assets
       }
+    }
+    const urlMap = assetResult.urlMap;
 
+    // A) FAIL-SOFT: try each format independently; never abort entire export
+    for (let i = 0; i < formats.length; i += 1) {
+      const fmt = formats[i];
+      try {
+        recorder.record({ event: `export.format.start`, module: 'export', phase: 'assemble', result: 'ok', parentEventId: exportStartEvent.eventId, details: { format: fmt } });
+        const generated = await generateContent(fmt, currentChatData, urlMap);
+        const fileExt = generated.ext || fmt;
+        files.push({ name: `${baseName}.${fileExt}`, content: generated.content, mime: generated.mime });
+        recorder.record({ event: `export.format.done`, module: 'export', phase: 'assemble', result: 'ok', parentEventId: exportStartEvent.eventId, details: { format: fmt } });
+      } catch (fmtErr) {
+        // A) Format failure is not fatal — record and continue
+        formatErrors.push({ format: fmt, error: (fmtErr?.message || '').slice(0, 200) });
+        recorder.record({ lvl: 'ERROR', event: `export.format.fail`, module: 'export', phase: 'assemble', result: 'fail', parentEventId: exportStartEvent.eventId, details: { format: fmt, error: (fmtErr?.message || '').slice(0, 200) } });
+      }
+      const percent = 15 + ((i + 1) / Math.max(1, formats.length)) * 70;
+      setProcessingProgress(percent, `Processing ${fmt.toUpperCase()}`);
+    }
+
+    // D6: Add resolved asset files to the export ZIP
+    if (assetResult.assetFiles.length > 0) {
+      files.push(...assetResult.assetFiles);
+    }
+
+    // A) Always include a canonical JSON manifest of what was exported
+    const exportManifest = {
+      schema: 'export-manifest.v1',
+      runId,
+      platform: currentChatData.platform,
+      title: currentChatData.title,
+      messageCount: (currentChatData.messages || []).length,
+      formatsRequested: formats,
+      formatsSucceeded: files.map((f) => f.name),
+      formatErrors,
+      assetsResolved: assetResult.urlMap.size,
+      assetFailures: lastAssetFailures.length,
+      assetsEmbedded: assetResult.assetFiles.length > 0,
+      exportedAt: new Date().toISOString(),
+      debugMode: debug,
+    };
+    files.push({ name: `${baseName}.export_manifest.json`, content: JSON.stringify(exportManifest, null, 2), mime: 'application/json' });
+
+    // C) Run inline invariant checks
+    const msgs = currentChatData.messages || [];
+    const unknownCount = msgs.filter((m) => /unknown/i.test(m.role)).length;
+    const emptyContent = msgs.filter((m) => !(m.content || '').trim()).length;
+    const invariantResult = {
+      pass: msgs.length > 0 && unknownCount / Math.max(1, msgs.length) <= 0.05 && formatErrors.length === 0,
+      messages_total: msgs.length,
+      unknown_ratio: msgs.length > 0 ? Number((unknownCount / msgs.length).toFixed(4)) : 0,
+      empty_content: emptyContent,
+      format_errors: formatErrors.length,
+      asset_failures: lastAssetFailures.length,
+    };
+    recorder.record({ event: 'export.invariants', module: 'popup', phase: 'finalize', result: invariantResult.pass ? 'ok' : 'fail', parentEventId: exportStartEvent.eventId, details: invariantResult });
+
+    try {
+      // A) Even if some formats failed, emit what we have (fail-soft)
       if (files.length === 1 && !checkZip.checked) {
         setProcessingProgress(95, 'Finalizing');
         downloadBlob(new Blob([files[0].content], { type: files[0].mime }), files[0].name);
       } else {
         setProcessingProgress(90, 'Packaging');
+        // B) Include minimal diagnostics summary in ZIP when debug is OFF
+        const diagSummary = {
+          runId, platform: currentChatData.platform,
+          counts: { messages_total: msgs.length, messages_unknown: unknownCount, assets_failed: lastAssetFailures.length, assets_resolved: assetResult.urlMap.size },
+          invariants: invariantResult,
+          formatErrors,
+          gestureValid: _gestureTokenValid,
+        };
+        files.push({ name: `${baseName}.diagnostics_summary.json`, content: JSON.stringify(diagSummary, null, 2), mime: 'application/json' });
+
         const zip = await createRobustZip(files);
         setProcessingProgress(98, 'Downloading');
         downloadBlob(zip, `${baseName}.zip`);
       }
+
+      recorder.record({ event: 'export.end', module: 'popup', phase: 'finalize', result: 'ok', parentEventId: exportStartEvent.eventId, details: { fileCount: files.length, formatErrors: formatErrors.length } });
       setProcessingProgress(100, 'Done');
-    } catch (error) {
-      showError(error);
-    } finally {
-      updateExportBtn();
+    } catch (downloadErr) {
+      recorder.record({ lvl: 'ERROR', event: 'export.download.fail', module: 'popup', phase: 'finalize', result: 'fail', details: { error: (downloadErr?.message || '').slice(0, 200) } });
+      showError(downloadErr);
     }
-  };
+
+    // B) ALWAYS persist diagnostics (regardless of debug mode)
+    lastDiagnostics = recorder.finish(
+      { messages_total: msgs.length, messages_unknown: unknownCount, assets_failed: lastAssetFailures.length, assets_resolved: assetResult.urlMap.size },
+      lastAssetFailures,
+      invariantResult
+    );
+
+    // Phase 1: Persist diagnostics to service worker (always, not just debug)
+    try {
+      chrome.runtime.sendMessage({ action: 'STORE_DIAGNOSTICS', runId, payload: lastDiagnostics }, () => {
+        if (chrome.runtime.lastError) console.warn('[Diagnostics] SW store failed:', chrome.runtime.lastError.message);
+      });
+    } catch (_swErr) { /* SW may be inactive; popup still has lastDiagnostics */ }
+
+    // Show warning if formats failed but export continued
+    if (formatErrors.length > 0) {
+      showInfo('Partial Export', `${formatErrors.length} format(s) failed: ${formatErrors.map((e) => e.format).join(', ')}. Other formats exported successfully. Check export_manifest.json for details.`);
+    }
+
+    updateExportBtn();
+  });
 
   btnLoadFull.onclick = () => {
     if (!activeTabId) return;
     const ok = window.confirm('Load full chat from the beginning? This may take longer for long chats.');
     if (!ok) return;
+    btnLoadFull.disabled = true;
+    btnLoadFull.textContent = 'Loading...';
     setAnalyzeProgress(5, 'Preparing full-load scan');
-    chrome.tabs.sendMessage(activeTabId, { action: 'scroll_chat' }, () => {
-      setAnalyzeProgress(80, 'Finalizing full-load scan');
-      setTimeout(requestExtraction, 800);
+    chrome.tabs.sendMessage(activeTabId, { action: 'scroll_chat' }, (res) => {
+      setAnalyzeProgress(90, 'Scroll complete, re-extracting');
+      setTimeout(() => {
+        requestExtraction();
+        btnLoadFull.disabled = false;
+        btnLoadFull.textContent = 'Fetch Full';
+      }, 800);
     });
   };
 
@@ -254,19 +560,45 @@ document.addEventListener('DOMContentLoaded', () => {
     openModal(document.getElementById('preview-modal'));
   };
 
-  btnExportConfig.onclick = () => {
+  btnExportConfig.onclick = withGesture(() => {
     const settings = collectSettings();
     saveSettingsToStorage(settings);
     exportSettingsCfg(settings);
-  };
+  });
 
-  btnLogs.onclick = () => {
-    chrome.runtime.sendMessage({ action: 'GET_LOGS' }, (logs) => {
-      downloadBlob(new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' }), 'ai_exporter_logs.json');
+  btnLogs.onclick = withGesture(async () => {
+    // Use promise-based sendMessage so download happens within gesture TTL
+    const logs = await new Promise((resolve) => {
+      chrome.runtime.sendMessage({ action: 'GET_LOGS' }, (resp) => resolve(resp));
     });
-  };
+    // Build comprehensive log report
+    const report = {
+      schema: 'log-report.v2',
+      exportedAt: new Date().toISOString(),
+      toolVersion: '0.11.0',
+      platform: currentChatData?.platform || 'N/A',
+      messageCount: currentChatData?.messages?.length || 0,
+      title: currentChatData?.title || 'N/A',
+      debugMode: isDebugMode(),
+      lastDiagnosticsAvailable: !!lastDiagnostics,
+      lastDiagnosticsSummary: lastDiagnostics ? {
+        runId: lastDiagnostics.run?.run_id,
+        anomalyScore: lastDiagnostics.scorecard?.anomalyScore,
+        unknownRoleRatio: lastDiagnostics.scorecard?.unknown_role_ratio,
+        entryCount: (lastDiagnostics.entries || []).length,
+      } : null,
+      activityLog: logs || [],
+      logCount: Array.isArray(logs) ? logs.length : 0,
+    };
+    if (!logs || (Array.isArray(logs) && logs.length === 0)) {
+      showInfo('No Logs', 'No activity logs recorded yet. Logs are created during extraction and export operations.');
+      return;
+    }
+    const date = new Date().toISOString().slice(0, 10);
+    downloadBlob(new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }), `ai_exporter_logs_${date}.json`);
+  });
 
-  btnExportImages.onclick = async () => {
+  btnExportImages.onclick = withGesture(async () => {
     if (!currentChatData) return;
     const imageList = extractAllImageSources(currentChatData.messages);
     if (!imageList.length) return showError(new Error('No images found in extracted chat data.'));
@@ -303,34 +635,56 @@ document.addEventListener('DOMContentLoaded', () => {
       const zip = await createRobustZip(files);
       downloadBlob(zip, `${platformPrefix}_${date}_photos.zip`);
     }
-  };
+  });
 
-  btnExportFiles.onclick = async () => {
+  btnExportFiles.onclick = withGesture(async () => {
     if (!currentChatData) return;
     if (!checkExportFiles.checked) return showInfo('Files Export Disabled', 'Enable "Extract and ZIP Chat Files" in Settings first.');
     const filesFound = extractAllFileSources(currentChatData.messages);
     if (!filesFound.length) return showError(new Error('No chat-generated file links were detected.'));
 
+    setProcessingProgress(5, 'Fetching files...');
     const packed = [];
     let i = 1;
     for (const file of filesFound) {
       try {
-        const blob = await fetch(file.url).then((r) => r.blob());
+        setProcessingProgress(5 + (i / filesFound.length) * 80, `Fetching file ${i}/${filesFound.length}`);
+        // Try fetching via content script (page context) first — the popup can't
+        // access session-authenticated URLs (ChatGPT backend-api, etc.)
+        let blob;
+        try {
+          const resp = await new Promise((resolve, reject) => {
+            chrome.tabs.sendMessage(activeTabId, { action: 'FETCH_FILE', url: file.url }, (r) => {
+              if (chrome.runtime.lastError || !r?.ok) reject(new Error(r?.error || 'content-script fetch failed'));
+              else resolve(r);
+            });
+          });
+          // Content script returns base64 data
+          const bin = atob(resp.data);
+          const arr = new Uint8Array(bin.length);
+          for (let j = 0; j < bin.length; j++) arr[j] = bin.charCodeAt(j);
+          blob = new Blob([arr], { type: resp.mime || 'application/octet-stream' });
+        } catch {
+          // Fallback: direct fetch from popup (works for public URLs)
+          blob = await fetch(file.url).then((r) => r.blob());
+        }
         const ext = (blob.type.split('/')[1] || 'bin').replace('jpeg', 'jpg');
         const name = file.name.includes('.') ? file.name : `${file.name}.${ext}`;
         const data = new Uint8Array(await blob.arrayBuffer());
         packed.push({ name: `${String(i).padStart(3, '0')}_${name}`, content: data, mime: blob.type || 'application/octet-stream' });
         i += 1;
       } catch {
-        // skip failed file
+        // skip failed file — fail-soft
       }
     }
-    if (!packed.length) return showError(new Error('Detected files could not be downloaded from current session.'));
+    if (!packed.length) return showError(new Error('Detected files could not be downloaded from current session. The file URLs may require an active page session.'));
+    setProcessingProgress(90, 'Packing ZIP...');
     const zip = await createRobustZip(packed);
     const date = new Date().toISOString().slice(0, 10);
     const platformPrefix = (currentChatData.platform || 'Export').replace(/[^a-zA-Z0-9]/g, '');
     downloadBlob(zip, `${platformPrefix}_${date}_chat_files.zip`);
-  };
+    setProcessingProgress(100, 'Done');
+  });
 
   document.getElementById('link-legal').onclick = () => showInfo('Legal', 'This is a local-processing developer version. Users remain responsible for lawful and compliant use in their jurisdiction.');
   document.getElementById('link-security').onclick = () => showInfo('Security', 'Security baseline: local-only processing, sanitized exports, no eval, and optional risky Raw HTML mode.');
@@ -413,8 +767,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function extractAllFileSources(messages) {
     const files = [];
-    const fileRegex = /\[\[FILE:([^|\]]+)\|([^\]]+)\]\]/g;
     for (const m of messages || []) {
+      // Create regex inside loop to reset lastIndex per message
+      const fileRegex = /\[\[FILE:([^|\]]+)\|([^\]]+)\]\]/g;
       let match;
       while ((match = fileRegex.exec(m.content || '')) !== null) {
         const rawUrl = (match[1] || '').trim();
@@ -429,115 +784,675 @@ document.addEventListener('DOMContentLoaded', () => {
     return Array.from(uniq.values());
   }
 
-  async function generateContent(fmt, data) {
+  // --- D6: Asset resolution + embedding in export ZIP ---
+  // Resolves images/files to binary data, stores in assets/ folder.
+  // Returns { assetFiles: [{name, content, mime}], urlMap: Map<originalUrl, localPath>, failures: [] }
+
+  const ASSET_ALLOWLIST = [
+    /^data:image\//i,
+    /\.(png|jpg|jpeg|gif|webp|svg|bmp|ico)(\?|$)/i,
+    /googleusercontent\.com/i,
+    /oaiusercontent\.com/i,
+    /oaistatic\.com/i,
+    /chatgpt\.com/i,
+    /claude\.ai/i,
+    /gemini\.google\.com/i,
+    /aistudio\.google\.com/i,
+    /githubusercontent\.com/i,
+  ];
+
+  function isAllowedAssetUrl(url) {
+    if (!url) return false;
+    if (/^data:image\//i.test(url)) return true;
+    if (!/^https?:\/\//i.test(url)) return false;
+    return ASSET_ALLOWLIST.some((re) => re.test(url));
+  }
+
+  function sanitizeAssetPath(name) {
+    // Zip-slip prevention: strip path traversal, control chars, keep only safe chars
+    return String(name || 'asset')
+      .replace(/\.\./g, '_')
+      .replace(/[\/\\:*?"<>|\x00-\x1F]/g, '_')
+      .replace(/^_+/, '')
+      .slice(0, 120) || 'asset';
+  }
+
+  async function resolveAndEmbedAssets(messages, recorder, parentEventId) {
+    const assetFiles = [];
+    const urlMap = new Map();
+    const failures = [];
+
+    // Discover all image sources
+    const imageSources = extractAllImageSources(messages);
+    // Discover all file sources
+    const fileSources = extractAllFileSources(messages);
+
+    let idx = 1;
+    for (const src of imageSources) {
+      if (urlMap.has(src)) continue;
+      const assetName = `assets/img_${String(idx).padStart(3, '0')}`;
+      try {
+        if (!isAllowedAssetUrl(src)) {
+          failures.push({ url: src.slice(0, 200), reason: 'not-allowlisted' });
+          if (recorder) recorder.record({ lvl: 'WARN', event: 'asset.skip.not_allowed', module: 'export', phase: 'assets', parentEventId, details: { url: src.slice(0, 100) } });
+          continue;
+        }
+        let blob;
+        if (/^data:image\//i.test(src)) {
+          // Data URL — decode directly
+          const parts = src.split(',');
+          const mimeMatch = src.match(/^data:(image\/[^;]+)/);
+          const mime = mimeMatch ? mimeMatch[1] : 'image/png';
+          const bin = atob(parts[1] || '');
+          const arr = new Uint8Array(bin.length);
+          for (let j = 0; j < bin.length; j++) arr[j] = bin.charCodeAt(j);
+          blob = new Blob([arr], { type: mime });
+        } else {
+          // Try content-script fetch (page context with session cookies)
+          try {
+            const resp = await new Promise((resolve, reject) => {
+              chrome.tabs.sendMessage(activeTabId, { action: 'FETCH_FILE', url: src }, (r) => {
+                if (chrome.runtime.lastError || !r?.ok) reject(new Error(r?.error || 'content-script fetch failed'));
+                else resolve(r);
+              });
+            });
+            const bin = atob(resp.data);
+            const arr = new Uint8Array(bin.length);
+            for (let j = 0; j < bin.length; j++) arr[j] = bin.charCodeAt(j);
+            blob = new Blob([arr], { type: resp.mime || 'application/octet-stream' });
+          } catch {
+            // Fallback: direct fetch from popup
+            blob = await fetch(src).then((r) => r.blob());
+          }
+        }
+        const ext = (blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg').replace('svg+xml', 'svg');
+        const fullName = `${assetName}.${sanitizeAssetPath(ext)}`;
+        const data = new Uint8Array(await blob.arrayBuffer());
+        assetFiles.push({ name: fullName, content: data, mime: blob.type || 'application/octet-stream' });
+        urlMap.set(src, fullName);
+        if (recorder) recorder.record({ event: 'asset.resolved', module: 'export', phase: 'assets', result: 'ok', parentEventId, details: { index: idx, size: data.length } });
+        idx++;
+      } catch (err) {
+        failures.push({ url: src.slice(0, 200), reason: (err?.message || 'fetch-failed').slice(0, 100) });
+        if (recorder) recorder.record({ lvl: 'WARN', event: 'asset.fetch.fail', module: 'export', phase: 'assets', result: 'fail', parentEventId, details: { url: src.slice(0, 100), error: (err?.message || '').slice(0, 100) } });
+      }
+    }
+
+    // Resolve chat files
+    for (const file of fileSources) {
+      if (urlMap.has(file.url)) continue;
+      const safeName = sanitizeAssetPath(file.name);
+      const assetName = `assets/${String(idx).padStart(3, '0')}_${safeName}`;
+      try {
+        if (!isAllowedAssetUrl(file.url) && !/^https?:\/\//i.test(file.url)) {
+          failures.push({ url: file.url.slice(0, 200), reason: 'not-allowlisted' });
+          continue;
+        }
+        let blob;
+        try {
+          const resp = await new Promise((resolve, reject) => {
+            chrome.tabs.sendMessage(activeTabId, { action: 'FETCH_FILE', url: file.url }, (r) => {
+              if (chrome.runtime.lastError || !r?.ok) reject(new Error(r?.error || 'content-script fetch failed'));
+              else resolve(r);
+            });
+          });
+          const bin = atob(resp.data);
+          const arr = new Uint8Array(bin.length);
+          for (let j = 0; j < bin.length; j++) arr[j] = bin.charCodeAt(j);
+          blob = new Blob([arr], { type: resp.mime || 'application/octet-stream' });
+        } catch {
+          blob = await fetch(file.url).then((r) => r.blob());
+        }
+        const ext = (blob.type.split('/')[1] || 'bin').replace('jpeg', 'jpg');
+        const fullName = assetName.includes('.') ? assetName : `${assetName}.${ext}`;
+        const data = new Uint8Array(await blob.arrayBuffer());
+        assetFiles.push({ name: fullName, content: data, mime: blob.type || 'application/octet-stream' });
+        urlMap.set(file.url, fullName);
+        idx++;
+      } catch (err) {
+        failures.push({ url: file.url.slice(0, 200), reason: (err?.message || 'fetch-failed').slice(0, 100) });
+      }
+    }
+
+    // Asset manifest
+    const assetManifest = {
+      schema: 'asset-manifest.v1',
+      resolved: urlMap.size,
+      failed: failures.length,
+      total: imageSources.length + fileSources.length,
+      failures,
+    };
+    assetFiles.push({ name: 'assets/asset_manifest.json', content: JSON.stringify(assetManifest, null, 2), mime: 'application/json' });
+
+    return { assetFiles, urlMap, failures };
+  }
+
+  /**
+   * Replace image/file URLs in content with local asset paths (for ZIP export).
+   */
+  function rewriteContentWithLocalAssets(content, urlMap) {
+    if (!urlMap || urlMap.size === 0) return content;
+    let result = content;
+    for (const [originalUrl, localPath] of urlMap) {
+      // Replace in [[IMG:...]] tokens
+      result = result.split(originalUrl).join(localPath);
+    }
+    return result;
+  }
+
+  function renderRichMessageHtmlWithAssets(content, urlMap) {
+    const rewritten = urlMap ? rewriteContentWithLocalAssets(content, urlMap) : content;
+    const parts = splitContentAndImages(rewritten || '');
+    return parts.map((part) => {
+      if (part.type === 'image') {
+        const src = (part.value || '').trim();
+        if (!src) return '';
+        // For local asset paths, use relative path; for data URIs / URLs, use as-is
+        const safeSrc = /^(data:|https?:\/\/)/.test(src) ? normalizeImageSrc(src) : escapeHtml(src);
+        if (!safeSrc) return '';
+        return `<img src="${safeSrc}" alt="Image" style="max-width:100%;height:auto;display:block;margin:12px 0;border-radius:6px;">`;
+      }
+      return escapeHtml(part.value || '').replace(/\n/g, '<br>');
+    }).join('');
+  }
+
+  async function generateContent(fmt, data, urlMap) {
     const msgs = data.messages || [];
     const title = data.title || 'Export';
+    const platform = data.platform || 'Unknown';
+    const exportDate = new Date().toISOString();
 
     if (fmt === 'pdf') {
-      const pdf = await buildRichPdf(title, msgs);
+      // Use canvas PDF for Unicode content (Arabic, Persian, CJK, etc.)
+      // Fall back to text PDF for ASCII-only content (smaller file size)
+      const allText = msgs.map((m) => m.content || '').join(' ');
+      const needsCanvasPdf = hasNonLatinChars(allText) || extractAllImageSources(msgs).length > 0;
+      const pdf = needsCanvasPdf ? await buildCanvasPdf(title, msgs) : buildTextPdf(title, msgs);
       return { content: pdf, mime: 'application/pdf' };
     }
 
-    if (fmt === 'doc' || fmt === 'html') {
+    if (fmt === 'doc') {
+      // Word-compatible HTML document (.doc extension opens in Word/LibreOffice)
+      // D6: Use local asset paths when available (ZIP export)
       const style = 'body{font-family:Arial,sans-serif;max-width:900px;margin:auto;padding:20px;line-height:1.6}img{max-width:100%;height:auto}.msg{margin-bottom:20px;padding:12px;border:1px solid #e5e7eb;border-radius:8px}.role{font-weight:700;margin-bottom:8px}';
+      const renderFn = urlMap ? (c) => renderRichMessageHtmlWithAssets(c, urlMap) : renderRichMessageHtml;
       const body = msgs.map((m) => {
-        return `<div class="msg"><div class="role">${escapeHtml(m.role)}</div><div>${renderRichMessageHtml(m.content)}</div></div>`;
+        return `<div class="msg"><div class="role">${escapeHtml(m.role)}</div><div>${renderFn(m.content)}</div></div>`;
+      }).join('');
+      const html = `<!DOCTYPE html><html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>${style}</style></head><body><h1>${escapeHtml(title)}</h1>${body}</body></html>`;
+      return { content: html, mime: 'application/msword', ext: 'doc' };
+    }
+
+    if (fmt === 'html') {
+      // D6: Use local asset paths when available (ZIP export)
+      const style = 'body{font-family:Arial,sans-serif;max-width:900px;margin:auto;padding:20px;line-height:1.6}img{max-width:100%;height:auto}.msg{margin-bottom:20px;padding:12px;border:1px solid #e5e7eb;border-radius:8px}.role{font-weight:700;margin-bottom:8px}';
+      const renderFn = urlMap ? (c) => renderRichMessageHtmlWithAssets(c, urlMap) : renderRichMessageHtml;
+      const body = msgs.map((m) => {
+        return `<div class="msg"><div class="role">${escapeHtml(m.role)}</div><div>${renderFn(m.content)}</div></div>`;
       }).join('');
       const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><style>${style}</style></head><body><h1>${escapeHtml(title)}</h1>${body}</body></html>`;
-      return { content: html, mime: fmt === 'doc' ? 'application/msword' : 'text/html' };
+      return { content: html, mime: 'text/html' };
     }
 
-    if (fmt === 'json') return { content: JSON.stringify({ platform: data.platform, messages: msgs.map((m) => ({ role: m.role, content: stripImageTokens(m.content).replace(/\n/g, ' ') })) }, null, 2), mime: 'application/json' };
-    if (fmt === 'csv') return { content: '\uFEFFRole,Content\n' + msgs.map((m) => `"${m.role.replace(/"/g, '""')}","${stripImageTokens(m.content).replace(/"/g, '""').replace(/\n/g, ' ')}"`).join('\n'), mime: 'text/csv' };
-    if (fmt === 'sql') return { content: 'CREATE TABLE chat_export (id SERIAL PRIMARY KEY, role VARCHAR(50), content TEXT);\n' + msgs.map((m) => `INSERT INTO chat_export (role, content) VALUES ('${m.role.replace(/'/g, "''")}', '${stripImageTokens(m.content).replace(/'/g, "''")}');`).join('\n'), mime: 'application/sql' };
-    if (fmt === 'txt') return { content: msgs.map((m) => `[${m.role}] ${stripImageTokens(m.content).replace(/\n/g, ' ')}`).join('\n'), mime: 'text/plain' };
-    return { content: msgs.map((m) => `### ${m.role}\n${m.content}\n`).join('\n'), mime: 'text/markdown' };
+    if (fmt === 'json') return { content: JSON.stringify({ schema: 'chat-export.v1', platform, exported_at: exportDate, title, messages: msgs.map((m, i) => ({ index: i, role: m.role, content: stripImageTokens(m.content) })) }, null, 2), mime: 'application/json' };
+    if (fmt === 'csv') {
+      const header = '\uFEFFIndex,Role,Platform,Content,ExportedAt';
+      const rows = msgs.map((m, i) => `${i},"${m.role.replace(/"/g, '""')}","${platform.replace(/"/g, '""')}","${stripImageTokens(m.content).replace(/"/g, '""').replace(/\n/g, ' ')}","${exportDate}"`);
+      return { content: `${header}\n${rows.join('\n')}`, mime: 'text/csv' };
+    }
+    if (fmt === 'sql') return { content: `CREATE TABLE chat_export (id SERIAL PRIMARY KEY, msg_index INT, role VARCHAR(50), platform VARCHAR(100), content TEXT, exported_at TIMESTAMP);\n` + msgs.map((m, i) => `INSERT INTO chat_export (msg_index, role, platform, content, exported_at) VALUES (${i}, '${m.role.replace(/'/g, "''")}', '${platform.replace(/'/g, "''")}', '${stripImageTokens(m.content).replace(/'/g, "''")}', '${exportDate}');`).join('\n'), mime: 'application/sql' };
+    if (fmt === 'txt') return { content: msgs.map((m, i) => `[${i}] [${m.role}] ${stripImageTokens(m.content)}`).join('\n\n'), mime: 'text/plain' };
+    // Markdown: rewrite image URLs to local asset paths if available
+    const mdContent = msgs.map((m) => {
+      const content = urlMap ? rewriteContentWithLocalAssets(m.content, urlMap) : m.content;
+      return `### ${m.role}\n${content}\n`;
+    }).join('\n');
+    return { content: mdContent, mime: 'text/markdown' };
   }
 
-  async function buildRichPdf(title, messages) {
-    const pageWidth = 1240;
-    const pageHeight = 1754;
-    const margin = 56;
-    const pageDataUrls = [];
+  /**
+   * Build PDF using canvas rendering for full Unicode + image support.
+   * Each page is rendered as a high-resolution canvas image embedded in PDF.
+   * This approach supports Arabic, Persian, CJK, and all Unicode scripts
+   * natively through the browser's font rendering engine.
+   */
+  async function buildCanvasPdf(title, messages) {
+    const PAGE_W = 595; // A4 points
+    const PAGE_H = 842;
+    const SCALE = 2; // retina-quality rendering
+    const MARGIN = 40;
+    const FONT_SIZE = 11;
+    const TITLE_SIZE = 18;
+    const ROLE_SIZE = 13;
+    const LINE_HEIGHT = FONT_SIZE * 1.5;
+    const CONTENT_W = PAGE_W - (MARGIN * 2);
+    const CONTENT_H = PAGE_H - (MARGIN * 2);
+    const MAX_IMG_H = 200; // max image height per page in points
 
-    let canvas = document.createElement('canvas');
-    canvas.width = pageWidth;
-    canvas.height = pageHeight;
-    let ctx = canvas.getContext('2d');
-    let y = margin;
+    const canvas = document.createElement('canvas');
+    canvas.width = PAGE_W * SCALE;
+    canvas.height = PAGE_H * SCALE;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(SCALE, SCALE);
 
-    const resetPage = () => {
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(0, 0, pageWidth, pageHeight);
-      ctx.textBaseline = 'top';
-      y = margin;
-    };
+    const pageImages = []; // each entry is a PNG data URL
+    let cursorY = MARGIN;
 
-    const pushPage = () => {
-      pageDataUrls.push(canvas.toDataURL('image/jpeg', 0.92));
-      canvas = document.createElement('canvas');
-      canvas.width = pageWidth;
-      canvas.height = pageHeight;
-      ctx = canvas.getContext('2d');
-      resetPage();
-    };
+    function detectTextDir(text) {
+      if (/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF\u0590-\u05FF]/.test(text)) return 'rtl';
+      return 'ltr';
+    }
 
-    const ensureSpace = (need) => {
-      if (y + need <= pageHeight - margin) return;
-      pushPage();
-    };
+    function newPage() {
+      if (cursorY > MARGIN) {
+        pageImages.push(canvas.toDataURL('image/png'));
+      }
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, PAGE_W, PAGE_H);
+      cursorY = MARGIN;
+    }
 
-    const drawTextBlock = (text, font, color = '#111111', lineHeight = 28, maxChars = 90) => {
-    const normalized = String(text || '').replace(/\r/g, '').trim();
-      if (!normalized) return;
-      const profile = detectScriptProfile(normalized);
-      const lines = wrapLineSmart(normalized, maxChars, profile);
+    function ensureSpace(needed) {
+      if (cursorY + needed > PAGE_H - MARGIN) {
+        newPage();
+      }
+    }
+
+    function wrapTextForCanvas(text, maxWidth, font) {
       ctx.font = font;
-      ctx.fillStyle = color;
-      ctx.direction = profile.isRtl ? 'rtl' : 'ltr';
-      ctx.textAlign = profile.isRtl ? 'right' : 'left';
-      const x = profile.isRtl ? pageWidth - margin : margin;
-      for (const line of lines) {
-        ensureSpace(lineHeight + 4);
-        ctx.fillText(line, x, y);
-        y += lineHeight;
-      }
-      ctx.direction = 'ltr';
-      ctx.textAlign = 'left';
-    };
-
-    resetPage();
-    drawTextBlock(title, 'bold 36px "Noto Sans", "Segoe UI", "Arial Unicode MS", Tahoma, Arial, sans-serif', '#111827', 40, 64);
-    y += 8;
-
-    for (const message of messages) {
-      drawTextBlock(`[${message.role}]`, 'bold 26px "Noto Sans", "Segoe UI", Arial, sans-serif', '#1D4ED8', 32, 64);
-      const parts = splitContentAndImages(message.content);
-      for (const part of parts) {
-        if (part.type === 'text') {
-          drawTextBlock(stripImageTokens(part.value), '24px "Noto Sans Arabic", "Noto Sans CJK SC", "Noto Sans", "Arial Unicode MS", Tahoma, Arial, sans-serif', '#111111', 30, 88);
-          continue;
+      const words = text.split(/\s+/);
+      const lines = [];
+      let line = '';
+      for (const word of words) {
+        const test = line ? `${line} ${word}` : word;
+        if (ctx.measureText(test).width > maxWidth && line) {
+          lines.push(line);
+          line = word;
+        } else {
+          line = test;
         }
-        const src = normalizeImageSrc((part.value || '').trim());
-        if (!src) continue;
-        const img = await loadImage(src);
-        if (!img) continue;
-        const maxW = pageWidth - margin * 2;
-        const w = Math.min(maxW, img.width || maxW);
-        const h = Math.max(36, Math.round((img.height / Math.max(img.width, 1)) * w));
-        ensureSpace(h + 14);
-        ctx.drawImage(img, margin, y, w, h);
-        y += h + 12;
       }
-      y += 10;
+      if (line) lines.push(line);
+      return lines.length ? lines : [''];
     }
 
-    pageDataUrls.push(canvas.toDataURL('image/jpeg', 0.92));
-    return buildPdfFromJpegPages(pageDataUrls, pageWidth, pageHeight);
+    function drawText(text, fontSize, bold, color) {
+      if (!text) return;
+      const dir = detectTextDir(text);
+      const font = `${bold ? 'bold ' : ''}${fontSize}px -apple-system, "Segoe UI", Roboto, "Noto Sans", "Noto Sans Arabic", "Noto Sans CJK SC", Arial, sans-serif`;
+      ctx.font = font;
+      ctx.fillStyle = color || '#111827';
+      ctx.textAlign = dir === 'rtl' ? 'right' : 'left';
+      const xPos = dir === 'rtl' ? PAGE_W - MARGIN : MARGIN;
+
+      const rawLines = text.split('\n');
+      for (const rawLine of rawLines) {
+        const wrapped = wrapTextForCanvas(rawLine, CONTENT_W, font);
+        for (const wl of wrapped) {
+          ensureSpace(fontSize + 4);
+          ctx.fillText(wl, xPos, cursorY + fontSize);
+          cursorY += fontSize + 4;
+        }
+      }
+      ctx.textAlign = 'left'; // reset
+    }
+
+    async function drawImage(src) {
+      if (!src) return;
+      try {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+          img.src = src;
+          setTimeout(reject, 5000); // 5s timeout
+        });
+        const aspect = img.width / Math.max(1, img.height);
+        let drawW = Math.min(CONTENT_W, img.width);
+        let drawH = drawW / aspect;
+        if (drawH > MAX_IMG_H) {
+          drawH = MAX_IMG_H;
+          drawW = drawH * aspect;
+        }
+        ensureSpace(drawH + 10);
+        ctx.drawImage(img, MARGIN, cursorY, drawW, drawH);
+        cursorY += drawH + 10;
+      } catch {
+        // Image failed to load — draw placeholder
+        ensureSpace(20);
+        ctx.fillStyle = '#9ca3af';
+        ctx.font = `italic 9px Arial, sans-serif`;
+        ctx.fillText('[Image could not be embedded]', MARGIN, cursorY + 10);
+        cursorY += 20;
+        ctx.fillStyle = '#111827';
+      }
+    }
+
+    // Start first page
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, PAGE_W, PAGE_H);
+
+    // Title
+    drawText(title || 'Chat Export', TITLE_SIZE, true, '#1e3a5f');
+    cursorY += 8;
+
+    // Render messages
+    for (const m of messages) {
+      ensureSpace(LINE_HEIGHT * 2);
+
+      // Role header with colored background
+      const roleColor = /user/i.test(m.role) ? '#2563eb' : '#059669';
+      ctx.fillStyle = roleColor + '15'; // light bg
+      ctx.fillRect(MARGIN - 4, cursorY - 2, CONTENT_W + 8, ROLE_SIZE + 8);
+      drawText(`[${m.role}]`, ROLE_SIZE, true, roleColor);
+      cursorY += 4;
+
+      // Split content into text and image parts
+      const parts = splitContentAndImages(m.content || '');
+      for (const part of parts) {
+        if (part.type === 'image') {
+          await drawImage(normalizeImageSrc(part.value));
+        } else {
+          const clean = stripHtmlTags(part.value || '');
+          if (clean.trim()) drawText(clean, FONT_SIZE, false, '#111827');
+        }
+      }
+
+      cursorY += 12; // spacing between messages
+    }
+
+    // Capture final page
+    if (cursorY > MARGIN) {
+      pageImages.push(canvas.toDataURL('image/png'));
+    }
+
+    // Assemble PDF from page images
+    return assemblePdfFromImages(pageImages, PAGE_W, PAGE_H);
   }
 
-  function detectScriptProfile(text) {
-    const s = String(text || '');
+  /**
+   * Assemble a PDF from page images (PNG data URLs).
+   * Each image becomes a full page in the PDF.
+   */
+  function assemblePdfFromImages(pageDataUrls, pageW, pageH) {
+    const objects = [];
+    // obj 1: catalog
+    objects[1] = `1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n`;
+
+    const kids = [];
+    let objNum = 3;
+
+    for (const dataUrl of pageDataUrls) {
+      // Extract raw PNG data from data URL
+      const base64 = dataUrl.split(',')[1] || '';
+      const binaryStr = atob(base64);
+      const imgBytes = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) imgBytes[i] = binaryStr.charCodeAt(i);
+
+      // Parse PNG to get dimensions
+      const pngInfo = parsePngInfo(imgBytes);
+      const imgObjNum = objNum;
+      const pageObjNum = objNum + 1;
+      const contentObjNum = objNum + 2;
+
+      // Image XObject (DCTDecode for JPEG or FlateDecode for PNG)
+      // We'll use raw PNG in the PDF via inline image or XObject
+      // Simpler approach: embed as ASCII85 or just base64 with stream
+      const imgStream = imgBytes;
+      objects[imgObjNum] = buildPdfImageObject(imgObjNum, imgStream, pngInfo.width, pngInfo.height);
+
+      // Content stream: draw image to fill page
+      const contentStr = `q ${pageW} 0 0 ${pageH} 0 0 cm /Img${imgObjNum} Do Q`;
+      objects[contentObjNum] = `${contentObjNum} 0 obj\n<< /Length ${contentStr.length} >>\nstream\n${contentStr}\nendstream\nendobj\n`;
+
+      // Page object
+      objects[pageObjNum] = `${pageObjNum} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageW} ${pageH}] /Resources << /XObject << /Img${imgObjNum} ${imgObjNum} 0 R >> >> /Contents ${contentObjNum} 0 R >>\nendobj\n`;
+
+      kids.push(`${pageObjNum} 0 R`);
+      objNum += 3;
+    }
+
+    // obj 2: pages
+    objects[2] = `2 0 obj\n<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${pageDataUrls.length} >>\nendobj\n`;
+
+    // Serialize
+    const enc = new TextEncoder();
+    const header = enc.encode('%PDF-1.4\n');
+    const chunks = [header];
+    const offsets = [0];
+    let offset = header.length;
+
+    for (let i = 1; i < objects.length; i++) {
+      if (!objects[i]) continue;
+      offsets[i] = offset;
+      if (typeof objects[i] === 'string') {
+        const bytes = enc.encode(objects[i]);
+        chunks.push(bytes);
+        offset += bytes.length;
+      } else {
+        // Binary object (image)
+        chunks.push(objects[i]);
+        offset += objects[i].length;
+      }
+    }
+
+    const maxObj = objects.length - 1;
+    const xrefStart = offset;
+    let xref = `xref\n0 ${maxObj + 1}\n0000000000 65535 f \n`;
+    for (let i = 1; i <= maxObj; i++) {
+      xref += `${String(offsets[i] || 0).padStart(10, '0')} 00000 n \n`;
+    }
+    chunks.push(enc.encode(xref));
+    chunks.push(enc.encode(`trailer\n<< /Size ${maxObj + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`));
+
+    const total = chunks.reduce((a, b) => a + b.length, 0);
+    const out = new Uint8Array(total);
+    let pos = 0;
+    for (const chunk of chunks) {
+      out.set(chunk, pos);
+      pos += chunk.length;
+    }
+    return out;
+  }
+
+  function parsePngInfo(bytes) {
+    // PNG header: width at offset 16, height at offset 20 (big-endian 4 bytes each)
+    if (bytes[0] === 0x89 && bytes[1] === 0x50) {
+      const width = (bytes[16] << 24) | (bytes[17] << 16) | (bytes[18] << 8) | bytes[19];
+      const height = (bytes[20] << 24) | (bytes[21] << 16) | (bytes[22] << 8) | bytes[23];
+      return { width, height };
+    }
+    return { width: 595, height: 842 }; // fallback A4
+  }
+
+  function buildPdfImageObject(objNum, pngBytes, width, height) {
+    // Build a PDF image XObject from raw PNG data
+    // Use /Filter /FlateDecode with the raw deflated IDAT chunks
+    // Simpler approach: use /Filter /DCTDecode with JPEG, but we have PNG
+    // Most practical: use raw RGB stream from PNG
+    // For maximum compatibility, we'll embed as ASCII hex encoded stream
+    const hexStream = Array.from(pngBytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+    const header = `${objNum} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /ASCIIHexDecode /Length ${hexStream.length + 1} >>\nstream\n`;
+    const footer = `>\nendstream\nendobj\n`;
+
+    const enc = new TextEncoder();
+    const headerBytes = enc.encode(header);
+    const hexBytes = enc.encode(hexStream);
+    const footerBytes = enc.encode(footer);
+
+    const total = headerBytes.length + hexBytes.length + footerBytes.length;
+    const result = new Uint8Array(total);
+    result.set(headerBytes, 0);
+    result.set(hexBytes, headerBytes.length);
+    result.set(footerBytes, headerBytes.length + hexBytes.length);
+    return result;
+  }
+
+  // Legacy text-based PDF builder (kept as fallback for ASCII-only content)
+  function buildTextPdf(title, messages) {
+    const PAGE_W = 595;
+    const PAGE_H = 842;
+    const MARGIN = 50;
+    const FONT_SIZE = 10;
+    const TITLE_SIZE = 16;
+    const ROLE_SIZE = 12;
+    const LINE_HEIGHT = 14;
+    const MAX_CHARS = 85;
+
+    const pages = [];
+    let currentPage = [];
+    let cursorY = PAGE_H - MARGIN;
+
+    function ensureSpace(needed) {
+      if (cursorY - needed < MARGIN) {
+        pages.push(currentPage);
+        currentPage = [];
+        cursorY = PAGE_H - MARGIN;
+      }
+    }
+
+    function addLine(text, fontSize = FONT_SIZE, bold = false) {
+      const cleaned = pdfEscapeText(text);
+      if (!cleaned) return;
+      ensureSpace(fontSize + 4);
+      const fontName = bold ? '/F2' : '/F1';
+      currentPage.push(`BT ${fontName} ${fontSize} Tf ${MARGIN} ${cursorY.toFixed(1)} Td (${cleaned}) Tj ET`);
+      cursorY -= (fontSize + 4);
+    }
+
+    function addWrappedText(text, fontSize = FONT_SIZE, bold = false) {
+      const clean = stripHtmlTags(stripImageTokens(text));
+      const lines = wrapLineSmart(clean, MAX_CHARS);
+      for (const line of lines) {
+        addLine(line, fontSize, bold);
+      }
+    }
+
+    addLine(title || 'Chat Export', TITLE_SIZE, true);
+    cursorY -= 10;
+
+    for (const m of messages) {
+      ensureSpace(LINE_HEIGHT * 3);
+      addLine(`[${m.role}]`, ROLE_SIZE, true);
+      addWrappedText(m.content || '', FONT_SIZE, false);
+      cursorY -= 8;
+    }
+
+    pages.push(currentPage);
+    return assemblePdfDocument(pages, PAGE_W, PAGE_H);
+  }
+
+  /**
+   * Strip HTML tags from text, preserving content.
+   */
+  function stripHtmlTags(text) {
+    return String(text || '')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/(p|div|li|h[1-6])>/gi, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#0?39;/g, "'")
+      .replace(/&nbsp;/g, ' ');
+  }
+
+  /**
+   * Detect if text contains non-Latin characters (Arabic, Persian, CJK, etc.)
+   */
+  function hasNonLatinChars(text) {
+    // eslint-disable-next-line no-control-regex
+    return /[^\x00-\x7F\xA0-\xFF]/.test(text);
+  }
+
+  function pdfEscapeText(text) {
+    return String(text || '')
+      // Strip any HTML tags that leaked through
+      .replace(/<[^>]+>/g, '')
+      .replace(/\\/g, '\\\\')
+      .replace(/\(/g, '\\(')
+      .replace(/\)/g, '\\)')
+      // Keep printable ASCII + common Latin-1 supplement (accented chars)
+      // Replace non-Latin chars with ? (Type1 Helvetica limitation)
+      .replace(/[^\x20-\x7E\xA0-\xFF\\()]/g, '?')
+      .trim();
+  }
+
+  function assemblePdfDocument(pages, pageW, pageH) {
+    const objects = [];
+
+    // obj 1: catalog
+    objects[1] = `1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n`;
+
+    // obj 3: Helvetica font
+    objects[3] = `3 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj\n`;
+
+    // obj 4: Helvetica-Bold font
+    objects[4] = `4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>\nendobj\n`;
+
+    // Resources shared by all pages
+    const resourcesRef = '<< /Font << /F1 3 0 R /F2 4 0 R >> >>';
+
+    // Build page objects
+    const kids = [];
+    let objNum = 5;
+    const pageDefs = [];
+
+    for (const ops of pages) {
+      const pageObj = objNum;
+      const contentObj = objNum + 1;
+      kids.push(`${pageObj} 0 R`);
+
+      const stream = ops.join('\n');
+      objects[contentObj] = `${contentObj} 0 obj\n<< /Length ${stream.length} >>\nstream\n${stream}\nendstream\nendobj\n`;
+      objects[pageObj] = `${pageObj} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageW} ${pageH}] /Resources ${resourcesRef} /Contents ${contentObj} 0 R >>\nendobj\n`;
+
+      pageDefs.push({ pageObj, contentObj });
+      objNum += 2;
+    }
+
+    // obj 2: pages
+    objects[2] = `2 0 obj\n<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${pages.length} >>\nendobj\n`;
+
+    // Serialize
+    const enc = new TextEncoder();
+    const header = enc.encode('%PDF-1.4\n');
+    const chunks = [header];
+    const offsets = [0];
+    let offset = header.length;
+
+    for (let i = 1; i < objects.length; i++) {
+      if (!objects[i]) continue;
+      offsets[i] = offset;
+      const bytes = enc.encode(objects[i]);
+      chunks.push(bytes);
+      offset += bytes.length;
+    }
+
+    const maxObj = objects.length - 1;
+    const xrefStart = offset;
+    let xref = `xref\n0 ${maxObj + 1}\n0000000000 65535 f \n`;
+    for (let i = 1; i <= maxObj; i++) {
+      xref += `${String(offsets[i] || 0).padStart(10, '0')} 00000 n \n`;
+    }
+    chunks.push(enc.encode(xref));
+    chunks.push(enc.encode(`trailer\n<< /Size ${maxObj + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`));
+
+    // Concatenate
+    const total = chunks.reduce((a, b) => a + b.length, 0);
+    const out = new Uint8Array(total);
+    let pos = 0;
+    for (const chunk of chunks) {
+      out.set(chunk, pos);
+      pos += chunk.length;
+    }
+    return out;
+  }
+
+  function _unused_detectScriptProfile() {
+    const s = String('');
     const isRtl = /[֐-ࣿיִ-﷽ﹰ-ﻼ]/.test(s);
     const isCjk = /[぀-ヿ㐀-鿿豈-﫿]/.test(s);
     return { isRtl, isCjk };
@@ -557,93 +1472,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (lastIndex < (content || '').length) parts.push({ type: 'text', value: (content || '').slice(lastIndex) });
     if (!parts.length) parts.push({ type: 'text', value: content || '' });
     return parts;
-  }
-
-  function loadImage(src) {
-    return new Promise((resolve) => {
-      const img = new Image();
-      if (!src.startsWith('data:')) img.crossOrigin = 'anonymous';
-      img.onload = () => resolve(img);
-      img.onerror = () => resolve(null);
-      img.src = src;
-    });
-  }
-
-  function buildPdfFromJpegPages(pageDataUrls, widthPx, heightPx) {
-    const pointsPerPx = 0.75;
-    const w = Math.round(widthPx * pointsPerPx);
-    const h = Math.round(heightPx * pointsPerPx);
-    const objects = [];
-
-    objects[1] = toBytes('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n');
-    const kids = [];
-    let objNum = 3;
-    const pageDefs = [];
-    for (let i = 0; i < pageDataUrls.length; i += 1) {
-      const pageObj = objNum;
-      const contentObj = objNum + 1;
-      const imageObj = objNum + 2;
-      kids.push(`${pageObj} 0 R`);
-      pageDefs.push({ pageObj, contentObj, imageObj, dataUrl: pageDataUrls[i], index: i + 1 });
-      objNum += 3;
-    }
-    objects[2] = toBytes(`2 0 obj\n<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${pageDefs.length} >>\nendobj\n`);
-
-    for (const def of pageDefs) {
-      const stream = `q\n${w} 0 0 ${h} 0 0 cm\n/Im${def.index} Do\nQ`;
-      const jpgBytes = dataUrlToBytes(def.dataUrl);
-      objects[def.pageObj] = toBytes(
-        `${def.pageObj} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${w} ${h}] /Resources << /XObject << /Im${def.index} ${def.imageObj} 0 R >> >> /Contents ${def.contentObj} 0 R >>\nendobj\n`
-      );
-      objects[def.contentObj] = toBytes(`${def.contentObj} 0 obj\n<< /Length ${stream.length} >>\nstream\n${stream}\nendstream\nendobj\n`);
-      objects[def.imageObj] = concatBytes(
-        toBytes(`${def.imageObj} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${widthPx} /Height ${heightPx} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpgBytes.length} >>\nstream\n`),
-        jpgBytes,
-        toBytes('\nendstream\nendobj\n')
-      );
-    }
-
-    const valid = [];
-    for (let i = 1; i < objects.length; i += 1) if (objects[i]) valid.push({ idx: i, bytes: objects[i] });
-
-    const chunks = [toBytes('%PDF-1.4\n')];
-    const offsets = [0];
-    let offset = chunks[0].length;
-    for (const obj of valid) {
-      offsets[obj.idx] = offset;
-      chunks.push(obj.bytes);
-      offset += obj.bytes.length;
-    }
-    const xrefStart = offset;
-    const maxObj = valid[valid.length - 1].idx;
-    let xref = `xref\n0 ${maxObj + 1}\n0000000000 65535 f \n`;
-    for (let i = 1; i <= maxObj; i += 1) xref += `${String(offsets[i] || 0).padStart(10, '0')} 00000 n \n`;
-    chunks.push(toBytes(xref));
-    chunks.push(toBytes(`trailer\n<< /Size ${maxObj + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`));
-    return concatBytes(...chunks);
-  }
-
-  function toBytes(text) {
-    return new TextEncoder().encode(text);
-  }
-
-  function dataUrlToBytes(dataUrl) {
-    const b64 = (dataUrl.split(',')[1] || '');
-    const raw = atob(b64);
-    const out = new Uint8Array(raw.length);
-    for (let i = 0; i < raw.length; i += 1) out[i] = raw.charCodeAt(i);
-    return out;
-  }
-
-  function concatBytes(...arrays) {
-    const total = arrays.reduce((a, b) => a + b.length, 0);
-    const out = new Uint8Array(total);
-    let pos = 0;
-    for (const arr of arrays) {
-      out.set(arr, pos);
-      pos += arr.length;
-    }
-    return out;
   }
 
   function wrapLineSmart(text, max, profile = { isRtl: false, isCjk: false }) {
@@ -739,7 +1567,40 @@ document.addEventListener('DOMContentLoaded', () => {
     return new Blob([...parts, ...cd, end], { type: 'application/zip' });
   }
 
+  // --- D) GestureToken enforcement ---
+  // Chrome loses user gesture context after first await. We use a time-windowed
+  // token: gesture is valid for 30s after user click (covers async export).
+  // permissions.request and chrome.downloads.download must be called
+  // synchronously in the click handler BEFORE any await.
+  let _gestureTokenTs = 0;
+  let _gestureTokenValid = false;
+  const GESTURE_TTL_MS = 30_000; // 30 seconds
+
+  function withGesture(fn) {
+    return async function (...args) {
+      // D) Issue gesture token synchronously in the click handler
+      _gestureTokenTs = Date.now();
+      _gestureTokenValid = true;
+      try { return await fn.apply(this, args); }
+      finally {
+        _gestureTokenValid = false;
+        _gestureTokenTs = 0;
+      }
+    };
+  }
+
+  function assertGesture(action) {
+    const elapsed = Date.now() - _gestureTokenTs;
+    if (!_gestureTokenValid || elapsed > GESTURE_TTL_MS) {
+      console.warn(`[GestureToken] Blocked ${action}: token expired (${elapsed}ms elapsed, TTL=${GESTURE_TTL_MS}ms).`);
+      _gestureTokenValid = false;
+      return false;
+    }
+    return true;
+  }
+
   function downloadBlob(blob, name) {
+    if (!assertGesture('downloadBlob')) return;
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -755,7 +1616,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-save-settings').onclick = () => {
     const settings = collectSettings();
     saveSettingsToStorage(settings);
-    exportSettingsCfg(settings);
     closeModal(settingsModal);
   };
   document.getElementById('btn-open-about').onclick = () => openModal(aboutModal);
@@ -764,6 +1624,68 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-close-about').onclick = document.getElementById('btn-ack-about').onclick = () => closeModal(aboutModal);
   document.getElementById('btn-close-error').onclick = () => closeModal(errorModal);
   document.getElementById('btn-close-preview').onclick = () => closeModal(document.getElementById('preview-modal'));
+
+  // debugMode toggle: debug mode controls verbose JSONL vs minimal diagnostics
+  // B) Diagnostics button is always visible (minimal diagnostics always captured)
+  if (checkDebugMode) {
+    checkDebugMode.addEventListener('change', () => {
+      console.log(`[DebugMode] ${checkDebugMode.checked ? 'ON (verbose JSONL)' : 'OFF (minimal summary)'}`);
+    });
+  }
+
+  // Forensic bundle export: 3-file download (diagnostics.jsonl, run_summary.json, asset_failures.json)
+  if (btnDownloadDiagnostics) {
+    btnDownloadDiagnostics.onclick = withGesture(async () => {
+      // D2: Try local cache first, then fall back to SW storage
+      if (!lastDiagnostics) {
+        try {
+          const swResp = await new Promise((resolve) => {
+            chrome.runtime.sendMessage({ action: 'GET_DIAGNOSTICS_JSONL' }, (r) => resolve(r));
+          });
+          if (swResp?.ok && swResp.diagnostics) lastDiagnostics = swResp.diagnostics;
+        } catch (_) { /* SW unavailable */ }
+      }
+      if (!lastDiagnostics) {
+        showInfo('No Diagnostics', 'No extraction or export has run yet. Navigate to a supported chat page and try again.');
+        return;
+      }
+      const date = new Date().toISOString().slice(0, 10);
+      const prefix = `${(currentChatData?.platform || 'Export').replace(/[^a-zA-Z0-9]/g, '')}_${date}`;
+
+      // File 1: diagnostics.jsonl (all flight recorder entries)
+      const jsonlContent = lastDiagnostics.entries.map((e) => JSON.stringify(e)).join('\n');
+      // File 2: run_summary.json (run metadata + scorecard)
+      const runSummary = {
+        schema_version: lastDiagnostics.schema_version,
+        run: lastDiagnostics.run,
+        tabScope: lastDiagnostics.tabScope,
+        counts: lastDiagnostics.counts,
+        scorecard: lastDiagnostics.scorecard,
+        entryCount: lastDiagnostics.entries.length,
+      };
+      // File 3: asset_failures.json
+      const assetFailures = {
+        failures: lastDiagnostics.failures || [],
+        failureCount: (lastDiagnostics.failures || []).length,
+      };
+
+      const bundleFiles = [
+        { name: `${prefix}.diagnostics.jsonl`, content: jsonlContent, mime: 'application/x-ndjson' },
+        { name: `${prefix}.run_summary.json`, content: JSON.stringify(runSummary, null, 2), mime: 'application/json' },
+        { name: `${prefix}.asset_failures.json`, content: JSON.stringify(assetFailures, null, 2), mime: 'application/json' },
+      ];
+
+      const zip = await createRobustZip(bundleFiles);
+      downloadBlob(zip, `${prefix}_diagnostics_bundle.zip`);
+    });
+  }
+
+  // Listen for extraction progress messages from content script
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.action === 'EXTRACTION_PROGRESS') {
+      setAnalyzeProgress(msg.percent, msg.label || 'Processing');
+    }
+  });
 
   safeInit();
 });

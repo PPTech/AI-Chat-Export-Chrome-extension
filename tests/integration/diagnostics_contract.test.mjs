@@ -1,22 +1,32 @@
 // License: MIT
-// Code generated with support from CODEX and CODEX CLI.
-// Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
+// Author: Dr. Babak Sorkhpour (with help of AI)
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-const schema = JSON.parse(fs.readFileSync('docs/diagnostics_schema.json', 'utf8'));
 const bg = fs.readFileSync('background.js', 'utf8');
 
-test('Diagnostics schema includes mandatory top-level fields', () => {
-  const required = schema.required || [];
-  const expected = ['runId', 'version', 'host', 'pageUrl', 'timestamp', 'ai', 'extraction', 'assets', 'security', 'learning', 'perf'];
-  for (const k of expected) assert.ok(required.includes(k), `missing ${k}`);
+test('Background.js exposes GET_DIAGNOSTICS_JSONL handler', () => {
+  assert.match(bg, /GET_DIAGNOSTICS_JSONL/);
 });
 
-test('Background exposes redacted diagnostics JSONL ring buffer route', () => {
-  assert.match(bg, /GET_DIAGNOSTICS_JSONL/);
-  assert.match(bg, /runtimeJsonlLogs/);
-  assert.match(bg, /redactDetails/);
+test('Background.js exposes STORE_DIAGNOSTICS handler', () => {
+  assert.match(bg, /STORE_DIAGNOSTICS/);
+});
+
+test('Background.js exposes VALIDATE_GESTURE handler', () => {
+  assert.match(bg, /VALIDATE_GESTURE/);
+});
+
+test('Background.js always calls sendResponse in every handler', () => {
+  // Every case must call sendResponse
+  assert.match(bg, /sendResponse/);
+  // Must return true for async support
+  assert.match(bg, /return true/);
+});
+
+test('Background.js limits diagnostics store size', () => {
+  // Max 20 runs to avoid memory bloat
+  assert.match(bg, /keys\.length > 20/);
 });

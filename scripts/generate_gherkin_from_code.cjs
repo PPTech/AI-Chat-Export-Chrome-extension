@@ -1,6 +1,5 @@
 // License: MIT
-// Code generated with support from CODEX and CODEX CLI.
-// Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
+// Author: Dr. Babak Sorkhpour (with help of AI)
 
 const fs = require('fs');
 

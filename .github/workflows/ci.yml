@@ -13,3 +13,20 @@ jobs:
           node-version: 20
       - run: npm ci
       - run: npm run build
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - name: Run contract tests
+        run: node --test tests/unit/*.test.mjs
+      - name: Verify claims gate
+        run: node scripts/verify_claims.mjs
+      - name: Compare exports quality gate
+        run: node scripts/compare_exports.cjs
+      - name: Verify version SSOT
+        run: node scripts/verify_version.cjs

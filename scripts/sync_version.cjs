@@ -1,38 +1,50 @@
+#!/usr/bin/env node
 // License: MIT
-// Code generated with support from CODEX and CODEX CLI.
-// Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// نویسنده دکتر بابک سرخپور با کمک ابزار چت جی پی تی.
+// Author: Dr. Babak Sorkhpour (with help of AI)
+// sync_version.cjs — Reads VERSION from lib/version.mjs (SSOT) and updates
+// manifest.json, package.json, and all runtime JS file headers.
+//
+// Usage: node scripts/sync_version.cjs
+// Verify: node scripts/verify_version.cjs
+
+'use strict';
 
 const fs = require('fs');
 const path = require('path');
 
-const versionFile = fs.readFileSync(path.join(process.cwd(), 'version.js'), 'utf8');
-const match = versionFile.match(/APP_VERSION\s*=\s*'([^']+)'/);
-if (!match) throw new Error('APP_VERSION not found in version.js');
+const root = path.join(__dirname, '..');
+
+// Read SSOT version from lib/version.mjs
+const versionSrc = fs.readFileSync(path.join(root, 'lib', 'version.mjs'), 'utf8');
+const match = versionSrc.match(/VERSION\s*=\s*'([^']+)'/);
+if (!match) {
+  console.error('FAIL: VERSION not found in lib/version.mjs');
+  process.exit(1);
+}
 const v = match[1];
 
-for (const p of ['manifest.json', 'VERSION.json', 'metadata.json', 'package.json']) {
-  const j = JSON.parse(fs.readFileSync(p, 'utf8'));
+// Update JSON files
+for (const p of ['manifest.json', 'package.json']) {
+  const fp = path.join(root, p);
+  if (!fs.existsSync(fp)) continue;
+  const j = JSON.parse(fs.readFileSync(fp, 'utf8'));
   j.version = v;
-  fs.writeFileSync(p, `${JSON.stringify(j, null, 2)}\n`);
+  fs.writeFileSync(fp, `${JSON.stringify(j, null, 2)}\n`);
+  console.log(`  Updated ${p} -> ${v}`);
 }
 
-const headerFiles = [
-  'script.js',
-  'background.js',
-  'content.js',
-  'offscreen.js',
-  'options.js',
-  'ai_engine.js',
-  'asset_processor.js',
-  'export_manager.js'
-];
+// Update version in JS file headers (// ... vX.Y.Z pattern)
+const headerFiles = ['script.js', 'background.js', 'content.js'];
 const versionLineRegex = /(\/\/\s*[^\n]*?\bv)(\d+\.\d+\.\d+)(\b[^\n]*)/;
 for (const file of headerFiles) {
-  if (!fs.existsSync(file)) continue;
-  const src = fs.readFileSync(file, 'utf8');
+  const fp = path.join(root, file);
+  if (!fs.existsSync(fp)) continue;
+  const src = fs.readFileSync(fp, 'utf8');
   const next = src.replace(versionLineRegex, `$1${v}$3`);
-  if (next !== src) fs.writeFileSync(file, next);
+  if (next !== src) {
+    fs.writeFileSync(fp, next);
+    console.log(`  Updated ${file} header -> v${v}`);
+  }
 }
 
 console.log(`Synchronized release version: ${v}`);

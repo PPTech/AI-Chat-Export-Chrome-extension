@@ -1,7 +1,6 @@
 // License: MIT
-// Code generated with support from CODEX and CODEX CLI.
-// Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
-// content.js - Platform Engine Orchestrator v0.10.10
+// Author: Dr. Babak Sorkhpour (with help of AI)
+// content.js - Platform Engine Orchestrator v0.11.0
 
 (() => {
   if (window.hasRunContent) return;
@@ -9,6 +8,109 @@
 
   const CHATGPT_ANALYSIS_KEY = 'CHATGPT_DOM_ANALYSIS';
 
+  // Progress reporting: sends extraction progress to popup and background
+  function reportProgress(percent, label, details = null) {
+    try {
+      chrome.runtime.sendMessage({
+        action: 'EXTRACTION_PROGRESS',
+        percent: Math.max(0, Math.min(100, Math.round(percent))),
+        label: label || 'Processing',
+        details: details || null,
+        timestamp: Date.now()
+      });
+    } catch (_) { /* popup may be closed */ }
+  }
+
+
+  // --- Gemini UI noise patterns to strip ---
+  const GEMINI_NOISE_PATTERNS = [
+    /^Show thinking$/im,
+    /^Show thinking\s*…?$/im,
+    /^Hide thinking$/im,
+    /^Thought for \d+ seconds?$/im,
+    /^Thinking…?$/im,
+    /^Edit$/im,
+    /^Copy$/im,
+    /^Copied$/im,
+    /^Share$/im,
+    /^More$/im,
+    /^Retry$/im,
+    /^Good response$/im,
+    /^Bad response$/im,
+    /^Modify response$/im,
+    /^Report legal issue$/im,
+    /^Google it$/im,
+    /^Double-check response$/im,
+  ];
+
+  /**
+   * D3: Split a single Gemini transcript block that contains both sides
+   * ("You said … Gemini said …") into separate user/assistant turns.
+   * Also strips UI noise like "Show thinking", button labels, etc.
+   */
+  function splitGeminiTranscriptBlock(rawText) {
+    if (!rawText || typeof rawText !== 'string') return [];
+    // Strip UI noise lines
+    let cleaned = rawText;
+    for (const pattern of GEMINI_NOISE_PATTERNS) {
+      cleaned = cleaned.replace(pattern, '');
+    }
+    // Normalize whitespace
+    cleaned = cleaned.replace(/\n{3,}/g, '\n\n').trim();
+    if (!cleaned) return [];
+
+    // Try to split on "You said" / "Gemini said" markers
+    // These markers appear when Gemini renders a combined transcript view
+    const markerRegex = /(?:^|\n)\s*(You said|Gemini said|Model said)\s*\n/gi;
+    const splits = [];
+    let lastIndex = 0;
+    let lastRole = null;
+    let match;
+
+    while ((match = markerRegex.exec(cleaned)) !== null) {
+      // Flush previous segment
+      if (lastIndex < match.index && lastRole !== null) {
+        const text = cleaned.slice(lastIndex, match.index).trim();
+        if (text) splits.push({ role: lastRole, text });
+      } else if (lastIndex < match.index && lastRole === null) {
+        // Text before any marker — could be standalone content
+        const text = cleaned.slice(lastIndex, match.index).trim();
+        if (text) splits.push({ role: 'unknown', text });
+      }
+      const markerLower = (match[1] || '').toLowerCase();
+      lastRole = markerLower.includes('you') ? 'user' : 'assistant';
+      lastIndex = match.index + match[0].length;
+    }
+
+    // Flush remaining text
+    if (lastIndex < cleaned.length) {
+      const text = cleaned.slice(lastIndex).trim();
+      if (text) {
+        splits.push({ role: lastRole || 'unknown', text });
+      }
+    }
+
+    // If no markers were found, return the whole block unsplit
+    if (splits.length === 0 && cleaned) {
+      splits.push({ role: 'unknown', text: cleaned });
+    }
+
+    return splits;
+  }
+
+  /**
+   * Strip Gemini UI noise from extracted content.
+   */
+  function stripGeminiNoise(text) {
+    if (!text) return '';
+    let cleaned = text;
+    for (const pattern of GEMINI_NOISE_PATTERNS) {
+      cleaned = cleaned.replace(pattern, '');
+    }
+    // Remove "You said" / "Gemini said" wrapper markers from content
+    cleaned = cleaned.replace(/(?:^|\n)\s*(You said|Gemini said|Model said)\s*(?:\n|$)/gi, '\n');
+    return cleaned.replace(/\n{3,}/g, '\n\n').trim();
+  }
 
   class GeminiExtractor {
     constructor(options = {}) {
@@ -135,40 +237,66 @@
       let role = 'unknown';
       let confidence = 0.35;
       const txt = (el.innerText || '').toLowerCase();
-      const aria = `${el.getAttribute('aria-label') || ''} ${el.getAttribute('data-test-id') || ''}`.toLowerCase();
+      const aria = `${el.getAttribute('aria-label') || ''} ${el.getAttribute('data-test-id') || ''} ${el.getAttribute('data-content-type') || ''}`.toLowerCase();
+      const cls = (el.className || '').toString().toLowerCase();
+
+      // D3: Check for text-based role markers (strongest signal for Gemini)
+      const startsWithYouSaid = /^you said\b/i.test(txt.trim());
+      const startsWithGeminiSaid = /^(gemini said|model said)\b/i.test(txt.trim());
+      if (startsWithYouSaid) {
+        role = 'user';
+        confidence += 0.45;
+        evidence.push('text-marker:you-said');
+      } else if (startsWithGeminiSaid) {
+        role = 'assistant';
+        confidence += 0.45;
+        evidence.push('text-marker:gemini-said');
+      }
+
+      // D3: Check class/attribute patterns for query vs response
+      if (/query|user-turn|user-message|user-query/i.test(cls) || /query|user/i.test(aria)) {
+        if (role === 'unknown') role = 'user';
+        confidence += 0.3;
+        evidence.push('class-or-aria:user-hint');
+      }
+      if (/response|model-turn|model-message|model-response/i.test(cls) || /response|model|gemini/i.test(aria)) {
+        if (role === 'unknown') role = 'assistant';
+        confidence += 0.3;
+        evidence.push('class-or-aria:model-hint');
+      }
 
       const avatarUser = !!el.querySelector('img[src*="googleusercontent"], img[alt*="profile" i], img[alt*="avatar" i]');
       if (avatarUser || /user-query|user/.test(aria)) {
-        role = 'user';
-        confidence += 0.3;
+        if (role === 'unknown') role = 'user';
+        confidence += 0.2;
         evidence.push('user-avatar-or-aria-hint');
       }
 
       const modelHint = /gemini|model/.test(aria) || /regenerate|draft response|thought/i.test(txt);
       const geminiIcon = !!el.querySelector('svg[aria-label*="Gemini" i], [aria-label*="Gemini" i], [aria-label*="Model" i]');
       if (modelHint || geminiIcon) {
-        role = 'assistant';
-        confidence += 0.3;
+        if (role === 'unknown') role = 'assistant';
+        confidence += 0.2;
         evidence.push('model-aria-or-control-hint');
       }
 
-      if (scopeEl) {
+      if (scopeEl && role === 'unknown') {
         const rect = el.getBoundingClientRect();
         const sRect = scopeEl.getBoundingClientRect();
         const delta = (rect.left + rect.width / 2) - (sRect.left + sRect.width / 2);
         if (delta > sRect.width * 0.12) {
           evidence.push('layout:right');
-          if (role === 'unknown') role = 'user';
+          role = 'user';
           confidence += 0.1;
         } else if (delta < -sRect.width * 0.12) {
           evidence.push('layout:left');
-          if (role === 'unknown') role = 'assistant';
+          role = 'assistant';
           confidence += 0.1;
         }
       }
 
       confidence = Math.min(0.98, confidence);
-      if (confidence < 0.5) role = 'unknown';
+      if (confidence < 0.42) role = 'unknown';
       return { role, confidence: Number(confidence.toFixed(2)), evidence };
     }
 
@@ -233,23 +361,175 @@
     }
   }
 
+  function tryChatGptSsotExtraction() {
+    // Attempt 1: __NEXT_DATA__ (older ChatGPT builds)
+    try {
+      const nextDataEl = document.getElementById('__NEXT_DATA__');
+      if (nextDataEl) {
+        const payload = JSON.parse(nextDataEl.textContent || '{}');
+        const serverResp = payload?.props?.pageProps?.serverResponse;
+        if (serverResp?.body?.mapping) {
+          const mapping = serverResp.body.mapping;
+          const ordered = Object.values(mapping)
+            .filter((n) => n.message?.content?.parts?.length)
+            .sort((a, b) => (a.message?.create_time || 0) - (b.message?.create_time || 0));
+          if (ordered.length > 0) {
+            return {
+              strategy: 'ssot:__NEXT_DATA__',
+              messages: ordered.map((n) => ({
+                role: n.message.author?.role === 'user' ? 'User' : 'Assistant',
+                content: n.message.content.parts.join('\n'),
+                timestamp: n.message.create_time ? new Date(n.message.create_time * 1000).toISOString() : null,
+                meta: { platform: 'ChatGPT', sourceSelector: 'ssot:__NEXT_DATA__', confidence: 0.99, evidence: ['ssot-server-data'] }
+              }))
+            };
+          }
+        }
+      }
+    } catch { /* SSOT path unavailable */ }
+
+    // Attempt 2: Remix route data (newer ChatGPT builds)
+    try {
+      const remixCtx = window.__remixContext;
+      if (remixCtx?.state?.loaderData) {
+        for (const [, loaderData] of Object.entries(remixCtx.state.loaderData)) {
+          const mapping = loaderData?.serverResponse?.body?.mapping;
+          if (!mapping) continue;
+          const ordered = Object.values(mapping)
+            .filter((n) => n.message?.content?.parts?.length)
+            .sort((a, b) => (a.message?.create_time || 0) - (b.message?.create_time || 0));
+          if (ordered.length > 0) {
+            return {
+              strategy: 'ssot:__remixContext',
+              messages: ordered.map((n) => ({
+                role: n.message.author?.role === 'user' ? 'User' : 'Assistant',
+                content: n.message.content.parts.join('\n'),
+                timestamp: n.message.create_time ? new Date(n.message.create_time * 1000).toISOString() : null,
+                meta: { platform: 'ChatGPT', sourceSelector: 'ssot:__remixContext', confidence: 0.99, evidence: ['ssot-remix-data'] }
+              }))
+            };
+          }
+        }
+      }
+    } catch { /* Remix data unavailable */ }
+
+    // Attempt 3: Same-origin conversation API (ChatGPT backend-api)
+    // Extract conversation ID from URL and try fetching full conversation JSON
+    return null;
+  }
+
+  /**
+   * Try fetching full ChatGPT conversation via same-origin API.
+   * This gets ALL messages without scrolling — the complete chat history.
+   * Only works on chatgpt.com with active session cookies.
+   */
+  async function tryChatGptApiFetch() {
+    try {
+      const match = location.pathname.match(/\/c\/([a-f0-9-]+)/i) || location.pathname.match(/\/([a-f0-9-]{36})/);
+      if (!match) return null;
+      const conversationId = match[1];
+      reportProgress(25, 'Fetching full conversation via API');
+      const resp = await fetch(`/backend-api/conversation/${conversationId}`, {
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' }
+      });
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      if (!data?.mapping) return null;
+      const ordered = Object.values(data.mapping)
+        .filter((n) => n.message?.content?.parts?.length && n.message?.author?.role !== 'system')
+        .sort((a, b) => (a.message?.create_time || 0) - (b.message?.create_time || 0));
+      if (ordered.length === 0) return null;
+      reportProgress(50, `API returned ${ordered.length} messages`);
+      return {
+        strategy: 'api:backend-api',
+        title: data.title || document.title,
+        messages: ordered.map((n) => {
+          const parts = n.message.content.parts || [];
+          // Handle multimodal content (images referenced in parts)
+          const textParts = parts.filter((p) => typeof p === 'string');
+          const imageParts = parts.filter((p) => typeof p === 'object' && p?.content_type?.startsWith('image'));
+          let content = textParts.join('\n');
+          for (const img of imageParts) {
+            const assetUrl = img.asset_pointer ? `https://chatgpt.com/backend-api/files/${img.asset_pointer.replace('file-service://', '')}` : '';
+            if (assetUrl) content += `\n[[IMG:${assetUrl}]]`;
+          }
+          return {
+            role: n.message.author?.role === 'user' ? 'User' : 'Assistant',
+            content,
+            timestamp: n.message.create_time ? new Date(n.message.create_time * 1000).toISOString() : null,
+            meta: { platform: 'ChatGPT', sourceSelector: 'api:backend-api', confidence: 0.99, evidence: ['api-full-conversation'] }
+          };
+        })
+      };
+    } catch (e) {
+      console.log('[ChatGPT] API fetch failed (expected on some builds):', e.message);
+      return null;
+    }
+  }
+
+  function computeCoverageMetrics(messages, domNodeCount) {
+    const user = messages.filter((m) => m.role === 'User').length;
+    const assistant = messages.filter((m) => m.role === 'Assistant' || m.role === 'Claude' || m.role === 'Gemini' || m.role === 'Model').length;
+    const unknown = messages.filter((m) => m.role === 'Unknown').length;
+    const total = messages.length;
+    return {
+      messages_total: total,
+      messages_user: user,
+      messages_assistant: assistant,
+      messages_unknown: unknown,
+      unknown_role_ratio: total > 0 ? (unknown / total).toFixed(3) : '0.000',
+      dom_candidates: domNodeCount,
+      coverage_ratio: domNodeCount > 0 ? (total / domNodeCount).toFixed(3) : '0.000'
+    };
+  }
+
   const PlatformEngines = {
     chatgpt: {
       name: 'ChatGPT',
       matches: () => location.hostname.includes('chatgpt.com') || location.hostname.includes('chat.openai.com'),
       async extract(options, utils) {
-        const analysis = await runChatGptDomAnalysis(options.fullLoad ? 'full' : 'visible', options, utils);
-        let messages = analysis.messages.map((m) => ({
-          role: m.inferredRole.role === 'assistant' ? 'Assistant' : (m.inferredRole.role === 'user' ? 'User' : 'Unknown'),
-          content: composeContentFromBlocks(m.parsed.blocks, options),
-          meta: {
-            platform: this.name,
-            sourceSelector: m.signature,
-            confidence: m.inferredRole.confidence,
-            evidence: m.inferredRole.evidence
-          }
-        }));
+        reportProgress(15, 'Trying bulk data sources');
 
+        // Strategy 0: Same-origin API fetch (gets ALL messages without scrolling)
+        const apiFetch = await tryChatGptApiFetch();
+        if (apiFetch && apiFetch.messages.length > 0) {
+          const isCodex = /chatgpt\.com\/codex/i.test(location.href);
+          const platformName = isCodex ? 'ChatGPT Codex' : this.name;
+          const coverage = computeCoverageMetrics(apiFetch.messages, apiFetch.messages.length);
+          console.log(`[ChatGPT] API fetch via ${apiFetch.strategy}: ${apiFetch.messages.length} messages`, coverage);
+          return { platform: platformName, title: apiFetch.title || document.title, messages: apiFetch.messages, _extraction: { strategy: apiFetch.strategy, coverage } };
+        }
+
+        // Strategy 1: SSOT extraction from embedded JSON data
+        reportProgress(25, 'Trying embedded data');
+        const ssot = tryChatGptSsotExtraction();
+        if (ssot && ssot.messages.length > 0) {
+          const isCodex = /chatgpt\.com\/codex/i.test(location.href);
+          const platformName = isCodex ? 'ChatGPT Codex' : this.name;
+          const coverage = computeCoverageMetrics(ssot.messages, ssot.messages.length);
+          console.log(`[ChatGPT] SSOT extraction via ${ssot.strategy}: ${ssot.messages.length} messages`, coverage);
+          return { platform: platformName, title: document.title, messages: ssot.messages, _extraction: { strategy: ssot.strategy, coverage } };
+        }
+
+        // Strategy 2: DOM analysis (controlled scroll if fullLoad)
+        reportProgress(35, 'Analyzing DOM');
+        const analysis = await runChatGptDomAnalysis(options.fullLoad ? 'full' : 'visible', options, utils);
+        let messages = [];
+        for (const m of analysis.messages) {
+          messages.push({
+            role: m.inferredRole.role === 'assistant' ? 'Assistant' : (m.inferredRole.role === 'user' ? 'User' : 'Unknown'),
+            content: await composeContentFromBlocks(m.parsed.blocks, options),
+            meta: {
+              platform: this.name,
+              sourceSelector: m.signature,
+              confidence: m.inferredRole.confidence,
+              evidence: m.inferredRole.evidence
+            }
+          });
+        }
+
+        // Strategy 3: Fallback selectors
         if (!messages.length) {
           const fallbackNodes = utils.adaptiveQuery('main [data-message-author-role], main article, main [data-testid*="message"], main section', 1)
             .filter((n) => utils.hasMeaningfulContent(n));
@@ -264,7 +544,11 @@
 
         const isCodex = /chatgpt\.com\/codex/i.test(location.href);
         const platformName = isCodex ? 'ChatGPT Codex' : this.name;
-        return { platform: platformName, title: document.title, messages };
+        const domCandidateCount = analysis.messages?.length || 0;
+        const strategy = messages.length ? 'dom-analysis' : 'fallback-selectors';
+        const coverage = computeCoverageMetrics(messages, domCandidateCount);
+        console.log(`[ChatGPT] ${strategy}: ${messages.length} messages`, coverage);
+        return { platform: platformName, title: document.title, messages, _extraction: { strategy, coverage, loadReport: analysis.loadReport } };
       }
     },
 
@@ -278,7 +562,9 @@
         for (const node of nodes) {
           const marker = `${node.getAttribute('data-testid') || ''} ${node.className || ''}`.toLowerCase();
           const isUser = marker.includes('user');
-          const content = await utils.extractNodeContent(node, options, isUser, this.name, 'claude-node');
+          let content = await utils.extractNodeContent(node, options, isUser, this.name, 'claude-node');
+          // Strip UI HTML contamination unless rawHtml mode
+          if (content && !options.rawHtml) content = normalizeContent(content);
           if (content) messages.push({ role: isUser ? 'User' : 'Claude', content, meta: { platform: this.name, sourceSelector: 'claude-node' } });
         }
         return { platform: this.name, title: document.title, messages };
@@ -295,10 +581,37 @@
 
         const messages = [];
         for (const m of analysis.messages) {
-          const role = m.inferredRole.role === 'assistant' ? 'Gemini' : (m.inferredRole.role === 'user' ? 'User' : 'Unknown');
-          const content = composeContentFromBlocks(m.parsed.blocks, options);
-          if (content) {
-            messages.push({ role, content, meta: { platform: this.name, sourceSelector: m.signature, confidence: m.inferredRole.confidence, evidence: m.inferredRole.evidence } });
+          const rawContent = await composeContentFromBlocks(m.parsed.blocks, options);
+          if (!rawContent) continue;
+
+          // D3: Try to split combined transcript blocks ("You said ... Gemini said ...")
+          const inferredRole = m.inferredRole.role;
+          const fullText = m.parsed.textPlain || rawContent;
+          const hasBothMarkers = /You said/i.test(fullText) && /(Gemini said|Model said)/i.test(fullText);
+
+          if (hasBothMarkers) {
+            // Split the combined block into separate turns
+            const splits = splitGeminiTranscriptBlock(fullText);
+            for (const split of splits) {
+              const cleanedContent = stripGeminiNoise(split.text);
+              if (!cleanedContent) continue;
+              const role = split.role === 'user' ? 'User' : (split.role === 'assistant' ? 'Gemini' : 'Unknown');
+              messages.push({
+                role,
+                content: cleanedContent,
+                meta: { platform: this.name, sourceSelector: m.signature, confidence: 0.85, evidence: ['transcript-marker-split', `original-role:${inferredRole}`] }
+              });
+            }
+          } else {
+            // Single-role block — use inferredRole + strip noise
+            const cleanedContent = stripGeminiNoise(rawContent);
+            if (!cleanedContent) continue;
+            const role = inferredRole === 'assistant' ? 'Gemini' : (inferredRole === 'user' ? 'User' : 'Unknown');
+            messages.push({
+              role,
+              content: cleanedContent,
+              meta: { platform: this.name, sourceSelector: m.signature, confidence: m.inferredRole.confidence, evidence: [...m.inferredRole.evidence, 'noise-stripped'] }
+            });
           }
         }
 
@@ -309,17 +622,196 @@
     aistudio: {
       name: 'AI Studio',
       matches: () => location.hostname.includes('aistudio.google.com'),
-      selectors: ['ms-chat-turn', 'ms-chat-bubble', 'user-query-item', 'model-response-item', '.chat-turn', '.query-container', '.response-container', '.chat-bubble'],
+      /**
+       * D4: Multi-strategy AI Studio extractor.
+       * AI Studio uses web components (custom elements) that may render
+       * content inside shadow DOM. Strategy ladder:
+       *   1. Shadow DOM traversal for known custom elements
+       *   2. Flat DOM with expanded selector set
+       *   3. Geometry-based detection (visible chat bubbles by position)
+       */
       async extract(options, utils) {
-        const nodes = utils.adaptiveQuery(this.selectors.join(','), 1).filter((n) => utils.hasMeaningfulContent(n));
+        let messages = [];
+        let strategy = 'none';
+
+        // --- Strategy 1: Shadow DOM traversal ---
+        messages = await this._extractViaShadowDom(options, utils);
+        if (messages.length > 0) { strategy = 'shadow-dom'; }
+
+        // --- Strategy 2: Expanded flat DOM selectors ---
+        if (messages.length === 0) {
+          messages = await this._extractViaFlatDom(options, utils);
+          if (messages.length > 0) strategy = 'flat-dom';
+        }
+
+        // --- Strategy 3: Geometry-based detection ---
+        if (messages.length === 0) {
+          messages = await this._extractViaGeometry(options, utils);
+          if (messages.length > 0) strategy = 'geometry';
+        }
+
+        // --- Strategy 4: Wait for content (MutationObserver) then retry ---
+        if (messages.length === 0) {
+          await this._waitForContent();
+          messages = await this._extractViaShadowDom(options, utils);
+          if (messages.length === 0) messages = await this._extractViaFlatDom(options, utils);
+          if (messages.length > 0) strategy = 'wait-then-retry';
+        }
+
+        reportProgress(85, `AI Studio: ${messages.length} messages via ${strategy}`);
+        const coverage = computeCoverageMetrics(messages, messages.length);
+        return { platform: this.name, title: document.title || 'AI Studio Export', messages, _extraction: { strategy, coverage } };
+      },
+
+      /** Traverse shadow DOMs of known AI Studio custom elements */
+      async _extractViaShadowDom(options, utils) {
+        const messages = [];
+        const customTags = ['ms-chat-turn', 'ms-chat-turn-container', 'ms-prompt-chunk', 'ms-response-chunk', 'ms-chat-bubble', 'ms-autosize-textarea'];
+        // Also find any element whose shadow root has chat content
+        const allEls = document.querySelectorAll('*');
+        const shadowHosts = [];
+        for (const el of allEls) {
+          if (el.shadowRoot) shadowHosts.push(el);
+        }
+        // Gather custom elements + shadow hosts
+        const candidates = [];
+        for (const tag of customTags) {
+          document.querySelectorAll(tag).forEach((el) => candidates.push(el));
+        }
+        for (const host of shadowHosts) {
+          const tag = (host.tagName || '').toLowerCase();
+          if (/chat|turn|prompt|response|message|bubble/i.test(tag) || /chat|turn|prompt|response|message/i.test(host.className || '')) {
+            candidates.push(host);
+          }
+        }
+
+        // Deduplicate and process
+        const seen = new Set();
+        for (const el of candidates) {
+          if (seen.has(el)) continue;
+          seen.add(el);
+          const root = el.shadowRoot || el;
+          const text = (root.textContent || '').trim();
+          if (text.length < 3) continue;
+
+          const marker = `${el.tagName} ${el.className || ''} ${el.getAttribute('is-user') || ''} ${el.getAttribute('role') || ''} ${el.getAttribute('data-turn-role') || ''}`.toLowerCase();
+          const isUser = /user|query|prompt|human/.test(marker) || el.getAttribute('is-user') === 'true';
+          const isModel = /model|response|assistant|gemini/.test(marker);
+
+          let content;
+          try {
+            content = await utils.extractNodeContent(root === el ? el : el, options, isUser, 'AI Studio', 'aistudio-shadow');
+          } catch {
+            content = text;
+          }
+          if (!content || content.length < 2) continue;
+
+          const role = isUser ? 'User' : (isModel ? 'Model' : 'Unknown');
+          messages.push({ role, content, meta: { platform: 'AI Studio', sourceSelector: `shadow:${el.tagName.toLowerCase()}`, confidence: isUser || isModel ? 0.85 : 0.4, evidence: isUser ? ['shadow-dom-user'] : isModel ? ['shadow-dom-model'] : ['shadow-dom-unknown'] } });
+        }
+        return messages;
+      },
+
+      /** Expanded flat DOM selector set */
+      async _extractViaFlatDom(options, utils) {
+        const selectors = [
+          'ms-chat-turn', 'ms-chat-bubble', 'ms-prompt-chunk', 'ms-response-chunk',
+          'user-query-item', 'model-response-item',
+          '.chat-turn', '.query-container', '.response-container', '.chat-bubble',
+          '[data-turn-role]', '[data-message-role]',
+          '[role="article"]', '[role="listitem"]',
+          '.conversation-turn', '.prompt-container', '.response-text',
+          'div[class*="chat-turn"]', 'div[class*="message"]', 'div[class*="response"]', 'div[class*="query"]',
+        ];
+        const nodes = utils.adaptiveQuery(selectors.join(','), 1).filter((n) => utils.hasMeaningfulContent(n));
         const messages = [];
         for (const node of nodes) {
-          const marker = `${node.tagName} ${node.className} ${node.getAttribute('is-user') || ''}`.toLowerCase();
-          const isUser = marker.includes('true') || marker.includes('user') || marker.includes('query');
-          const content = await utils.extractNodeContent(node, options, isUser, this.name, 'aistudio-node');
-          if (content) messages.push({ role: isUser ? 'User' : 'Model', content, meta: { platform: this.name, sourceSelector: 'aistudio-node' } });
+          const marker = `${node.tagName} ${node.className || ''} ${node.getAttribute('is-user') || ''} ${node.getAttribute('data-turn-role') || ''} ${node.getAttribute('role') || ''}`.toLowerCase();
+          const isUser = /user|query|prompt|human/.test(marker) || node.getAttribute('is-user') === 'true';
+          const isModel = /model|response|assistant/.test(marker);
+          const content = await utils.extractNodeContent(node, options, isUser, 'AI Studio', 'aistudio-flat');
+          if (content) {
+            const role = isUser ? 'User' : (isModel ? 'Model' : 'Unknown');
+            messages.push({ role, content, meta: { platform: 'AI Studio', sourceSelector: 'aistudio-flat' } });
+          }
         }
-        return { platform: this.name, title: document.title || 'AI Studio Export', messages };
+        return messages;
+      },
+
+      /** Geometry-based: find visible chat bubbles by layout position */
+      async _extractViaGeometry(options, utils) {
+        const messages = [];
+        const viewH = window.innerHeight;
+        const mainEl = document.querySelector('main, [role="main"]') || document.body;
+        // Find all divs/sections that look like chat bubbles based on size and position
+        const allDivs = Array.from(mainEl.querySelectorAll('div, section, article')).filter((el) => {
+          const rect = el.getBoundingClientRect();
+          const text = (el.innerText || '').trim();
+          // Must have meaningful text, visible, and reasonably sized
+          return text.length > 10 && rect.height > 30 && rect.height < viewH * 0.8 && rect.width > 200;
+        });
+
+        // Group by similar vertical position (chat turns are stacked vertically)
+        // Score: prefer elements that aren't deeply nested wrappers
+        const scored = allDivs.map((el) => {
+          const text = (el.innerText || '').trim();
+          const children = el.querySelectorAll('*').length;
+          const codeBlocks = el.querySelectorAll('pre, code').length;
+          const hasImg = el.querySelectorAll('img').length;
+          const textScore = Math.min(5, text.length / 200);
+          const penaltyForTooManyChildren = children > 50 ? -3 : 0;
+          const score = textScore + codeBlocks + hasImg + penaltyForTooManyChildren;
+          return { el, score, text };
+        }).filter((s) => s.score > 1).sort((a, b) => b.score - a.score);
+
+        // Deduplicate overlapping elements
+        const kept = [];
+        for (const item of scored) {
+          const overlap = kept.some((k) => k.el.contains(item.el) || item.el.contains(k.el));
+          if (!overlap) kept.push(item);
+        }
+
+        // Sort by DOM order
+        kept.sort((a, b) => a.el.compareDocumentPosition(b.el) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1);
+
+        // Alternate user/model (AI Studio typically alternates)
+        for (let i = 0; i < kept.length; i++) {
+          const content = await utils.extractNodeContent(kept[i].el, options, i % 2 === 0, 'AI Studio', 'aistudio-geometry');
+          if (content) {
+            messages.push({
+              role: i % 2 === 0 ? 'User' : 'Model',
+              content,
+              meta: { platform: 'AI Studio', sourceSelector: 'aistudio-geometry', confidence: 0.55, evidence: ['geometry-alternate'] }
+            });
+          }
+        }
+        return messages;
+      },
+
+      /** Wait up to 3s for content to appear (AI Studio lazy-renders) */
+      _waitForContent() {
+        return new Promise((resolve) => {
+          const target = document.querySelector('main, [role="main"]') || document.body;
+          let resolved = false;
+          const observer = new MutationObserver(() => {
+            // Check if chat content appeared
+            const hasContent = target.querySelectorAll('ms-chat-turn, [data-turn-role], .chat-turn, [role="article"]').length > 0;
+            if (hasContent && !resolved) {
+              resolved = true;
+              observer.disconnect();
+              resolve();
+            }
+          });
+          observer.observe(target, { childList: true, subtree: true });
+          // Timeout after 3s
+          setTimeout(() => {
+            if (!resolved) {
+              resolved = true;
+              observer.disconnect();
+              resolve();
+            }
+          }, 3000);
+        });
       }
     }
   };
@@ -410,6 +902,11 @@
         if (!src) continue;
         if (isUser && alt.includes('avatar')) continue;
         if (alt.includes('avatar') || cls.includes('avatar') || cls.includes('icon')) continue;
+        // Block external favicon services and tiny UI icons
+        if (/favicon|google\.com\/s2\/favicons|gstatic\.com.*icon/i.test(src)) continue;
+        const w = img.naturalWidth || img.width || 0;
+        const h = img.naturalHeight || img.height || 0;
+        if (w > 0 && h > 0 && w <= 24 && h <= 24) continue; // skip tiny icons
 
         const normalized = options.convertImages ? await this.urlToBase64(src) : src;
         if (normalized) tokens.push(`[[IMG:${normalized}]]`);
@@ -449,7 +946,15 @@
       const fileTokens = options.extractFiles ? await this.extractFileTokensFromNode(node) : [];
 
       const clone = node.cloneNode(true);
-      clone.querySelectorAll('script,style,button,svg,[role="tooltip"],.sr-only').forEach((n) => n.remove());
+      // Remove UI scaffolding elements
+      clone.querySelectorAll('script,style,button,svg,nav,aside,header,footer,[role="toolbar"],[role="tooltip"],[aria-hidden="true"],.sr-only').forEach((n) => n.remove());
+      // Remove "Copy", "Show more", etc. leaf buttons/labels
+      clone.querySelectorAll('*').forEach((el) => {
+        const t = (el.textContent || '').trim().toLowerCase();
+        if (/^(copy|copied|show more|show less|share|thumbs up|thumbs down|edit)$/i.test(t) && el.children.length === 0) {
+          el.remove();
+        }
+      });
       clone.querySelectorAll('img').forEach((img) => img.remove());
 
       clone.querySelectorAll('pre').forEach((pre) => {
@@ -528,6 +1033,37 @@
 
   function collectMessageNodes(rootEl) {
     if (!rootEl) return [];
+
+    // ChatGPT-specific: prefer elements that ALREADY carry role info.
+    // Modern ChatGPT uses article[data-testid^="conversation-turn"] as turn containers
+    // with nested [data-message-author-role] divs.
+    const chatgptTurns = Array.from(rootEl.querySelectorAll(
+      '[data-message-author-role], article[data-testid*="conversation-turn"], [data-testid*="conversation-turn"]'
+    )).filter((el) => {
+      // Only keep leaf-level containers (not deeply nested role-bearing wrappers)
+      const text = (el.textContent || '').trim();
+      return text.length > 0;
+    });
+
+    if (chatgptTurns.length >= 2) {
+      // Deduplicate: prefer children with data-message-author-role over parents
+      const deduped = [];
+      for (const el of chatgptTurns) {
+        const alreadyCovered = deduped.some((k) => k.contains(el) || el.contains(k));
+        if (alreadyCovered) {
+          // If the new element is a child of an existing one, replace parent with child
+          const parentIdx = deduped.findIndex((k) => k.contains(el));
+          if (parentIdx >= 0 && el.hasAttribute('data-message-author-role')) {
+            deduped[parentIdx] = el;
+          }
+          continue;
+        }
+        deduped.push(el);
+      }
+      return deduped.map((el, idx) => ({ el, indexInDom: idx, score: 10, signals: ['chatgpt-turn-container'] }));
+    }
+
+    // Generic fallback for non-ChatGPT or when ChatGPT selectors find nothing
     const raw = Array.from(rootEl.querySelectorAll('article,section,div,li')).filter((el) => {
       const text = (el.textContent || '').trim();
       return text.length > 0 || el.querySelector('pre code,img');
@@ -574,46 +1110,112 @@
     let role = 'unknown';
     let confidence = 0.3;
 
-    const rect = messageEl.getBoundingClientRect();
-    const rootRect = rootEl.getBoundingClientRect();
-    const centerMsg = rect.left + rect.width / 2;
-    const centerRoot = rootRect.left + rootRect.width / 2;
-    const alignmentDelta = centerMsg - centerRoot;
-    if (alignmentDelta > rootRect.width * 0.15) {
-      evidence.push('layout_alignment:right');
+    // 1. Check data-message-author-role on element AND ancestors (ChatGPT primary signal)
+    // Walk up to 10 ancestors — ChatGPT DOM is deeply nested
+    const authorRole = findAttrUp(messageEl, 'data-message-author-role', 10);
+    if (authorRole === 'user') {
+      evidence.push('attr:data-message-author-role=user');
       role = 'user';
-      confidence += 0.2;
-    } else if (alignmentDelta < -rootRect.width * 0.1) {
-      evidence.push('layout_alignment:left');
+      confidence += 0.5;
+    } else if (authorRole === 'assistant') {
+      evidence.push('attr:data-message-author-role=assistant');
       role = 'assistant';
-      confidence += 0.2;
-    } else {
-      evidence.push('layout_alignment:center-ish');
+      confidence += 0.5;
     }
 
-    const txt = (messageEl.innerText || '').toLowerCase();
-    if (/regenerate|continue generating|thumbs up|thumbs down/.test(txt)) {
-      evidence.push('assistant-control-hints');
-      role = 'assistant';
-      confidence += 0.25;
-    }
-
-    if (/you said|you uploaded|you sent/.test(txt) || (messageEl.getAttribute('data-message-author-role') || '').toLowerCase() === 'user') {
-      evidence.push('user-hint-text-or-attribute');
-      role = 'user';
-      confidence += 0.25;
-    }
-
-    if (/assistant/.test((messageEl.getAttribute('data-message-author-role') || '').toLowerCase())) {
-      evidence.push('assistant-author-attribute');
-      role = 'assistant';
+    // 2. Check data-testid attributes (ChatGPT uses conversation-turn-N patterns)
+    const testId = findAttrUp(messageEl, 'data-testid', 10) || '';
+    if (/user/i.test(testId)) {
+      evidence.push(`testid:${testId}`);
+      if (role === 'unknown') role = 'user';
+      confidence += 0.3;
+    } else if (/assistant|model|response/i.test(testId)) {
+      evidence.push(`testid:${testId}`);
+      if (role === 'unknown') role = 'assistant';
       confidence += 0.3;
     }
 
+    // 3. Check ARIA labels and accessible names
+    const ariaLabel = (messageEl.getAttribute('aria-label') || '').toLowerCase();
+    const ariaRoledesc = (messageEl.getAttribute('aria-roledescription') || '').toLowerCase();
+    const ariaCombo = `${ariaLabel} ${ariaRoledesc}`;
+    if (/\buser\b|human|you said/i.test(ariaCombo)) {
+      evidence.push('aria:user-hint');
+      if (role === 'unknown') role = 'user';
+      confidence += 0.2;
+    } else if (/\bassistant\b|chatgpt|gpt|model|response/i.test(ariaCombo)) {
+      evidence.push('aria:assistant-hint');
+      if (role === 'unknown') role = 'assistant';
+      confidence += 0.2;
+    }
+
+    // 4. Check for avatar/icon patterns indicating role
+    const hasUserAvatar = !!messageEl.querySelector('img[alt*="User" i], img[alt*="avatar" i]:not([alt*="ChatGPT"]):not([alt*="GPT"])');
+    const hasAssistantIcon = !!messageEl.querySelector('img[alt*="ChatGPT" i], img[alt*="GPT" i], svg[class*="gizmo"], [data-testid="bot-avatar"]');
+    if (hasUserAvatar && !hasAssistantIcon) {
+      evidence.push('avatar:user');
+      if (role === 'unknown') role = 'user';
+      confidence += 0.15;
+    } else if (hasAssistantIcon) {
+      evidence.push('avatar:assistant');
+      if (role === 'unknown') role = 'assistant';
+      confidence += 0.15;
+    }
+
+    // 5. Container class/attribute semantics
+    const classAndAttrs = `${messageEl.className || ''} ${messageEl.getAttribute('data-role') || ''}`.toLowerCase();
+    if (/\buser\b/.test(classAndAttrs)) {
+      evidence.push('class:user');
+      if (role === 'unknown') role = 'user';
+      confidence += 0.15;
+    } else if (/\bassistant\b|\bbot\b|\bai\b|\bmodel\b/.test(classAndAttrs)) {
+      evidence.push('class:assistant');
+      if (role === 'unknown') role = 'assistant';
+      confidence += 0.15;
+    }
+
+    // 6. Layout alignment (weakest signal, never overrides stronger signals)
+    if (role === 'unknown') {
+      const rect = messageEl.getBoundingClientRect();
+      const rootRect = rootEl.getBoundingClientRect();
+      const centerMsg = rect.left + rect.width / 2;
+      const centerRoot = rootRect.left + rootRect.width / 2;
+      const alignmentDelta = centerMsg - centerRoot;
+      if (alignmentDelta > rootRect.width * 0.15) {
+        evidence.push('layout:right');
+        role = 'user';
+        confidence += 0.1;
+      } else if (alignmentDelta < -rootRect.width * 0.1) {
+        evidence.push('layout:left');
+        role = 'assistant';
+        confidence += 0.1;
+      }
+    }
+
+    // 7. Content-based hints (assistant controls)
+    const txt = (messageEl.innerText || '').toLowerCase();
+    if (role === 'unknown' && /regenerate|continue generating|thumbs up|thumbs down|copy code/.test(txt)) {
+      evidence.push('content:assistant-controls');
+      role = 'assistant';
+      confidence += 0.15;
+    }
+
     confidence = Math.min(0.99, confidence);
-    if (confidence < 0.5) role = 'unknown';
+    // Lower threshold: 0.35 instead of 0.5 to reduce unknowns
+    if (confidence < 0.35) role = 'unknown';
 
     return { role, confidence: Number(confidence.toFixed(2)), evidence };
+  }
+
+  // Walk up to `maxDepth` ancestors to find an attribute value
+  function findAttrUp(el, attr, maxDepth = 3) {
+    let current = el;
+    for (let i = 0; i <= maxDepth && current; i++) {
+      const val = current.getAttribute?.(attr);
+      if (val) return val.toLowerCase();
+      current = current.parentElement;
+    }
+    return null;
   }
 
   function parseMessageContent(messageEl) {
@@ -717,6 +1319,9 @@
     rootEl.scrollTop = rootEl.scrollHeight;
     await new Promise((r) => setTimeout(r, 500));
 
+    // Media lazy-load warmup: scroll through to trigger IntersectionObserver-based lazy loading
+    await warmupLazyMedia(rootEl);
+
     report.finalMessageCount = collectMessageNodes(rootEl).length;
     report.finalScrollHeight = rootEl.scrollHeight;
     report.stabilized = stable >= stableThreshold;
@@ -724,7 +1329,115 @@
     return report;
   }
 
-  function composeContentFromBlocks(blocks, options) {
+  /**
+   * Slowly scroll through the chat container to trigger lazy-loaded images/media.
+   * Many platforms use IntersectionObserver to lazy-load images — this ensures
+   * all images are loaded into the DOM before extraction.
+   */
+  async function warmupLazyMedia(rootEl) {
+    if (!rootEl || rootEl.scrollHeight <= rootEl.clientHeight) return;
+    const step = Math.max(200, Math.floor(rootEl.clientHeight * 0.8));
+    const maxSteps = Math.min(60, Math.ceil(rootEl.scrollHeight / step));
+
+    // Scroll top-to-bottom in steps
+    for (let i = 0; i < maxSteps; i++) {
+      rootEl.scrollTop = i * step;
+      await new Promise((r) => setTimeout(r, 150));
+    }
+    // Final: scroll to bottom and wait for any pending loads
+    rootEl.scrollTop = rootEl.scrollHeight;
+    await new Promise((r) => setTimeout(r, 400));
+
+    // Force any lazy images with data-src to load
+    rootEl.querySelectorAll('img[data-src]:not([src]), img[loading="lazy"]').forEach((img) => {
+      const dataSrc = img.getAttribute('data-src');
+      if (dataSrc && !img.src) img.src = dataSrc;
+    });
+    await new Promise((r) => setTimeout(r, 300));
+  }
+
+  /**
+   * normalizeContent: strip UI HTML scaffolding from extracted content.
+   * If the string contains HTML tags, parse it and extract semantic text,
+   * code blocks, and links. Drop buttons, SVGs, UI-only elements.
+   */
+  function normalizeContent(content) {
+    if (!content || typeof content !== 'string') return content || '';
+    // Quick check: does it look like it contains HTML?
+    if (!/<[a-z][^>]*>/i.test(content)) return content;
+    // Preserve [[IMG:...]] and [[FILE:...]] tokens before parsing
+    const imgTokens = [];
+    const fileTokens = [];
+    let cleaned = content.replace(/\[\[IMG:([^\]]*)\]\]/g, (m) => { imgTokens.push(m); return `__IMG_TOKEN_${imgTokens.length - 1}__`; });
+    cleaned = cleaned.replace(/\[\[FILE:([^\]]*)\]\]/g, (m) => { fileTokens.push(m); return `__FILE_TOKEN_${fileTokens.length - 1}__`; });
+    // Preserve markdown code blocks
+    const codeBlocks = [];
+    cleaned = cleaned.replace(/```[\s\S]*?```/g, (m) => { codeBlocks.push(m); return `__CODE_BLOCK_${codeBlocks.length - 1}__`; });
+
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(`<div>${cleaned}</div>`, 'text/html');
+      const root = doc.body.querySelector('div') || doc.body;
+
+      // Remove UI-only elements
+      root.querySelectorAll('button, svg, nav, aside, header, footer, [role="toolbar"], [role="tooltip"], .sr-only, [aria-hidden="true"]').forEach((n) => n.remove());
+      // Remove "Show more", "Copy", etc. buttons/links
+      root.querySelectorAll('*').forEach((el) => {
+        const text = (el.textContent || '').trim().toLowerCase();
+        if (/^(show more|show less|copy|copied|share|thumbs up|thumbs down)$/i.test(text) && el.children.length === 0) {
+          el.remove();
+        }
+      });
+
+      const parts = [];
+      // Extract semantic content
+      const walker = doc.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+      const seenCode = new Set();
+      while (walker.nextNode()) {
+        const node = walker.currentNode;
+        if (node.nodeType === Node.TEXT_NODE) {
+          const text = (node.textContent || '').replace(/\s+/g, ' ').trim();
+          if (text) parts.push(text);
+          continue;
+        }
+        const tag = node.tagName?.toLowerCase();
+        if (tag === 'pre' || tag === 'code') {
+          const code = (node.textContent || '').trim();
+          if (code && !seenCode.has(code)) {
+            const langHint = (node.className || '').match(/language-(\w+)/)?.[1] || '';
+            parts.push(`\n\`\`\`${langHint}\n${code}\n\`\`\`\n`);
+            seenCode.add(code);
+          }
+        } else if (tag === 'a') {
+          const href = node.getAttribute('href') || '';
+          const linkText = (node.textContent || '').trim();
+          if (href && linkText) parts.push(`[${linkText}](${href})`);
+        }
+      }
+
+      let result = parts.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+
+      // Restore tokens
+      result = result.replace(/__IMG_TOKEN_(\d+)__/g, (_, i) => imgTokens[parseInt(i)] || '');
+      result = result.replace(/__FILE_TOKEN_(\d+)__/g, (_, i) => fileTokens[parseInt(i)] || '');
+      result = result.replace(/__CODE_BLOCK_(\d+)__/g, (_, i) => codeBlocks[parseInt(i)] || '');
+
+      return result;
+    } catch {
+      // If parsing fails, do a basic regex strip
+      let result = content
+        .replace(/<(button|svg|nav|aside|header|footer)[^>]*>[\s\S]*?<\/\1>/gi, '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      result = result.replace(/__IMG_TOKEN_(\d+)__/g, (_, i) => imgTokens[parseInt(i)] || '');
+      result = result.replace(/__FILE_TOKEN_(\d+)__/g, (_, i) => fileTokens[parseInt(i)] || '');
+      result = result.replace(/__CODE_BLOCK_(\d+)__/g, (_, i) => codeBlocks[parseInt(i)] || '');
+      return result;
+    }
+  }
+
+  async function composeContentFromBlocks(blocks, options) {
     const out = [];
     for (const b of blocks) {
       if (b.type === 'text') out.push(b.text);
@@ -735,8 +1448,9 @@
       }
       else if (b.type === 'quote') out.push(`> ${b.text}`);
       else if (b.type === 'image') {
-        const src = options.convertImages ? b.src : b.src;
-        out.push(`[[IMG:${src}]]`);
+        // Embed image as base64 when convertImages is enabled
+        const src = (options.convertImages && b.src && !b.src.startsWith('data:')) ? await utils.urlToBase64(b.src) : b.src;
+        if (src) out.push(`[[IMG:${src}]]`);
       }
       else if (b.type === 'link') out.push(`[${b.text || b.href}](${b.href})`);
     }
@@ -823,15 +1537,23 @@
   }
 
   async function extractChatData(options) {
+    reportProgress(10, 'Detecting platform');
     const engine = Object.values(PlatformEngines).find((e) => e.matches());
-    if (!engine) return { success: false, platform: 'Unsupported', messages: [] };
+    if (!engine) {
+      reportProgress(100, 'Unsupported platform');
+      return { success: false, platform: 'Unsupported', messages: [] };
+    }
 
+    reportProgress(20, `Extracting from ${engine.name}`);
     const extracted = await engine.extract(options, utils);
+    reportProgress(70, 'Normalizing messages');
     const messages = utils.dedupe(extracted.messages || []);
 
-    chrome.runtime.sendMessage({ action: 'LOG_ERROR', message: 'Extraction Result', details: `${engine.name} found ${messages.length} messages.` });
-    chrome.runtime.sendMessage({ action: 'LOG_ERROR', message: 'Adaptive Analyzer', details: `Engine=${engine.name}; normalized=${messages.length}` });
+    reportProgress(85, `Found ${messages.length} messages`);
+    chrome.runtime.sendMessage({ action: 'LOG_INFO', message: 'Extraction Result', details: `${engine.name} found ${messages.length} messages.` });
+    chrome.runtime.sendMessage({ action: 'LOG_INFO', message: 'Adaptive Analyzer', details: `Engine=${engine.name}; normalized=${messages.length}` });
 
+    reportProgress(100, 'Extraction complete');
     return { success: messages.length > 0, platform: extracted.platform, title: extracted.title, messages };
   }
 
@@ -845,17 +1567,28 @@
     let stable = 0;
     let prev = scroller.scrollHeight;
     let rounds = 0;
+    const maxRounds = 50;
+    const stableTarget = 5;
+    reportProgress(5, 'Loading full history');
     const timer = setInterval(() => {
       rounds += 1;
       scroller.scrollTop = 0;
       if (Math.abs(scroller.scrollHeight - prev) < 24) stable += 1;
       else stable = 0;
       prev = scroller.scrollHeight;
-      if (stable >= 10 || rounds >= 45) {
+      // Report progress: rounds / maxRounds mapped to 5-90%
+      const pct = 5 + Math.round((rounds / maxRounds) * 85);
+      reportProgress(Math.min(90, pct), `Scrolling (${rounds}/${maxRounds})`, {
+        scrollHeight: scroller.scrollHeight,
+        stableCount: stable,
+        round: rounds
+      });
+      if (stable >= stableTarget || rounds >= maxRounds) {
         clearInterval(timer);
-        sendResponse({ status: 'done' });
+        reportProgress(95, 'Scroll complete, extracting');
+        sendResponse({ status: 'done', rounds, scrollHeight: scroller.scrollHeight });
       }
-    }, 1200);
+    }, 1000);
   }
 
   function discoverClaudeStructure() {
@@ -944,6 +1677,27 @@
       const findings = discoverClaudeStructure();
       sendResponse({ success: true, findings });
       return true;
+    }
+    // FETCH_FILE: download a file in page context (has session cookies)
+    // then return as base64 so the popup can pack it into a ZIP.
+    if (request.action === 'FETCH_FILE') {
+      (async () => {
+        try {
+          const resp = await fetch(request.url, { credentials: 'include' });
+          if (!resp.ok) { sendResponse({ ok: false, error: `HTTP ${resp.status}` }); return; }
+          const blob = await resp.blob();
+          const reader = new FileReader();
+          reader.onload = () => {
+            const base64 = reader.result.split(',')[1] || '';
+            sendResponse({ ok: true, data: base64, mime: blob.type, size: blob.size });
+          };
+          reader.onerror = () => sendResponse({ ok: false, error: 'FileReader failed' });
+          reader.readAsDataURL(blob);
+        } catch (e) {
+          sendResponse({ ok: false, error: e.message || 'fetch failed' });
+        }
+      })();
+      return true; // async response
     }
     return false;
   });
