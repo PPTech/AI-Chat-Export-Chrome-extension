@@ -25,3 +25,4 @@ dist-ssr
 
 # Job tracking (never commit)
 .claude-job.md
+nul
