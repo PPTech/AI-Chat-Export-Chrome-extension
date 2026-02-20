@@ -139,6 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!res) {
       document.getElementById('platform-badge').textContent = 'No Data (Retrying)';
       setAnalyzeProgress(0, 'Retrying');
+      persistExtractionDiagnostics(null, 'no-response');
       return;
     }
     if (res?.success) {
@@ -150,11 +151,51 @@ document.addEventListener('DOMContentLoaded', () => {
       updateDetectedSummary(res.messages || []);
       setAnalyzeProgress(100, 'Completed');
       chrome.runtime.sendMessage({ action: 'SET_DATA', tabId: activeTabId, data: res });
+      persistExtractionDiagnostics(res, 'ok');
       updateExportBtn();
       return;
     }
     document.getElementById('platform-badge').textContent = `${res?.platform || 'Unknown'} (Waiting)`;
     setAnalyzeProgress(0, 'Waiting');
+    persistExtractionDiagnostics(res, 'fail');
+  }
+
+  /**
+   * D2: Persist extraction diagnostics after EVERY extraction attempt (success or fail).
+   * This ensures "Download Diagnostics" always has data, even when export never runs.
+   */
+  function persistExtractionDiagnostics(res, status) {
+    const runId = `extraction-${Date.now()}`;
+    const msgs = res?.messages || [];
+    const unknownCount = msgs.filter((m) => /unknown/i.test(m.role)).length;
+    const total = msgs.length;
+    const diag = {
+      schema_version: 'diagnostics.v5',
+      run: { run_id: runId, started_at_utc: new Date().toISOString(), ended_at_utc: new Date().toISOString(), tool_version: '0.11.0', platform: res?.platform || 'unknown' },
+      tabScope: activeTabId != null ? `tab:${activeTabId}` : 'global',
+      phase: 'extraction',
+      status,
+      entries: [],
+      counts: { messages_total: total, messages_unknown: unknownCount, assets_failed: 0 },
+      failures: [],
+      scorecard: {
+        messages_total: total,
+        unknown_role_ratio: total > 0 ? Number((unknownCount / total).toFixed(4)) : 0,
+        unknown_role_pass: total > 0 ? unknownCount / total <= 0.05 : false,
+        has_messages: total > 0,
+        anomalyScore: total === 0 ? 40 : (unknownCount / Math.max(1, total) > 0.05 ? 30 : 0),
+      },
+      invariants: null,
+      verbose: false,
+    };
+    // Store as lastDiagnostics so Download Diagnostics works immediately
+    if (!lastDiagnostics) lastDiagnostics = diag;
+    // Persist to SW
+    try {
+      chrome.runtime.sendMessage({ action: 'STORE_DIAGNOSTICS', runId, payload: diag }, () => {
+        if (chrome.runtime.lastError) console.warn('[Diagnostics] SW store failed:', chrome.runtime.lastError.message);
+      });
+    } catch (_) { /* SW may be inactive */ }
   }
 
   document.querySelectorAll('.format-item').forEach((item) => {
@@ -1316,8 +1357,17 @@ document.addEventListener('DOMContentLoaded', () => {
   // Forensic bundle export: 3-file download (diagnostics.jsonl, run_summary.json, asset_failures.json)
   if (btnDownloadDiagnostics) {
     btnDownloadDiagnostics.onclick = withGesture(async () => {
+      // D2: Try local cache first, then fall back to SW storage
       if (!lastDiagnostics) {
-        showInfo('No Diagnostics', 'Run an export first (diagnostics are always captured).');
+        try {
+          const swResp = await new Promise((resolve) => {
+            chrome.runtime.sendMessage({ action: 'GET_DIAGNOSTICS_JSONL' }, (r) => resolve(r));
+          });
+          if (swResp?.ok && swResp.diagnostics) lastDiagnostics = swResp.diagnostics;
+        } catch (_) { /* SW unavailable */ }
+      }
+      if (!lastDiagnostics) {
+        showInfo('No Diagnostics', 'No extraction or export has run yet. Navigate to a supported chat page and try again.');
         return;
       }
       const date = new Date().toISOString().slice(0, 10);
