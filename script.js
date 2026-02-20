@@ -415,10 +415,16 @@ document.addEventListener('DOMContentLoaded', () => {
     exportSettingsCfg(settings);
   });
 
-  btnLogs.onclick = withGesture(() => {
-    chrome.runtime.sendMessage({ action: 'GET_LOGS' }, (logs) => {
-      downloadBlob(new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' }), 'ai_exporter_logs.json');
+  btnLogs.onclick = withGesture(async () => {
+    // Use promise-based sendMessage so download happens within gesture TTL
+    const logs = await new Promise((resolve) => {
+      chrome.runtime.sendMessage({ action: 'GET_LOGS' }, (resp) => resolve(resp));
     });
+    if (!logs || (Array.isArray(logs) && logs.length === 0)) {
+      showInfo('No Logs', 'No activity logs recorded yet. Logs are created during extraction and export operations.');
+      return;
+    }
+    downloadBlob(new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' }), 'ai_exporter_logs.json');
   });
 
   btnExportImages.onclick = withGesture(async () => {
@@ -466,25 +472,47 @@ document.addEventListener('DOMContentLoaded', () => {
     const filesFound = extractAllFileSources(currentChatData.messages);
     if (!filesFound.length) return showError(new Error('No chat-generated file links were detected.'));
 
+    setProcessingProgress(5, 'Fetching files...');
     const packed = [];
     let i = 1;
     for (const file of filesFound) {
       try {
-        const blob = await fetch(file.url).then((r) => r.blob());
+        setProcessingProgress(5 + (i / filesFound.length) * 80, `Fetching file ${i}/${filesFound.length}`);
+        // Try fetching via content script (page context) first — the popup can't
+        // access session-authenticated URLs (ChatGPT backend-api, etc.)
+        let blob;
+        try {
+          const resp = await new Promise((resolve, reject) => {
+            chrome.tabs.sendMessage(activeTabId, { action: 'FETCH_FILE', url: file.url }, (r) => {
+              if (chrome.runtime.lastError || !r?.ok) reject(new Error(r?.error || 'content-script fetch failed'));
+              else resolve(r);
+            });
+          });
+          // Content script returns base64 data
+          const bin = atob(resp.data);
+          const arr = new Uint8Array(bin.length);
+          for (let j = 0; j < bin.length; j++) arr[j] = bin.charCodeAt(j);
+          blob = new Blob([arr], { type: resp.mime || 'application/octet-stream' });
+        } catch {
+          // Fallback: direct fetch from popup (works for public URLs)
+          blob = await fetch(file.url).then((r) => r.blob());
+        }
         const ext = (blob.type.split('/')[1] || 'bin').replace('jpeg', 'jpg');
         const name = file.name.includes('.') ? file.name : `${file.name}.${ext}`;
         const data = new Uint8Array(await blob.arrayBuffer());
         packed.push({ name: `${String(i).padStart(3, '0')}_${name}`, content: data, mime: blob.type || 'application/octet-stream' });
         i += 1;
       } catch {
-        // skip failed file
+        // skip failed file — fail-soft
       }
     }
-    if (!packed.length) return showError(new Error('Detected files could not be downloaded from current session.'));
+    if (!packed.length) return showError(new Error('Detected files could not be downloaded from current session. The file URLs may require an active page session.'));
+    setProcessingProgress(90, 'Packing ZIP...');
     const zip = await createRobustZip(packed);
     const date = new Date().toISOString().slice(0, 10);
     const platformPrefix = (currentChatData.platform || 'Export').replace(/[^a-zA-Z0-9]/g, '');
     downloadBlob(zip, `${platformPrefix}_${date}_chat_files.zip`);
+    setProcessingProgress(100, 'Done');
   });
 
   document.getElementById('link-legal').onclick = () => showInfo('Legal', 'This is a local-processing developer version. Users remain responsible for lawful and compliant use in their jurisdiction.');
@@ -568,8 +596,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function extractAllFileSources(messages) {
     const files = [];
-    const fileRegex = /\[\[FILE:([^|\]]+)\|([^\]]+)\]\]/g;
     for (const m of messages || []) {
+      // Create regex inside loop to reset lastIndex per message
+      const fileRegex = /\[\[FILE:([^|\]]+)\|([^\]]+)\]\]/g;
       let match;
       while ((match = fileRegex.exec(m.content || '')) !== null) {
         const rawUrl = (match[1] || '').trim();

@@ -630,6 +630,37 @@
 
   function collectMessageNodes(rootEl) {
     if (!rootEl) return [];
+
+    // ChatGPT-specific: prefer elements that ALREADY carry role info.
+    // Modern ChatGPT uses article[data-testid^="conversation-turn"] as turn containers
+    // with nested [data-message-author-role] divs.
+    const chatgptTurns = Array.from(rootEl.querySelectorAll(
+      '[data-message-author-role], article[data-testid*="conversation-turn"], [data-testid*="conversation-turn"]'
+    )).filter((el) => {
+      // Only keep leaf-level containers (not deeply nested role-bearing wrappers)
+      const text = (el.textContent || '').trim();
+      return text.length > 0;
+    });
+
+    if (chatgptTurns.length >= 2) {
+      // Deduplicate: prefer children with data-message-author-role over parents
+      const deduped = [];
+      for (const el of chatgptTurns) {
+        const alreadyCovered = deduped.some((k) => k.contains(el) || el.contains(k));
+        if (alreadyCovered) {
+          // If the new element is a child of an existing one, replace parent with child
+          const parentIdx = deduped.findIndex((k) => k.contains(el));
+          if (parentIdx >= 0 && el.hasAttribute('data-message-author-role')) {
+            deduped[parentIdx] = el;
+          }
+          continue;
+        }
+        deduped.push(el);
+      }
+      return deduped.map((el, idx) => ({ el, indexInDom: idx, score: 10, signals: ['chatgpt-turn-container'] }));
+    }
+
+    // Generic fallback for non-ChatGPT or when ChatGPT selectors find nothing
     const raw = Array.from(rootEl.querySelectorAll('article,section,div,li')).filter((el) => {
       const text = (el.textContent || '').trim();
       return text.length > 0 || el.querySelector('pre code,img');
@@ -677,7 +708,8 @@
     let confidence = 0.3;
 
     // 1. Check data-message-author-role on element AND ancestors (ChatGPT primary signal)
-    const authorRole = findAttrUp(messageEl, 'data-message-author-role', 3);
+    // Walk up to 10 ancestors — ChatGPT DOM is deeply nested
+    const authorRole = findAttrUp(messageEl, 'data-message-author-role', 10);
     if (authorRole === 'user') {
       evidence.push('attr:data-message-author-role=user');
       role = 'user';
@@ -689,7 +721,7 @@
     }
 
     // 2. Check data-testid attributes (ChatGPT uses conversation-turn-N patterns)
-    const testId = findAttrUp(messageEl, 'data-testid', 3) || '';
+    const testId = findAttrUp(messageEl, 'data-testid', 10) || '';
     if (/user/i.test(testId)) {
       evidence.push(`testid:${testId}`);
       if (role === 'unknown') role = 'user';
@@ -1223,6 +1255,27 @@
       const findings = discoverClaudeStructure();
       sendResponse({ success: true, findings });
       return true;
+    }
+    // FETCH_FILE: download a file in page context (has session cookies)
+    // then return as base64 so the popup can pack it into a ZIP.
+    if (request.action === 'FETCH_FILE') {
+      (async () => {
+        try {
+          const resp = await fetch(request.url, { credentials: 'include' });
+          if (!resp.ok) { sendResponse({ ok: false, error: `HTTP ${resp.status}` }); return; }
+          const blob = await resp.blob();
+          const reader = new FileReader();
+          reader.onload = () => {
+            const base64 = reader.result.split(',')[1] || '';
+            sendResponse({ ok: true, data: base64, mime: blob.type, size: blob.size });
+          };
+          reader.onerror = () => sendResponse({ ok: false, error: 'FileReader failed' });
+          reader.readAsDataURL(blob);
+        } catch (e) {
+          sendResponse({ ok: false, error: e.message || 'fetch failed' });
+        }
+      })();
+      return true; // async response
     }
     return false;
   });
