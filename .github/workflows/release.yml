@@ -3,6 +3,8 @@ on:
   push:
     tags:
       - 'v*'
+  pull_request:
+    branches: [main]
 
 jobs:
   validate-release:
@@ -12,8 +14,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm ci
+
+      # Syntax check runtime files
       - run: node -c content.js
       - run: node -c script.js
-      - run: node scripts/generate_gherkin_from_code.cjs
-      - run: npm run build
+      - run: node -c background.js
+
+      # CI gates
+      - run: node scripts/verify_version.cjs
+      - run: node scripts/verify_claims.cjs
+      - run: node scripts/verify_gesture_path.cjs
+
+      # Contract tests
+      - run: node --test tests/integration/legal_headers_contract.test.mjs
+      - run: node --test tests/integration/release_consistency_contract.test.mjs

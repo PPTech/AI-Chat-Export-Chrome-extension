@@ -1,6 +1,5 @@
 // License: MIT
-// Code generated with support from CODEX and CODEX CLI.
-// Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
+// Author: Dr. Babak Sorkhpour (with help of AI)
 // script.js - Main Controller v0.10.11
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -365,6 +364,13 @@ document.addEventListener('DOMContentLoaded', () => {
       lastAssetFailures,
       invariantResult
     );
+
+    // Phase 1: Persist diagnostics to service worker (always, not just debug)
+    try {
+      chrome.runtime.sendMessage({ action: 'STORE_DIAGNOSTICS', runId, payload: lastDiagnostics }, () => {
+        if (chrome.runtime.lastError) console.warn('[Diagnostics] SW store failed:', chrome.runtime.lastError.message);
+      });
+    } catch (_swErr) { /* SW may be inactive; popup still has lastDiagnostics */ }
 
     // Show warning if formats failed but export continued
     if (formatErrors.length > 0) {

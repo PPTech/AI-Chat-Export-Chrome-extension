@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "AI Chat Exporter (Ultimate)",
   "version": "0.10.11",
-  "description": "Industrial-grade multi-platform chat extraction. Secure local-first architecture. Powered by Gemini 2.0 Flash.",
+  "description": "Industrial-grade multi-platform chat extraction. Secure local-first architecture. No external APIs.",
   "action": {
     "default_popup": "index.html",
     "default_title": "AI Chat Exporter"
@@ -17,7 +17,10 @@
   "optional_host_permissions": [
     "*://gemini.google.com/*",
     "*://lh3.googleusercontent.com/*",
-    "*://aistudio.google.com/*"
+    "*://lh3.google.com/*",
+    "*://aistudio.google.com/*",
+    "*://*.oaiusercontent.com/*",
+    "*://*.oaistatic.com/*"
   ],
   "content_scripts": [
     {

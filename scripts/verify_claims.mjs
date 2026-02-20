@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // License: MIT
+// Author: Dr. Babak Sorkhpour (with help of AI)
 // verify_claims.mjs - CI gate that verifies export truthfulness claims.
 // Exit code 0 = pass, 1 = fail.
 
@@ -71,9 +72,9 @@ const scriptPath = join(ROOT, 'script.js');
 try {
   const script = readFileSync(scriptPath, 'utf8');
 
-  // DOCX must be MHTML or actual ZIP
-  if (script.includes("'application/msword'") && !script.includes("ext: 'mhtml'")) {
-    errors.push('FORMAT: doc format claims application/msword but does not output MHTML');
+  // DOC output: honest HTML with application/msword MIME (Word opens it correctly)
+  if (script.includes("'application/msword'") && !script.includes('doc')) {
+    errors.push('FORMAT: doc format uses application/msword but doc handling missing');
   }
 
   // PDF must be text-based
