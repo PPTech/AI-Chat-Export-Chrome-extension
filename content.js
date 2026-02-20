@@ -1678,6 +1678,11 @@
       sendResponse({ success: true, findings });
       return true;
     }
+    // Ping: check if content script is injected and responsive
+    if (request.action === 'ping') {
+      sendResponse({ ok: true, ts: Date.now() });
+      return true;
+    }
     // FETCH_FILE: download a file in page context (has session cookies)
     // then return as base64 so the popup can pack it into a ZIP.
     if (request.action === 'FETCH_FILE') {
