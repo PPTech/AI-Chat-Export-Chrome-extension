@@ -1,6 +1,28 @@
 # Changelog
 # Author: Dr. Babak Sorkhpour (with help of AI)
 
+## 0.11.0 - 2026-02-20
+
+### New features
+- **ChatGPT full history**: API-based extraction via `/backend-api/conversation/{id}` gets all messages without scrolling. DOM fallback when API unavailable.
+- **Canvas PDF**: Browser-canvas rendering for full Unicode support (Arabic, Persian, CJK) with inline image embedding.
+- **Asset embedding in ZIP** (D6): Images and files resolved during export, stored in `assets/` folder inside ZIP. HTML/DOC/Markdown references rewritten to local paths. Allowlisted hosts only.
+- **Always-on diagnostics** (D2): Every extraction attempt (success or fail) produces a downloadable diagnostic bundle. "Download Diagnostics" falls back to service worker storage.
+- **AI Studio multi-strategy extractor** (D4): 4-strategy ladder (shadow DOM, expanded flat DOM, geometry-based, MutationObserver wait-then-retry).
+- **Flight Recorder v3** (D7): Structured event types, run correlation IDs, content redaction in non-verbose mode, asset resolution rate scorecard, failure reason aggregation. Schema v6.
+
+### Bug fixes
+- **Protocol fix** (D1): `EXTRACTION_PROGRESS` handler added to service worker. Extraction result messages downgraded from ERROR to INFO. Zero `UNKNOWN_ACTION` spam.
+- **Gemini role splitting** (D3): Combined transcript blocks ("You said ... Gemini said ...") split into separate user/assistant turns. UI noise ("Show thinking", button labels) stripped. `unknown_role_ratio` target < 5%.
+- Real-time extraction progress bar in popup UI.
+
+### How to verify
+1. Export any chat → ZIP contains `assets/` folder with resolved images + `asset_manifest.json`.
+2. Click "Download Diagnostics" after a failed extraction → bundle is available.
+3. Export a Gemini chat → roles should be User/Gemini (not Unknown); no "Show thinking" in content.
+4. Export from AI Studio → nonzero message count with strategy info in diagnostics.
+5. Check logs → zero `UNKNOWN_ACTION` entries.
+
 ## 0.10.11 - 2026-02-19
 
 ### What broke
