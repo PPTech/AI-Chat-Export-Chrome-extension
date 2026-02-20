@@ -1,6 +1,36 @@
 # Changelog
 # Author: Dr. Babak Sorkhpour (with help of AI)
 
+## 0.12.0 - 2026-02-20
+
+### Diagnostics pipeline
+- **Always-on diagnostics**: `persistExtractionDiagnostics` now always overwrites `lastDiagnostics` with latest extraction data (was only set once).
+- **GET_DIAGNOSTICS alias**: Added backwards-compatible `GET_DIAGNOSTICS` handler in service worker (routes to `GET_DIAGNOSTICS_JSONL`).
+- **Schema v6 unified**: Both extraction and export diagnostics now use `diagnostics.v6` consistently.
+- **COMMAND_IN/COMMAND_OUT invariant**: Documented and tested contract that every background message gets a response.
+
+### Fail-soft export
+- **Bundle manifest renamed**: `export_manifest.json` → `export_bundle_manifest.json` with schema `export-bundle-manifest.v1`.
+- **Asset failure reasons**: Manifest now includes `assetFailureReasons` array with truncated URLs and reason codes.
+- **Always-bundled**: Diagnostics summary and bundle manifest now included in every export (not just multi-file ZIP mode).
+
+### Attachment classifier
+- **Favicon filtering**: `.ico` moved from IMAGE_EXTENSIONS to HARD_IGNORE_EXTENSIONS — favicons blocked by default.
+- **Allowlist cleanup**: Removed `githubusercontent.com` from ASSET_ALLOWLIST (was a placeholder host).
+
+### Tests
+- New: `failsoft_bundle_contract.test.mjs` — validates bundle manifest, diagnostics, and asset failure reasons always present.
+- New: `background_invariants.test.mjs` — validates every background.js handler calls `sendResponse()`.
+- Updated: `failsoft_diagnostics_contract.test.mjs` — refs updated for renamed manifest and v6 schema.
+
+### Cleanup
+- Removed dead `_unused_detectScriptProfile()` function from `script.js`.
+- Updated `verify_claims.cjs` to check renamed manifest.
+
+### Docs
+- Updated `README.md` and `CHANGELOG.md` for v0.12.0.
+- Version bumped via SSOT (`lib/version.mjs` → all files).
+
 ## 0.11.0 - 2026-02-20
 
 ### New features

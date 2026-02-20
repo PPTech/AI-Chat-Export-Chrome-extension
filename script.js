@@ -92,7 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function exportSettingsCfg(settings) {
     const lines = Object.entries(settings).map(([k, v]) => `${k}=${String(v)}`);
-    const cfg = `# AI Chat Exporter Settings\n# version=0.11.0\n${lines.join('\n')}\n`;
+    const cfg = `# AI Chat Exporter Settings\n# version=0.12.0\n${lines.join('\n')}\n`;
     const date = new Date().toISOString().slice(0, 10);
     downloadBlob(new Blob([cfg], { type: 'text/plain' }), `ai_chat_exporter_settings_${date}.cfg`);
   }
@@ -359,7 +359,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       return {
         schema_version: 'diagnostics.v6',
-        run: { run_id: runId, started_at_utc: startedAt, ended_at_utc: endedAt, tool_version: '0.11.0', platform },
+        run: { run_id: runId, started_at_utc: startedAt, ended_at_utc: endedAt, tool_version: '0.12.0', platform },
         tabScope: activeTabId != null ? `tab:${activeTabId}` : 'global',
         entries: verbose ? entries : entries.filter((e) => e.lvl === 'ERROR' || e.lvl === 'WARN'),
         entryCount: entries.length,
@@ -523,7 +523,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Show warning if formats failed but export continued
     if (formatErrors.length > 0) {
-      showInfo('Partial Export', `${formatErrors.length} format(s) failed: ${formatErrors.map((e) => e.format).join(', ')}. Other formats exported successfully. Check export_manifest.json for details.`);
+      showInfo('Partial Export', `${formatErrors.length} format(s) failed: ${formatErrors.map((e) => e.format).join(', ')}. Other formats exported successfully. Check export_bundle_manifest.json for details.`);
     }
 
     updateExportBtn();
@@ -579,7 +579,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const report = {
       schema: 'log-report.v2',
       exportedAt: new Date().toISOString(),
-      toolVersion: '0.11.0',
+      toolVersion: '0.12.0',
       platform: currentChatData?.platform || 'N/A',
       messageCount: currentChatData?.messages?.length || 0,
       title: currentChatData?.title || 'N/A',

@@ -30,7 +30,7 @@ if (!versionMatch) {
 
 // 2. Export pipeline forensic artifacts
 const scriptSrc = fs.readFileSync(path.join(root, 'script.js'), 'utf8');
-for (const token of ['export_manifest.json', 'diagnostics_summary.json', 'createPopupFlightRecorder']) {
+for (const token of ['export_bundle_manifest.json', 'diagnostics_summary.json', 'createPopupFlightRecorder']) {
   if (!scriptSrc.includes(token)) claims.push(`script.js missing forensic artifact: ${token}`);
 }
 
