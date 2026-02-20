@@ -1,124 +1,728 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AI Chat Exporter Ultimate</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+    rel="stylesheet">
   <style>
+    /* ─── Design Tokens ─── */
     :root {
-      --bg-color: #ffffff;
-      --text-main: #111827;
-      --text-sub: #6b7280;
-      --border: #e5e7eb;
-      --primary: #2563eb;
-      --primary-hover: #1d4ed8;
-      --surface: #f9fafb;
+      --bg-color: #f0f2f5;
+      --bg-gradient: linear-gradient(135deg, #f0f2f5 0%, #e2e8f0 50%, #dbeafe 100%);
+      --text-main: #0f172a;
+      --text-sub: #64748b;
+      --border: rgba(148, 163, 184, 0.25);
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --primary-glow: rgba(99, 102, 241, 0.25);
+      --accent-gradient: linear-gradient(135deg, #6366f1 0%, #06b6d4 100%);
+      --surface: rgba(255, 255, 255, 0.72);
+      --surface-hover: rgba(255, 255, 255, 0.88);
+      --glass-blur: blur(16px);
       --danger: #ef4444;
       --warning: #f59e0b;
       --success: #10b981;
+      --card-shadow: 0 4px 24px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.04);
+      --modal-shadow: 0 25px 60px -12px rgba(15, 23, 42, 0.2);
     }
 
     body.dark {
-      --bg-color: #0f172a;
+      --bg-color: #0c0f1a;
+      --bg-gradient: linear-gradient(135deg, #0c0f1a 0%, #111827 50%, #0f172a 100%);
       --text-main: #f1f5f9;
       --text-sub: #94a3b8;
-      --border: #1e293b;
-      --surface: #1e293b;
+      --border: rgba(148, 163, 184, 0.12);
+      --surface: rgba(30, 41, 59, 0.65);
+      --surface-hover: rgba(30, 41, 59, 0.85);
+      --primary-glow: rgba(99, 102, 241, 0.18);
+      --card-shadow: 0 4px 24px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.15);
+      --modal-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.5);
+    }
+
+    /* ─── Reset & Base ─── */
+    * {
+      box-sizing: border-box;
     }
 
     body {
-      width: 400px;
+      width: 420px;
       margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background-color: var(--bg-color);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg-gradient);
       color: var(--text-main);
       overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
     }
 
-    .container { display: flex; flex-direction: column; min-height: 560px; }
+    /* ─── Modern Scrollbar ─── */
+    ::-webkit-scrollbar {
+      width: 5px;
+    }
 
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 10px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--text-sub);
+    }
+
+    /* ─── Layout ─── */
+    .container {
+      display: flex;
+      flex-direction: column;
+      min-height: 580px;
+    }
+
+    /* ─── Header ─── */
     header {
-      padding: 12px 16px;
+      padding: 14px 18px;
       border-bottom: 1px solid var(--border);
       display: flex;
       justify-content: space-between;
       align-items: center;
-      background-color: var(--bg-color);
-      position: sticky; top: 0; z-index: 10;
+      background: var(--surface);
+      backdrop-filter: var(--glass-blur);
+      -webkit-backdrop-filter: var(--glass-blur);
+      position: sticky;
+      top: 0;
+      z-index: 10;
     }
-    
-    .logo-area h1 { margin: 0; font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
-    .dev-badge { background: #3b82f6; color: white; font-size: 9px; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; }
-    .icon-btn { background: none; border: 1px solid var(--border); border-radius: 8px; width: 32px; height: 32px; cursor: pointer; color: var(--text-main); transition: all 0.2s; display: flex; align-items: center; justify-content: center; }
-    .icon-btn:hover { background: var(--surface); border-color: var(--primary); }
 
-    main { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+    .logo-area h1 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--accent-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
 
-    .status-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; text-align: center; position: relative; }
-    .btn-clear-abs { position: absolute; top: 8px; right: 8px; font-size: 10px; color: var(--danger); background: none; border: none; cursor: pointer; text-decoration: underline; }
-    .platform-badge { font-size: 10px; font-weight: 700; color: var(--primary); text-transform: uppercase; display: block; }
-    .message-count { font-size: 32px; font-weight: 800; margin: 4px 0; }
-    .message-label { font-size: 11px; color: var(--text-sub); }
+    .dev-badge {
+      background: var(--accent-gradient);
+      color: white;
+      font-size: 8px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      -webkit-text-fill-color: white;
+      animation: badge-pulse 3s ease-in-out infinite;
+    }
 
-    .action-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-    .action-btn { flex: 1 1 auto; min-width: 70px; padding: 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-color); color: var(--text-main); font-size: 11px; font-weight: 600; cursor: pointer; }
-    .action-btn:hover { border-color: var(--primary); color: var(--primary); }
+    @keyframes badge-pulse {
 
-    .section-title { font-size: 11px; font-weight: 700; color: var(--text-sub); text-transform: uppercase; margin-bottom: 6px; }
-    
-    .format-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.7;
+      }
+    }
+
+    .icon-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      width: 34px;
+      height: 34px;
+      cursor: pointer;
+      color: var(--text-main);
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: var(--glass-blur);
+      font-size: 14px;
+    }
+
+    .icon-btn:hover {
+      background: var(--surface-hover);
+      border-color: var(--primary);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px var(--primary-glow);
+    }
+
+    .icon-btn:active {
+      transform: scale(0.95);
+    }
+
+    /* ─── Main ─── */
+    main {
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* ─── Status Card ─── */
+    .status-card {
+      background: var(--surface);
+      backdrop-filter: var(--glass-blur);
+      -webkit-backdrop-filter: var(--glass-blur);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      text-align: center;
+      position: relative;
+      box-shadow: var(--card-shadow);
+      transition: all 0.3s ease;
+    }
+
+    .status-card:hover {
+      box-shadow: var(--card-shadow), 0 0 0 1px var(--primary-glow);
+    }
+
+    .btn-clear-abs {
+      position: absolute;
+      top: 10px;
+      right: 12px;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--danger);
+      background: none;
+      border: none;
+      cursor: pointer;
+      text-decoration: none;
+      opacity: 0.6;
+      transition: opacity 0.2s;
+    }
+
+    .btn-clear-abs:hover {
+      opacity: 1;
+      text-decoration: underline;
+    }
+
+    .platform-badge {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      background: var(--accent-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      text-transform: uppercase;
+      display: block;
+    }
+
+    .message-count {
+      font-size: 36px;
+      font-weight: 900;
+      margin: 6px 0;
+      background: var(--accent-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .message-label {
+      font-size: 11px;
+      color: var(--text-sub);
+      font-weight: 500;
+    }
+
+    /* ─── Progress Bar ─── */
+    .progress-track {
+      width: 100%;
+      height: 4px;
+      background: var(--border);
+      border-radius: 4px;
+      margin-top: 8px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .progress-fill {
+      width: 0%;
+      height: 100%;
+      border-radius: 4px;
+      background: var(--accent-gradient);
+      transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+    }
+
+    .progress-fill::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+      animation: shimmer 2s ease-in-out infinite;
+    }
+
+    @keyframes shimmer {
+      0% {
+        transform: translateX(-100%);
+      }
+
+      100% {
+        transform: translateX(100%);
+      }
+    }
+
+    /* ─── Action Buttons ─── */
+    .action-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .action-btn {
+      flex: 1 1 auto;
+      min-width: 72px;
+      padding: 9px 6px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-main);
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      backdrop-filter: var(--glass-blur);
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .action-btn:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px var(--primary-glow);
+    }
+
+    .action-btn:active {
+      transform: scale(0.97);
+    }
+
+    /* ─── Format Grid ─── */
+    .section-title {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      color: var(--text-sub);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .format-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+
     .format-item {
-        border: 1px solid var(--border); border-radius: 10px; padding: 10px 8px; cursor: pointer;
-        background: var(--bg-color); transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px 10px;
+      cursor: pointer;
+      background: var(--surface);
+      backdrop-filter: var(--glass-blur);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: var(--card-shadow);
     }
-    .format-item:hover { transform: translateY(-2px); border-color: var(--primary); }
+
+    .format-item:hover {
+      transform: translateY(-3px);
+      border-color: var(--primary);
+      box-shadow: var(--card-shadow), 0 8px 24px var(--primary-glow);
+    }
+
+    .format-item:active {
+      transform: scale(0.98);
+    }
+
     .format-item.selected {
-        border-color: var(--primary); background: rgba(37, 99, 235, 0.08);
-        box-shadow: 0 0 0 1px var(--primary);
+      border-color: var(--primary);
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(6, 182, 212, 0.05));
+      box-shadow: 0 0 0 2px var(--primary), var(--card-shadow);
     }
-    .format-item label { font-size: 12px; font-weight: 700; display: block; pointer-events: none; }
-    .format-item .tooltip { font-size: 9px; color: var(--text-sub); display: block; margin-top: 3px; pointer-events: none; }
-    .format-item.selected label { color: var(--primary); }
 
+    .format-icon {
+      font-size: 18px;
+      flex-shrink: 0;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--surface-hover);
+      border-radius: 8px;
+    }
+
+    .format-text {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .format-item label {
+      font-size: 12px;
+      font-weight: 700;
+      display: block;
+      pointer-events: none;
+    }
+
+    .format-item .tooltip {
+      font-size: 9px;
+      color: var(--text-sub);
+      display: block;
+      pointer-events: none;
+      font-weight: 500;
+    }
+
+    .format-item.selected label {
+      background: var(--accent-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* ─── Export Button ─── */
     .export-action {
-        background: var(--primary); color: white; border: none; padding: 14px; border-radius: 12px;
-        font-weight: 700; font-size: 14px; cursor: pointer; width: 100%; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
-        transition: all 0.2s; margin-top: 4px;
+      background: var(--accent-gradient);
+      color: white;
+      border: none;
+      padding: 15px;
+      border-radius: 14px;
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
+      width: 100%;
+      letter-spacing: 0.3px;
+      box-shadow: 0 6px 20px var(--primary-glow);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      margin-top: 6px;
+      position: relative;
+      overflow: hidden;
     }
-    .export-action:hover { background: var(--primary-hover); }
-    .export-action:disabled { background: var(--text-sub); opacity: 0.5; cursor: not-allowed; box-shadow: none; }
 
-    /* Modal Styles */
-    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 100; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
-    .modal-content { background: var(--bg-color); width: 330px; padding: 24px; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); max-height: 85vh; overflow-y: auto; }
-    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-    .modal-header h2 { margin: 0; font-size: 18px; font-weight: 700; }
-    .close-btn { width: 100%; padding: 12px; margin-top: 24px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; font-weight: 700; }
+    .export-action::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
+      transition: left 0.5s;
+    }
 
-    .error-header { display: flex; align-items: center; gap: 10px; color: var(--danger); margin-bottom: 15px; }
-    .error-title { font-weight: 800; font-size: 16px; }
-    .error-detail-box { background: var(--surface); padding: 12px; border-radius: 8px; border: 1px solid var(--border); font-family: monospace; font-size: 11px; margin-bottom: 12px; color: var(--text-main); word-break: break-all; }
-    .error-suggestion { font-size: 12px; color: var(--text-sub); line-height: 1.5; }
-    
-    .about-row { margin-bottom: 12px; font-size: 12px; color: var(--text-main); line-height: 1.5; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
-    .about-label { font-weight: 700; display: block; margin-bottom: 2px; color: var(--text-sub); }
-    .about-link { color: var(--primary); text-decoration: none; }
+    .export-action:hover::before {
+      left: 100%;
+    }
 
-    .settings-list { display: flex; flex-direction: column; gap: 14px; }
-    .setting-row { display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
-    .setting-label { font-size: 13px; font-weight: 600; }
-    .setting-info { font-size: 10px; color: var(--text-sub); }
-    
-    footer { padding: 12px; text-align: center; border-top: 1px solid var(--border); background: var(--surface); margin-top: auto; }
-    .copyright { font-size: 10px; font-weight: 700; }
-    .footer-links { font-size: 9px; color: var(--text-sub); display: flex; justify-content: center; gap: 12px; margin-top: 4px; }
-    .footer-links span { cursor: pointer; text-decoration: underline; }
+    .export-action:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 28px var(--primary-glow);
+    }
+
+    .export-action:active {
+      transform: scale(0.98);
+    }
+
+    .export-action:disabled {
+      background: var(--border);
+      opacity: 0.5;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    .export-action:disabled::before {
+      display: none;
+    }
+
+    /* ─── Modal Styles ─── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+    }
+
+    .modal-content {
+      background: var(--surface);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      width: 340px;
+      padding: 26px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      box-shadow: var(--modal-shadow);
+      max-height: 85vh;
+      overflow-y: auto;
+      animation: modal-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    @keyframes modal-in {
+      from {
+        opacity: 0;
+        transform: scale(0.92) translateY(8px);
+      }
+
+      to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 22px;
+    }
+
+    .modal-header h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 800;
+      background: var(--accent-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .close-btn {
+      width: 100%;
+      padding: 13px;
+      margin-top: 24px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--text-main);
+      transition: all 0.2s;
+    }
+
+    .close-btn:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    /* ─── Error Modal ─── */
+    .error-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--danger);
+      margin-bottom: 15px;
+    }
+
+    .error-title {
+      font-weight: 800;
+      font-size: 16px;
+    }
+
+    .error-detail-box {
+      background: var(--surface);
+      padding: 14px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      font-family: 'JetBrains Mono', 'Cascadia Code', monospace;
+      font-size: 11px;
+      margin-bottom: 14px;
+      color: var(--text-main);
+      word-break: break-all;
+      line-height: 1.5;
+    }
+
+    .error-suggestion {
+      font-size: 12px;
+      color: var(--text-sub);
+      line-height: 1.6;
+    }
+
+    /* ─── About Modal ─── */
+    .about-row {
+      margin-bottom: 14px;
+      font-size: 12px;
+      color: var(--text-main);
+      line-height: 1.6;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 10px;
+    }
+
+    .about-label {
+      font-weight: 700;
+      display: block;
+      margin-bottom: 3px;
+      color: var(--text-sub);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .about-link {
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .about-link:hover {
+      text-decoration: underline;
+    }
+
+    /* ─── Settings ─── */
+    .settings-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      padding: 2px 0;
+    }
+
+    .setting-label {
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .setting-info {
+      font-size: 10px;
+      color: var(--text-sub);
+      margin-top: 2px;
+      font-weight: 500;
+    }
+
+    .settings-btn {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-main);
+      margin-bottom: 8px;
+      transition: all 0.2s;
+    }
+
+    .settings-btn:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    /* ─── Toggle Switch ─── */
+    input[type="checkbox"] {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 38px;
+      height: 20px;
+      border-radius: 12px;
+      background: var(--border);
+      cursor: pointer;
+      position: relative;
+      transition: all 0.3s;
+      flex-shrink: 0;
+    }
+
+    input[type="checkbox"]::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: white;
+      transition: all 0.3s;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+
+    input[type="checkbox"]:checked {
+      background: var(--accent-gradient);
+    }
+
+    input[type="checkbox"]:checked::after {
+      transform: translateX(18px);
+    }
+
+    /* ─── Footer ─── */
+    footer {
+      padding: 14px;
+      text-align: center;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      backdrop-filter: var(--glass-blur);
+      margin-top: auto;
+    }
+
+    .copyright {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-sub);
+    }
+
+    .footer-links {
+      font-size: 9px;
+      color: var(--text-sub);
+      display: flex;
+      justify-content: center;
+      gap: 14px;
+      margin-top: 6px;
+    }
+
+    .footer-links span {
+      cursor: pointer;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    .footer-links span:hover {
+      color: var(--primary);
+    }
+
+    .footer-links .version {
+      cursor: default;
+      opacity: 0.6;
+    }
   </style>
 </head>
+
 <body class="light">
   <div class="container">
     <header>
-      <div class="logo-area"><h1>AI Exporter <span class="dev-badge">ULTIMATE</span></h1></div>
+      <div class="logo-area">
+        <h1>AI Exporter <span class="dev-badge">ULTIMATE</span></h1>
+      </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
         <button id="btn-open-settings" class="icon-btn" title="Settings">⚙️</button>
         <button id="btn-open-about" class="icon-btn" title="About draft page">ℹ️</button>
@@ -135,36 +739,66 @@
         <div id="stats-view" style="display: none;">
           <div class="message-count" id="msg-count">0</div>
           <div class="message-label">Messages Ready</div>
-          <div class="message-label" id="detected-summary" style="margin-top:2px;">Detected: 0 messages • 0 photos • 0 files • 0 others</div>
-          <div id="analyze-progress" class="message-label" style="margin-top:4px;">Analysis: 0%</div>
-          <div style="width:100%;height:4px;background:var(--border);border-radius:2px;margin-top:4px;overflow:hidden;">
-            <div id="analyze-progress-bar" style="width:0%;height:100%;background:var(--primary);border-radius:2px;transition:width 0.3s ease;"></div>
+          <div class="message-label" id="detected-summary" style="margin-top:3px;">Detected: 0 messages • 0 photos • 0
+            files • 0 others</div>
+          <div id="analyze-progress" class="message-label" style="margin-top:6px;">Analysis: 0%</div>
+          <div class="progress-track">
+            <div id="analyze-progress-bar" class="progress-fill"></div>
           </div>
           <div class="action-row">
-            <button id="btn-preview" class="action-btn" title="Preview extracted messages before export">Preview</button>
-            <button id="btn-load-full" class="action-btn" title="Load full chat history from beginning">Fetch Full</button>
-            <button id="btn-export-images" class="action-btn" title="Export all detected chat images separately">Export Photos</button>
-            <button id="btn-export-files" class="action-btn" title="Export files created in chat as ZIP">Export Files</button>
+            <button id="btn-preview" class="action-btn"
+              title="Preview extracted messages before export">Preview</button>
+            <button id="btn-load-full" class="action-btn" title="Load full chat history from beginning">Fetch
+              Full</button>
+            <button id="btn-export-images" class="action-btn" title="Export all detected chat images separately">Export
+              Photos</button>
+            <button id="btn-export-files" class="action-btn" title="Export files created in chat as ZIP">Export
+              Files</button>
           </div>
         </div>
         <div id="empty-view">
-            <p style="font-size: 13px; color: var(--text-sub);">Analyzing active tab...</p>
+          <p style="font-size: 13px; color: var(--text-sub); font-weight: 500;">Analyzing active tab...</p>
         </div>
       </div>
 
       <div class="section-title">Output Formats</div>
       <div class="format-grid">
-        <div class="format-item" data-ext="md" title="Export Markdown format"><label>Markdown</label><span class="tooltip">Clean notes</span></div>
-        <div class="format-item" data-ext="html" title="Export HTML with embedded images"><label>HTML Web</label><span class="tooltip">Full layout</span></div>
-        <div class="format-item" data-ext="json" title="Export structured JSON data"><label>JSON Data</label><span class="tooltip">Raw data</span></div>
-        <div class="format-item" data-ext="doc" title="Export Word-compatible HTML document"><label>Word Doc</label><span class="tooltip">Embedded images</span></div>
-        <div class="format-item" data-ext="csv" title="Export CSV for Excel"><label>Excel CSV</label><span class="tooltip">Spreadsheet</span></div>
-        <div class="format-item" data-ext="sql" title="Export SQL insert statements"><label>SQL DB</label><span class="tooltip">Database Dump</span></div>
-        <div class="format-item" data-ext="txt" title="Export plain text"><label>Plain Text</label><span class="tooltip">Simple text</span></div>
-        <div class="format-item" data-ext="pdf" title="Export standalone PDF"><label>PDF</label><span class="tooltip">Standalone File</span></div>
+        <div class="format-item" data-ext="md" title="Export Markdown format">
+          <span class="format-icon">📝</span>
+          <div class="format-text"><label>Markdown</label><span class="tooltip">Clean notes</span></div>
+        </div>
+        <div class="format-item" data-ext="html" title="Export HTML with embedded images">
+          <span class="format-icon">🌐</span>
+          <div class="format-text"><label>HTML Web</label><span class="tooltip">Full layout</span></div>
+        </div>
+        <div class="format-item" data-ext="json" title="Export structured JSON data">
+          <span class="format-icon">📊</span>
+          <div class="format-text"><label>JSON Data</label><span class="tooltip">Raw data</span></div>
+        </div>
+        <div class="format-item" data-ext="doc" title="Export Word-compatible HTML document">
+          <span class="format-icon">📄</span>
+          <div class="format-text"><label>Word Doc</label><span class="tooltip">Embedded images</span></div>
+        </div>
+        <div class="format-item" data-ext="csv" title="Export CSV for Excel">
+          <span class="format-icon">📈</span>
+          <div class="format-text"><label>Excel CSV</label><span class="tooltip">Spreadsheet</span></div>
+        </div>
+        <div class="format-item" data-ext="sql" title="Export SQL insert statements">
+          <span class="format-icon">🗄️</span>
+          <div class="format-text"><label>SQL DB</label><span class="tooltip">Database Dump</span></div>
+        </div>
+        <div class="format-item" data-ext="txt" title="Export plain text">
+          <span class="format-icon">📃</span>
+          <div class="format-text"><label>Plain Text</label><span class="tooltip">Simple text</span></div>
+        </div>
+        <div class="format-item" data-ext="pdf" title="Export standalone PDF">
+          <span class="format-icon">📕</span>
+          <div class="format-text"><label>PDF</label><span class="tooltip">Standalone File</span></div>
+        </div>
       </div>
 
-      <button id="btn-export-main" class="export-action" disabled title="Generate selected export files">Generate Package</button>
+      <button id="btn-export-main" class="export-action" disabled title="Generate selected export files">Generate
+        Package</button>
     </main>
 
     <footer>
@@ -172,83 +806,123 @@
       <div class="footer-links">
         <span id="link-legal" title="Open legal usage information">Legal</span>
         <span id="link-security" title="Open security model information">Security</span>
-        <span class="version">v0.12.0</span>
+        <span class="version">v0.12.1</span>
       </div>
     </footer>
 
     <!-- Settings Modal -->
     <div id="settings-modal" class="modal-overlay">
-        <div class="modal-content">
-            <div class="modal-header"><h2>Settings</h2><button id="btn-close-settings" style="border:none;background:none;cursor:pointer;">✕</button></div>
-            <div class="settings-list">
-                <div class="setting-item">
-                    <label class="setting-row"><span class="setting-label">Include Images</span><input type="checkbox" id="check-images" checked title="Enable image extraction and embedding for rich formats"></label>
-                    <span class="setting-info">Embeds Base64 images for Word/HTML</span>
-                </div>
-                <div class="setting-item">
-                    <label class="setting-row"><span class="setting-label">Syntax Highlighting</span><input type="checkbox" id="check-code" checked title="Preserve code blocks during extraction"></label>
-                    <span class="setting-info">Preserve code block colors/formatting</span>
-                </div>
-                <div class="setting-item">
-                    <label class="setting-row"><span class="setting-label">Raw HTML (Risky)</span><input type="checkbox" id="check-raw-html" title="Capture raw HTML (advanced/risky)"></label>
-                    <span class="setting-info">Captures exact DOM</span>
-                </div>
-                <div class="setting-item">
-                    <label class="setting-row"><span class="setting-label">ZIP Compression</span><input type="checkbox" id="check-zip" title="Bundle outputs into ZIP archive"></label>
-                </div>
-                <div class="setting-item">
-                    <label class="setting-row"><span class="setting-label">Pack Photos as ZIP</span><input type="checkbox" id="check-photo-zip" checked title="If enabled, Export Photos creates one ZIP file. If disabled, photos are exported in batch files."></label>
-                </div>
-                <div class="setting-item">
-                    <label class="setting-row"><span class="setting-label">Extract and ZIP Chat Files</span><input type="checkbox" id="check-export-files" checked title="If enabled, detected chat file links are exported and packed into ZIP."></label>
-                </div>
-                <div class="setting-item">
-                    <label class="setting-row"><span class="setting-label">Advanced: Links as Attachments</span><input type="checkbox" id="check-advanced-links" title="Treat hyperlinks in message text as downloadable attachments (advanced)"></label>
-                    <span class="setting-info">Links in text become downloads (use with caution)</span>
-                </div>
-                <div class="setting-item">
-                    <label class="setting-row"><span class="setting-label">Debug Mode</span><input type="checkbox" id="check-debug-mode" title="Enable flight recorder, invariant checks, and forensic diagnostics bundle"></label>
-                    <span class="setting-info">Flight recorder + invariant checks + forensic export</span>
-                </div>
-                <!-- Encryption Removed per Security Audit -->
-                <button id="btn-export-config" title="Download settings as local .cfg file" style="width:100%; padding:8px; border:1px solid var(--border); background:var(--surface); border-radius:6px; cursor:pointer; font-size:11px; margin-bottom:6px;">Export Settings Config (.cfg)</button>
-                <button id="btn-download-logs" title="Download activity/error logs" style="width:100%; padding:8px; border:1px solid var(--border); background:var(--surface); border-radius:6px; cursor:pointer; font-size:11px; margin-bottom:6px;">Download Error Logs</button>
-                <button id="btn-download-diagnostics" title="Download diagnostics bundle (always available; debug mode adds verbose JSONL)" style="width:100%; padding:8px; border:1px solid var(--border); background:var(--surface); border-radius:6px; cursor:pointer; font-size:11px;">Download Diagnostics</button>
-            </div>
-            <button class="close-btn" id="btn-save-settings">Save</button>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Settings</h2><button id="btn-close-settings"
+            style="border:none;background:none;cursor:pointer;font-size:18px;color:var(--text-sub);">✕</button>
         </div>
+        <div class="settings-list">
+          <div class="setting-item">
+            <label class="setting-row"><span class="setting-label">Include Images</span><input type="checkbox"
+                id="check-images" checked title="Enable image extraction and embedding for rich formats"></label>
+            <span class="setting-info">Embeds Base64 images for Word/HTML</span>
+          </div>
+          <div class="setting-item">
+            <label class="setting-row"><span class="setting-label">Syntax Highlighting</span><input type="checkbox"
+                id="check-code" checked title="Preserve code blocks during extraction"></label>
+            <span class="setting-info">Preserve code block colors/formatting</span>
+          </div>
+          <div class="setting-item">
+            <label class="setting-row"><span class="setting-label">Raw HTML (Risky)</span><input type="checkbox"
+                id="check-raw-html" title="Capture raw HTML (advanced/risky)"></label>
+            <span class="setting-info">Captures exact DOM</span>
+          </div>
+          <div class="setting-item">
+            <label class="setting-row"><span class="setting-label">ZIP Compression</span><input type="checkbox"
+                id="check-zip" title="Bundle outputs into ZIP archive"></label>
+          </div>
+          <div class="setting-item">
+            <label class="setting-row"><span class="setting-label">Pack Photos as ZIP</span><input type="checkbox"
+                id="check-photo-zip" checked
+                title="If enabled, Export Photos creates one ZIP file. If disabled, photos are exported in batch files."></label>
+          </div>
+          <div class="setting-item">
+            <label class="setting-row"><span class="setting-label">Extract and ZIP Chat Files</span><input
+                type="checkbox" id="check-export-files" checked
+                title="If enabled, detected chat file links are exported and packed into ZIP."></label>
+          </div>
+          <div class="setting-item">
+            <label class="setting-row"><span class="setting-label">Advanced: Links as Attachments</span><input
+                type="checkbox" id="check-advanced-links"
+                title="Treat hyperlinks in message text as downloadable attachments (advanced)"></label>
+            <span class="setting-info">Links in text become downloads (use with caution)</span>
+          </div>
+          <div class="setting-item">
+            <label class="setting-row"><span class="setting-label">Debug Mode</span><input type="checkbox"
+                id="check-debug-mode"
+                title="Enable flight recorder, invariant checks, and forensic diagnostics bundle"></label>
+            <span class="setting-info">Flight recorder + invariant checks + forensic export</span>
+          </div>
+          <!-- Encryption Removed per Security Audit -->
+          <button id="btn-export-config" class="settings-btn" title="Download settings as local .cfg file">Export
+            Settings Config (.cfg)</button>
+          <button id="btn-download-logs" class="settings-btn" title="Download activity/error logs">Download Error
+            Logs</button>
+          <button id="btn-download-diagnostics" class="settings-btn"
+            title="Download diagnostics bundle (always available; debug mode adds verbose JSONL)">Download
+            Diagnostics</button>
+        </div>
+        <button class="close-btn" id="btn-save-settings">Save</button>
+      </div>
     </div>
-    
+
     <!-- Error Modal -->
     <div id="error-modal" class="modal-overlay">
-        <div class="modal-content">
-            <div class="error-header">
-                <span style="font-size: 24px;">⚠️</span>
-                <span class="error-title">Export Failed</span>
-            </div>
-            <div class="error-detail-box" id="error-msg">Unknown error occurred.</div>
-            <p class="error-suggestion" id="error-fix">Please try refreshing the page.</p>
-            <button class="close-btn" id="btn-close-error">Dismiss</button>
+      <div class="modal-content">
+        <div class="error-header">
+          <span style="font-size: 24px;">⚠️</span>
+          <span class="error-title">Export Failed</span>
         </div>
+        <div class="error-detail-box" id="error-msg">Unknown error occurred.</div>
+        <p class="error-suggestion" id="error-fix">Please try refreshing the page.</p>
+        <button class="close-btn" id="btn-close-error">Dismiss</button>
+      </div>
     </div>
 
     <!-- About Modal -->
     <div id="about-modal" class="modal-overlay">
-        <div class="modal-content">
-            <div class="modal-header"><h2>About</h2><button id="btn-close-about" style="border:none;background:none;cursor:pointer;">✕</button></div>
-            <div class="about-row"><span class="about-label">Owner & Management</span>Dr. Babak Sorkhpour <a href="https://x.com/Drbabakskr" target="_blank" class="about-link">(@Drbabakskr)</a></div>
-            <div class="about-row"><span class="about-label">Author & Engineering</span>Dr. Babak Sorkhpour with support from Gemini, Google AI Studio, ChatGPT, OpenAI Codex and Claude.ai.</div>
-            <div class="about-row"><span class="about-label">License</span>MIT License (Ultimate Edition)</div>
-            <div class="about-row"><span class="about-label">Technology</span>All codes are generated by AI with human review in this project workflow.</div>
-            <div class="about-row"><span class="about-label">Supported Platforms</span>ChatGPT, OpenAI Codex, Claude.ai, Gemini and Google AI Studio</div>
-            <div class="about-row"><span class="about-label">Version</span>0.12.0</div>
-            <button class="close-btn" id="btn-ack-about">Close</button>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>About</h2><button id="btn-close-about"
+            style="border:none;background:none;cursor:pointer;font-size:18px;color:var(--text-sub);">✕</button>
         </div>
+        <div class="about-row"><span class="about-label">Owner & Management</span>Dr. Babak Sorkhpour <a
+            href="https://x.com/Drbabakskr" target="_blank" class="about-link">(@Drbabakskr)</a></div>
+        <div class="about-row"><span class="about-label">Author & Engineering</span>Dr. Babak Sorkhpour with support
+          from Gemini, Google AI Studio, ChatGPT, OpenAI Codex and Claude.ai.</div>
+        <div class="about-row"><span class="about-label">License</span>AGPL-3.0 License (Ultimate Edition)</div>
+        <div class="about-row"><span class="about-label">Technology</span>All codes are generated by AI with human
+          review in this project workflow.</div>
+        <div class="about-row"><span class="about-label">Supported Platforms</span>ChatGPT, OpenAI Codex, Claude.ai,
+          Gemini and Google AI Studio</div>
+        <div class="about-row"><span class="about-label">Version</span>0.12.1</div>
+        <button class="close-btn" id="btn-ack-about">Close</button>
+      </div>
     </div>
 
-    <div id="preview-modal" class="modal-overlay"><div class="modal-content"><h2>Preview</h2><pre id="preview-content" style="height:200px;overflow:auto;font-size:10px;border:1px solid var(--border);padding:10px;border-radius:6px;"></pre><button class="close-btn" id="btn-close-preview">Close</button></div></div>
-    <div id="info-modal" class="modal-overlay"><div class="modal-content"><h2 id="info-title"></h2><p id="info-body" style="font-size:12px;color:var(--text-sub);"></p><button class="close-btn" id="btn-close-info">OK</button></div></div>
+    <div id="preview-modal" class="modal-overlay">
+      <div class="modal-content">
+        <h2>Preview</h2>
+        <pre id="preview-content"
+          style="height:200px;overflow:auto;font-size:10px;border:1px solid var(--border);padding:12px;border-radius:10px;background:var(--surface);"></pre>
+        <button class="close-btn" id="btn-close-preview">Close</button>
+      </div>
+    </div>
+    <div id="info-modal" class="modal-overlay">
+      <div class="modal-content">
+        <h2 id="info-title"></h2>
+        <p id="info-body" style="font-size:12px;color:var(--text-sub);line-height:1.6;"></p><button class="close-btn"
+          id="btn-close-info">OK</button>
+      </div>
+    </div>
   </div>
   <script src="script.js"></script>
 </body>
+
 </html>

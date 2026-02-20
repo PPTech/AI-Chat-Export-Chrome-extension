@@ -2,7 +2,7 @@
 # Code generated with support from CODEX and CODEX CLI.
 # Owner / Idea / Management: Dr. Babak Sorkhpour (https://x.com/Drbabakskr)
 
-# Claims Ledger (v0.12.0)
+# Claims Ledger (v0.12.1)
 
 ## Guarantees enforced by repository checks
 - Version synchronization across `version.js`, `manifest.json`, `VERSION.json`, and `metadata.json`.

@@ -1,6 +1,28 @@
 # Changelog
 # Author: Dr. Babak Sorkhpour (with help of AI)
 
+## 0.12.1 - 2026-02-21
+
+### License
+- **AGPL-3.0**: All source file headers changed from `License: MIT` → `License: AGPL-3.0` (LICENSE file was already AGPL-3.0).
+- About modal and README footer updated to reflect AGPL-3.0.
+
+### Version sync
+- All version references synced to 0.12.1 via SSOT (`lib/version.mjs`).
+- `sync_version.cjs` enhanced to also update `index.html` (footer + about modal).
+- `verify_version.cjs` enhanced to check `index.html` version matches SSOT.
+
+### UI modernization
+- Premium glassmorphism design with Inter font, gradient accents, and micro-animations.
+- Dark/light mode with frosted glass surfaces and animated gradient borders.
+- Format cards with type icons and hover glow effects.
+- Smooth transitions and modern scrollbar styling.
+
+### BDD Gherkin
+- New: `fail_soft.feature` — fail-soft export, diagnostics, partial file download scenarios.
+- Updated: `export_pipeline.feature` — favicon blocking, bundle manifest, asset failure tracking.
+- Updated: `export.feature` — content script ping, file export failure manifest.
+
 ## 0.12.0 - 2026-02-20
 
 ### Diagnostics pipeline

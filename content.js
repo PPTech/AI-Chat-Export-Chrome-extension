@@ -1,6 +1,6 @@
 // License: AGPL-3.0
 // Author: Dr. Babak Sorkhpour (with help of AI)
-// content.js - Platform Engine Orchestrator v0.12.0
+// content.js - Platform Engine Orchestrator v0.12.1
 
 (() => {
   if (window.hasRunContent) return;

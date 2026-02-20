@@ -10,7 +10,7 @@ const files = ['content.js', 'background.js', 'script.js'];
 test('Legal header exists in all runtime files', () => {
   for (const f of files) {
     const txt = fs.readFileSync(f, 'utf8');
-    assert.match(txt, /License: MIT/, `missing MIT license header in ${f}`);
+    assert.match(txt, /License: AGPL-3.0/, `missing AGPL-3.0 license header in ${f}`);
     assert.match(txt, /Dr\. Babak Sorkhpour/, `missing author attribution in ${f}`);
   }
 });

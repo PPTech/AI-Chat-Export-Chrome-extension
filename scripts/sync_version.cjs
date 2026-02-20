@@ -47,4 +47,16 @@ for (const file of headerFiles) {
   }
 }
 
+// Update version in index.html (footer version span + about modal version row)
+const htmlPath = path.join(root, 'index.html');
+if (fs.existsSync(htmlPath)) {
+  let html = fs.readFileSync(htmlPath, 'utf8');
+  // Footer: <span class="version">v0.x.y</span>
+  html = html.replace(/(class="version">v)\d+\.\d+\.\d+/, `$1${v}`);
+  // About modal: <span class="about-label">Version</span>0.x.y
+  html = html.replace(/(about-label">Version<\/span>)\d+\.\d+\.\d+/, `$1${v}`);
+  fs.writeFileSync(htmlPath, html);
+  console.log(`  Updated index.html -> v${v}`);
+}
+
 console.log(`Synchronized release version: ${v}`);

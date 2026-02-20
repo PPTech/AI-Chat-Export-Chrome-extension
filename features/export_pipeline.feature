@@ -72,3 +72,22 @@ Feature: Export pipeline contract enforcement
     When the scorecard is computed
     Then unknown_role_pass is false
     And unknown_role_ratio exceeds 0.05 threshold
+
+  Scenario: Favicon .ico files are blocked by default
+    Given an attachment candidate URL "https://cdn.example.com/favicon.ico"
+    When the classifier evaluates the URL
+    Then it returns kind "ignored" with reason "hard_ignore:.ico"
+    And allowed is false
+
+  Scenario: Bundle manifest always included in export ZIP
+    Given a completed export with any format selection
+    When the ZIP is assembled
+    Then it contains export_bundle_manifest.json
+    And the manifest schema is "export-bundle-manifest.v1"
+
+  Scenario: Asset failure reasons recorded in bundle manifest
+    Given an export with images that fail to resolve
+    When export_bundle_manifest.json is generated
+    Then assetFailureReasons is a non-empty array
+    And each entry contains url (truncated to 80 chars) and reason
+

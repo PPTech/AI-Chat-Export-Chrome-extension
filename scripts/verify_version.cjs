@@ -65,9 +65,24 @@ if (!bgVersionMatch || bgVersionMatch[1] !== ssotVersion) {
   console.log(`[PASS] background.js version matches`);
 }
 
+// 6. Check index.html footer version
+const htmlPath = path.join(ROOT, 'index.html');
+if (fs.existsSync(htmlPath)) {
+  const htmlContent = fs.readFileSync(htmlPath, 'utf-8');
+  const htmlVersionMatch = htmlContent.match(/class="version">v([0-9.]+)/);
+  if (!htmlVersionMatch || htmlVersionMatch[1] !== ssotVersion) {
+    const found = htmlVersionMatch ? htmlVersionMatch[1] : '(not found)';
+    console.error(`[FAIL] index.html footer version "${found}" !== SSOT "${ssotVersion}"`);
+    ok = false;
+  } else {
+    console.log(`[PASS] index.html footer version matches`);
+  }
+}
+
 if (!ok) {
   console.error('\n[FAIL] Version mismatch detected. Update all files to match lib/version.mjs.');
   process.exit(1);
 }
 
 console.log('\n[PASS] All version references match SSOT.');
+

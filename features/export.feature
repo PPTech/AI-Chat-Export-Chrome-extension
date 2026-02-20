@@ -24,3 +24,18 @@ Feature: Export Chat conversation (local-only)
     When I run export
     Then export_bundle_manifest.inventory includes at least 3 files
     And attachments_resolved equals 2
+
+  Scenario: Content script ping detects injection status
+    Given the popup needs to fetch files from the page context
+    When it sends a ping message to the content script
+    Then the content script responds with ok:true and a timestamp
+    And if the ping fails, the popup re-injects content.js
+
+  Scenario: File export records partial failures in file_failures.json
+    Given 5 files are detected in the chat
+    And 2 files fail to download
+    When the user clicks Export Files
+    Then the ZIP contains 3 successfully downloaded files
+    And the ZIP contains file_failures.json with 2 failure entries
+    And an info toast displays the partial success count
+
