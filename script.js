@@ -327,12 +327,29 @@ document.addEventListener('DOMContentLoaded', () => {
     const files = [];
     const formatErrors = [];
 
+    // D6: Resolve and embed assets (images/files) before generating formats
+    let assetResult = { assetFiles: [], urlMap: new Map(), failures: [] };
+    const hasImageFormats = formats.some((f) => ['html', 'doc', 'md', 'pdf'].includes(f));
+    if (hasImageFormats && checkImages.checked) {
+      try {
+        setProcessingProgress(5, 'Resolving assets');
+        recorder.record({ event: 'asset.resolve.start', module: 'export', phase: 'assets', result: 'ok', parentEventId: exportStartEvent.eventId });
+        assetResult = await resolveAndEmbedAssets(currentChatData.messages, recorder, exportStartEvent.eventId);
+        lastAssetFailures = assetResult.failures;
+        recorder.record({ event: 'asset.resolve.done', module: 'export', phase: 'assets', result: 'ok', parentEventId: exportStartEvent.eventId, details: { resolved: assetResult.urlMap.size, failed: assetResult.failures.length } });
+      } catch (assetErr) {
+        recorder.record({ lvl: 'WARN', event: 'asset.resolve.fail', module: 'export', phase: 'assets', result: 'fail', parentEventId: exportStartEvent.eventId, details: { error: (assetErr?.message || '').slice(0, 200) } });
+        // Asset failure is not fatal — continue without local assets
+      }
+    }
+    const urlMap = assetResult.urlMap;
+
     // A) FAIL-SOFT: try each format independently; never abort entire export
     for (let i = 0; i < formats.length; i += 1) {
       const fmt = formats[i];
       try {
         recorder.record({ event: `export.format.start`, module: 'export', phase: 'assemble', result: 'ok', parentEventId: exportStartEvent.eventId, details: { format: fmt } });
-        const generated = await generateContent(fmt, currentChatData);
+        const generated = await generateContent(fmt, currentChatData, urlMap);
         const fileExt = generated.ext || fmt;
         files.push({ name: `${baseName}.${fileExt}`, content: generated.content, mime: generated.mime });
         recorder.record({ event: `export.format.done`, module: 'export', phase: 'assemble', result: 'ok', parentEventId: exportStartEvent.eventId, details: { format: fmt } });
@@ -341,8 +358,13 @@ document.addEventListener('DOMContentLoaded', () => {
         formatErrors.push({ format: fmt, error: (fmtErr?.message || '').slice(0, 200) });
         recorder.record({ lvl: 'ERROR', event: `export.format.fail`, module: 'export', phase: 'assemble', result: 'fail', parentEventId: exportStartEvent.eventId, details: { format: fmt, error: (fmtErr?.message || '').slice(0, 200) } });
       }
-      const percent = 10 + ((i + 1) / Math.max(1, formats.length)) * 75;
+      const percent = 15 + ((i + 1) / Math.max(1, formats.length)) * 70;
       setProcessingProgress(percent, `Processing ${fmt.toUpperCase()}`);
+    }
+
+    // D6: Add resolved asset files to the export ZIP
+    if (assetResult.assetFiles.length > 0) {
+      files.push(...assetResult.assetFiles);
     }
 
     // A) Always include a canonical JSON manifest of what was exported
@@ -355,7 +377,9 @@ document.addEventListener('DOMContentLoaded', () => {
       formatsRequested: formats,
       formatsSucceeded: files.map((f) => f.name),
       formatErrors,
+      assetsResolved: assetResult.urlMap.size,
       assetFailures: lastAssetFailures.length,
+      assetsEmbedded: assetResult.assetFiles.length > 0,
       exportedAt: new Date().toISOString(),
       debugMode: debug,
     };
@@ -685,7 +709,179 @@ document.addEventListener('DOMContentLoaded', () => {
     return Array.from(uniq.values());
   }
 
-  async function generateContent(fmt, data) {
+  // --- D6: Asset resolution + embedding in export ZIP ---
+  // Resolves images/files to binary data, stores in assets/ folder.
+  // Returns { assetFiles: [{name, content, mime}], urlMap: Map<originalUrl, localPath>, failures: [] }
+
+  const ASSET_ALLOWLIST = [
+    /^data:image\//i,
+    /\.(png|jpg|jpeg|gif|webp|svg|bmp|ico)(\?|$)/i,
+    /googleusercontent\.com/i,
+    /oaiusercontent\.com/i,
+    /oaistatic\.com/i,
+    /chatgpt\.com/i,
+    /claude\.ai/i,
+    /gemini\.google\.com/i,
+    /aistudio\.google\.com/i,
+    /githubusercontent\.com/i,
+  ];
+
+  function isAllowedAssetUrl(url) {
+    if (!url) return false;
+    if (/^data:image\//i.test(url)) return true;
+    if (!/^https?:\/\//i.test(url)) return false;
+    return ASSET_ALLOWLIST.some((re) => re.test(url));
+  }
+
+  function sanitizeAssetPath(name) {
+    // Zip-slip prevention: strip path traversal, control chars, keep only safe chars
+    return String(name || 'asset')
+      .replace(/\.\./g, '_')
+      .replace(/[\/\\:*?"<>|\x00-\x1F]/g, '_')
+      .replace(/^_+/, '')
+      .slice(0, 120) || 'asset';
+  }
+
+  async function resolveAndEmbedAssets(messages, recorder, parentEventId) {
+    const assetFiles = [];
+    const urlMap = new Map();
+    const failures = [];
+
+    // Discover all image sources
+    const imageSources = extractAllImageSources(messages);
+    // Discover all file sources
+    const fileSources = extractAllFileSources(messages);
+
+    let idx = 1;
+    for (const src of imageSources) {
+      if (urlMap.has(src)) continue;
+      const assetName = `assets/img_${String(idx).padStart(3, '0')}`;
+      try {
+        if (!isAllowedAssetUrl(src)) {
+          failures.push({ url: src.slice(0, 200), reason: 'not-allowlisted' });
+          if (recorder) recorder.record({ lvl: 'WARN', event: 'asset.skip.not_allowed', module: 'export', phase: 'assets', parentEventId, details: { url: src.slice(0, 100) } });
+          continue;
+        }
+        let blob;
+        if (/^data:image\//i.test(src)) {
+          // Data URL — decode directly
+          const parts = src.split(',');
+          const mimeMatch = src.match(/^data:(image\/[^;]+)/);
+          const mime = mimeMatch ? mimeMatch[1] : 'image/png';
+          const bin = atob(parts[1] || '');
+          const arr = new Uint8Array(bin.length);
+          for (let j = 0; j < bin.length; j++) arr[j] = bin.charCodeAt(j);
+          blob = new Blob([arr], { type: mime });
+        } else {
+          // Try content-script fetch (page context with session cookies)
+          try {
+            const resp = await new Promise((resolve, reject) => {
+              chrome.tabs.sendMessage(activeTabId, { action: 'FETCH_FILE', url: src }, (r) => {
+                if (chrome.runtime.lastError || !r?.ok) reject(new Error(r?.error || 'content-script fetch failed'));
+                else resolve(r);
+              });
+            });
+            const bin = atob(resp.data);
+            const arr = new Uint8Array(bin.length);
+            for (let j = 0; j < bin.length; j++) arr[j] = bin.charCodeAt(j);
+            blob = new Blob([arr], { type: resp.mime || 'application/octet-stream' });
+          } catch {
+            // Fallback: direct fetch from popup
+            blob = await fetch(src).then((r) => r.blob());
+          }
+        }
+        const ext = (blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg').replace('svg+xml', 'svg');
+        const fullName = `${assetName}.${sanitizeAssetPath(ext)}`;
+        const data = new Uint8Array(await blob.arrayBuffer());
+        assetFiles.push({ name: fullName, content: data, mime: blob.type || 'application/octet-stream' });
+        urlMap.set(src, fullName);
+        if (recorder) recorder.record({ event: 'asset.resolved', module: 'export', phase: 'assets', result: 'ok', parentEventId, details: { index: idx, size: data.length } });
+        idx++;
+      } catch (err) {
+        failures.push({ url: src.slice(0, 200), reason: (err?.message || 'fetch-failed').slice(0, 100) });
+        if (recorder) recorder.record({ lvl: 'WARN', event: 'asset.fetch.fail', module: 'export', phase: 'assets', result: 'fail', parentEventId, details: { url: src.slice(0, 100), error: (err?.message || '').slice(0, 100) } });
+      }
+    }
+
+    // Resolve chat files
+    for (const file of fileSources) {
+      if (urlMap.has(file.url)) continue;
+      const safeName = sanitizeAssetPath(file.name);
+      const assetName = `assets/${String(idx).padStart(3, '0')}_${safeName}`;
+      try {
+        if (!isAllowedAssetUrl(file.url) && !/^https?:\/\//i.test(file.url)) {
+          failures.push({ url: file.url.slice(0, 200), reason: 'not-allowlisted' });
+          continue;
+        }
+        let blob;
+        try {
+          const resp = await new Promise((resolve, reject) => {
+            chrome.tabs.sendMessage(activeTabId, { action: 'FETCH_FILE', url: file.url }, (r) => {
+              if (chrome.runtime.lastError || !r?.ok) reject(new Error(r?.error || 'content-script fetch failed'));
+              else resolve(r);
+            });
+          });
+          const bin = atob(resp.data);
+          const arr = new Uint8Array(bin.length);
+          for (let j = 0; j < bin.length; j++) arr[j] = bin.charCodeAt(j);
+          blob = new Blob([arr], { type: resp.mime || 'application/octet-stream' });
+        } catch {
+          blob = await fetch(file.url).then((r) => r.blob());
+        }
+        const ext = (blob.type.split('/')[1] || 'bin').replace('jpeg', 'jpg');
+        const fullName = assetName.includes('.') ? assetName : `${assetName}.${ext}`;
+        const data = new Uint8Array(await blob.arrayBuffer());
+        assetFiles.push({ name: fullName, content: data, mime: blob.type || 'application/octet-stream' });
+        urlMap.set(file.url, fullName);
+        idx++;
+      } catch (err) {
+        failures.push({ url: file.url.slice(0, 200), reason: (err?.message || 'fetch-failed').slice(0, 100) });
+      }
+    }
+
+    // Asset manifest
+    const assetManifest = {
+      schema: 'asset-manifest.v1',
+      resolved: urlMap.size,
+      failed: failures.length,
+      total: imageSources.length + fileSources.length,
+      failures,
+    };
+    assetFiles.push({ name: 'assets/asset_manifest.json', content: JSON.stringify(assetManifest, null, 2), mime: 'application/json' });
+
+    return { assetFiles, urlMap, failures };
+  }
+
+  /**
+   * Replace image/file URLs in content with local asset paths (for ZIP export).
+   */
+  function rewriteContentWithLocalAssets(content, urlMap) {
+    if (!urlMap || urlMap.size === 0) return content;
+    let result = content;
+    for (const [originalUrl, localPath] of urlMap) {
+      // Replace in [[IMG:...]] tokens
+      result = result.split(originalUrl).join(localPath);
+    }
+    return result;
+  }
+
+  function renderRichMessageHtmlWithAssets(content, urlMap) {
+    const rewritten = urlMap ? rewriteContentWithLocalAssets(content, urlMap) : content;
+    const parts = splitContentAndImages(rewritten || '');
+    return parts.map((part) => {
+      if (part.type === 'image') {
+        const src = (part.value || '').trim();
+        if (!src) return '';
+        // For local asset paths, use relative path; for data URIs / URLs, use as-is
+        const safeSrc = /^(data:|https?:\/\/)/.test(src) ? normalizeImageSrc(src) : escapeHtml(src);
+        if (!safeSrc) return '';
+        return `<img src="${safeSrc}" alt="Image" style="max-width:100%;height:auto;display:block;margin:12px 0;border-radius:6px;">`;
+      }
+      return escapeHtml(part.value || '').replace(/\n/g, '<br>');
+    }).join('');
+  }
+
+  async function generateContent(fmt, data, urlMap) {
     const msgs = data.messages || [];
     const title = data.title || 'Export';
     const platform = data.platform || 'Unknown';
@@ -702,19 +898,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (fmt === 'doc') {
       // Word-compatible HTML document (.doc extension opens in Word/LibreOffice)
-      // No fake MHTML wrapper — this is honest HTML that Word renders correctly.
+      // D6: Use local asset paths when available (ZIP export)
       const style = 'body{font-family:Arial,sans-serif;max-width:900px;margin:auto;padding:20px;line-height:1.6}img{max-width:100%;height:auto}.msg{margin-bottom:20px;padding:12px;border:1px solid #e5e7eb;border-radius:8px}.role{font-weight:700;margin-bottom:8px}';
+      const renderFn = urlMap ? (c) => renderRichMessageHtmlWithAssets(c, urlMap) : renderRichMessageHtml;
       const body = msgs.map((m) => {
-        return `<div class="msg"><div class="role">${escapeHtml(m.role)}</div><div>${renderRichMessageHtml(m.content)}</div></div>`;
+        return `<div class="msg"><div class="role">${escapeHtml(m.role)}</div><div>${renderFn(m.content)}</div></div>`;
       }).join('');
       const html = `<!DOCTYPE html><html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>${style}</style></head><body><h1>${escapeHtml(title)}</h1>${body}</body></html>`;
       return { content: html, mime: 'application/msword', ext: 'doc' };
     }
 
     if (fmt === 'html') {
+      // D6: Use local asset paths when available (ZIP export)
       const style = 'body{font-family:Arial,sans-serif;max-width:900px;margin:auto;padding:20px;line-height:1.6}img{max-width:100%;height:auto}.msg{margin-bottom:20px;padding:12px;border:1px solid #e5e7eb;border-radius:8px}.role{font-weight:700;margin-bottom:8px}';
+      const renderFn = urlMap ? (c) => renderRichMessageHtmlWithAssets(c, urlMap) : renderRichMessageHtml;
       const body = msgs.map((m) => {
-        return `<div class="msg"><div class="role">${escapeHtml(m.role)}</div><div>${renderRichMessageHtml(m.content)}</div></div>`;
+        return `<div class="msg"><div class="role">${escapeHtml(m.role)}</div><div>${renderFn(m.content)}</div></div>`;
       }).join('');
       const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><style>${style}</style></head><body><h1>${escapeHtml(title)}</h1>${body}</body></html>`;
       return { content: html, mime: 'text/html' };
@@ -728,7 +927,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (fmt === 'sql') return { content: `CREATE TABLE chat_export (id SERIAL PRIMARY KEY, msg_index INT, role VARCHAR(50), platform VARCHAR(100), content TEXT, exported_at TIMESTAMP);\n` + msgs.map((m, i) => `INSERT INTO chat_export (msg_index, role, platform, content, exported_at) VALUES (${i}, '${m.role.replace(/'/g, "''")}', '${platform.replace(/'/g, "''")}', '${stripImageTokens(m.content).replace(/'/g, "''")}', '${exportDate}');`).join('\n'), mime: 'application/sql' };
     if (fmt === 'txt') return { content: msgs.map((m, i) => `[${i}] [${m.role}] ${stripImageTokens(m.content)}`).join('\n\n'), mime: 'text/plain' };
-    return { content: msgs.map((m) => `### ${m.role}\n${m.content}\n`).join('\n'), mime: 'text/markdown' };
+    // Markdown: rewrite image URLs to local asset paths if available
+    const mdContent = msgs.map((m) => {
+      const content = urlMap ? rewriteContentWithLocalAssets(m.content, urlMap) : m.content;
+      return `### ${m.role}\n${content}\n`;
+    }).join('\n');
+    return { content: mdContent, mime: 'text/markdown' };
   }
 
   /**
