@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(where:*)",
+      "Bash(node:*)",
+      "Bash(npm --version:*)",
+      "Bash(echo:*)",
+      "Bash(printenv:*)",
+      "Bash(cmd.exe /c \"where node\")",
+      "Bash(cmd.exe /c \"node --version\")",
+      "Bash(git push:*)",
+      "Bash(gh pr create:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git remote:*)",
+      "Bash(gh pr:*)",
+      "Bash(dir:*)",
+      "Bash(xargs:*)",
+      "Bash(git rm:*)",
+      "Bash(git status:*)",
+      "Bash(powershell -Command \"Expand-Archive -Path ''ChatGPT_2026-02-19 \\(4\\).zip'' -DestinationPath ''C:\\\\Users\\\\Bab\\\\Downloads\\\\export_sample_4'' -Force\")",
+      "Bash(powershell -Command:*)",
+      "Bash(powershell -ExecutionPolicy Bypass -File:*)"
+    ]
+  }
+}

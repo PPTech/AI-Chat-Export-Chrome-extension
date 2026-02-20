@@ -65,6 +65,7 @@ if (!bgVersionMatch || bgVersionMatch[1] !== ssotVersion) {
   console.log(`[PASS] background.js version matches`);
 }
 
+<<<<<<< HEAD
 // 6. Check index.html footer version
 const htmlPath = path.join(ROOT, 'index.html');
 if (fs.existsSync(htmlPath)) {
@@ -77,6 +78,34 @@ if (fs.existsSync(htmlPath)) {
   } else {
     console.log(`[PASS] index.html footer version matches`);
   }
+=======
+// 6. Check index.html version footer and about modal
+const htmlContent = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf-8');
+const htmlVersionFooter = htmlContent.match(/class="version">v([0-9.]+)</);
+const htmlVersionAbout = htmlContent.match(/<span class="about-label">Version<\/span>([0-9.]+)</);
+if (!htmlVersionFooter || htmlVersionFooter[1] !== ssotVersion) {
+  const found = htmlVersionFooter ? htmlVersionFooter[1] : '(not found)';
+  console.error(`[FAIL] index.html footer version "${found}" !== SSOT "${ssotVersion}"`);
+  ok = false;
+} else {
+  console.log(`[PASS] index.html footer version matches`);
+}
+if (!htmlVersionAbout || htmlVersionAbout[1] !== ssotVersion) {
+  const found = htmlVersionAbout ? htmlVersionAbout[1] : '(not found)';
+  console.error(`[FAIL] index.html about modal version "${found}" !== SSOT "${ssotVersion}"`);
+  ok = false;
+} else {
+  console.log(`[PASS] index.html about modal version matches`);
+}
+
+// 7. Check package.json
+const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8'));
+if (pkg.version !== ssotVersion) {
+  console.error(`[FAIL] package.json version "${pkg.version}" !== SSOT "${ssotVersion}"`);
+  ok = false;
+} else {
+  console.log(`[PASS] package.json version matches`);
+>>>>>>> origin/claude/elated-bohr
 }
 
 if (!ok) {
