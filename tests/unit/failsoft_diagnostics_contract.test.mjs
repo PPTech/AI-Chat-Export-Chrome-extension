@@ -21,11 +21,11 @@ test('A) export handler catches per-format errors (fail-soft)', () => {
     'Must track format errors array'
   );
   assert.ok(
-    scriptContent.includes('export_manifest.json'),
-    'Must always emit export_manifest.json'
+    scriptContent.includes('export_bundle_manifest.json'),
+    'Must always emit export_bundle_manifest.json'
   );
   assert.ok(
-    scriptContent.includes('export-manifest.v1'),
+    scriptContent.includes('export-bundle-manifest.v1'),
     'Manifest must have schema version'
   );
 });
@@ -167,9 +167,9 @@ test('E) verify_version.cjs CI gate exists', () => {
 });
 
 // Schema version bump
-test('diagnostics schema is v5', () => {
+test('diagnostics schema is v6', () => {
   assert.ok(
-    scriptContent.includes("'diagnostics.v5'"),
-    'Diagnostics schema must be v5 with always-on + anomaly scoring'
+    scriptContent.includes("'diagnostics.v6'"),
+    'Diagnostics schema must be v6 with always-on + anomaly scoring'
   );
 });

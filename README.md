@@ -1,6 +1,6 @@
 # AI Chat Exporter (Ultimate)
 
-**Version**: 0.11.0
+**Version**: 0.12.0
 **License**: MIT
 **Author**: Dr. Babak Sorkhpour ([@Drbabakskr](https://x.com/Drbabakskr))
 
@@ -34,11 +34,12 @@ Local-only Chrome extension for exporting AI chat conversations. No external API
 
 - **Full History Fetch**: ChatGPT backend-api extraction gets all messages without scrolling
 - **Asset Embedding**: Images and files resolved and embedded in export ZIP (`assets/` folder)
-- **Fail-Soft Export**: Individual format failures don't abort the entire export
-- **Always-On Diagnostics**: Every extraction attempt produces a downloadable diagnostic bundle
+- **Fail-Soft Export**: Individual format or asset failures never abort the entire export — text outputs always succeed
+- **Always-On Diagnostics**: Every extraction/export produces a downloadable diagnostic bundle, even when Debug Mode is off
+- **Bundle Manifest**: Every export includes `export_bundle_manifest.json` with failure reasons and asset resolution status
 - **Multilingual PDF**: Canvas-based rendering supports Arabic, Persian, CJK, and all Unicode
 - **Debug Mode**: Verbose flight recorder with structured events and run correlation
-- **Zero Dependencies**: No external libraries, no network calls (except asset fetching with user consent)
+- **Zero Dependencies**: No external libraries, no network calls (except asset fetching from allowlisted AI platform hosts)
 
 ## Privacy & Security
 
@@ -48,6 +49,7 @@ Local-only Chrome extension for exporting AI chat conversations. No external API
 - All network requests require user gesture + explicit permission
 - Export files generated and downloaded locally
 - Settings stored in `chrome.storage.local` only
+- Scripts, executables, favicons, and non-attachment files are auto-filtered
 
 ## Quick Start
 
@@ -71,9 +73,11 @@ Local-only Chrome extension for exporting AI chat conversations. No external API
 ### Developer Commands
 
 ```bash
-node -c content.js    # Syntax check content script
-node -c script.js     # Syntax check popup script
-node -c background.js # Syntax check service worker
+node -c content.js        # Syntax check content script
+node -c script.js         # Syntax check popup script
+node -c background.js     # Syntax check service worker
+node --test tests/**/*.test.mjs  # Run all contract tests
+node scripts/verify_version.cjs  # CI gate: version SSOT
 ```
 
 ## Architecture
@@ -100,15 +104,16 @@ Export Pipeline (script.js)
 | `background.js` | Service worker: tab state, diagnostics store, gesture validation |
 | `index.html` | Popup UI: controls, settings, modals |
 | `lib/version.mjs` | Single source of truth for version string |
+| `lib/attachment_classifier.mjs` | Deterministic attachment classification (blocks scripts/favicons) |
 
 ## Diagnostics
 
 Every extraction and export attempt creates a diagnostic bundle (even on failure):
 
-- **run_summary.json**: Run metadata, scorecard, anomaly score
-- **diagnostics.jsonl**: Structured event log (verbose mode only)
+- **diagnostics_summary.json**: Run metadata, scorecard, invariant results
+- **export_bundle_manifest.json**: What was requested vs what succeeded, asset failure reasons
+- **diagnostics.jsonl**: Structured event log (verbose/debug mode)
 - **asset_failures.json**: Failed asset resolution details
-- **export_manifest.json**: What was requested vs what succeeded
 
 Click **Download Diagnostics** in the popup to get the latest bundle.
 
@@ -122,8 +127,7 @@ Enable in Settings to get verbose diagnostics with full event details. When off,
 |---|---|
 | "0 messages" on ChatGPT | Refresh the chat page, then reopen the popup |
 | "0 messages" on AI Studio | Wait 3 seconds for lazy rendering; try Fetch Full |
-| Gemini roles all "Unknown" | Update extension (v0.11.0 adds transcript splitting) |
-| "No Diagnostics" | Update extension (v0.11.0 captures diagnostics on every attempt) |
+| Gemini roles all "Unknown" | Update extension (v0.11.0+ adds transcript splitting) |
 | PDF missing characters | Ensure system has Unicode fonts installed (Noto Sans recommended) |
 | Images not in export | Enable "Include Images" in Settings before exporting |
 | CSP errors in console | Normal for some platforms; extraction still works via fallback |
