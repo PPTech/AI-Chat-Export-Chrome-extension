@@ -2,7 +2,7 @@
 
 ## Environment
 - **Chrome version**: _(fill in, e.g. 124.0.6367.91)_
-- **Extension version**: 0.11.0
+- **Extension version**: 0.12.0
 - **OS**: _(fill in, e.g. Windows 11 23H2, macOS 14.4)_
 - **Node version** (for tests): 20.x
 

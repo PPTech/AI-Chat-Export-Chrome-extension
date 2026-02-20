@@ -1,6 +1,6 @@
 # AI Chat Exporter (Ultimate)
 
-**Version**: 0.11.0
+**Version**: 0.12.0
 **License**: MIT
 **Author**: Dr. Babak Sorkhpour ([@Drbabakskr](https://x.com/Drbabakskr))
 
