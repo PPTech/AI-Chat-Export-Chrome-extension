@@ -22,6 +22,96 @@
   }
 
 
+  // --- Gemini UI noise patterns to strip ---
+  const GEMINI_NOISE_PATTERNS = [
+    /^Show thinking$/im,
+    /^Show thinking\s*…?$/im,
+    /^Hide thinking$/im,
+    /^Thought for \d+ seconds?$/im,
+    /^Thinking…?$/im,
+    /^Edit$/im,
+    /^Copy$/im,
+    /^Copied$/im,
+    /^Share$/im,
+    /^More$/im,
+    /^Retry$/im,
+    /^Good response$/im,
+    /^Bad response$/im,
+    /^Modify response$/im,
+    /^Report legal issue$/im,
+    /^Google it$/im,
+    /^Double-check response$/im,
+  ];
+
+  /**
+   * D3: Split a single Gemini transcript block that contains both sides
+   * ("You said … Gemini said …") into separate user/assistant turns.
+   * Also strips UI noise like "Show thinking", button labels, etc.
+   */
+  function splitGeminiTranscriptBlock(rawText) {
+    if (!rawText || typeof rawText !== 'string') return [];
+    // Strip UI noise lines
+    let cleaned = rawText;
+    for (const pattern of GEMINI_NOISE_PATTERNS) {
+      cleaned = cleaned.replace(pattern, '');
+    }
+    // Normalize whitespace
+    cleaned = cleaned.replace(/\n{3,}/g, '\n\n').trim();
+    if (!cleaned) return [];
+
+    // Try to split on "You said" / "Gemini said" markers
+    // These markers appear when Gemini renders a combined transcript view
+    const markerRegex = /(?:^|\n)\s*(You said|Gemini said|Model said)\s*\n/gi;
+    const splits = [];
+    let lastIndex = 0;
+    let lastRole = null;
+    let match;
+
+    while ((match = markerRegex.exec(cleaned)) !== null) {
+      // Flush previous segment
+      if (lastIndex < match.index && lastRole !== null) {
+        const text = cleaned.slice(lastIndex, match.index).trim();
+        if (text) splits.push({ role: lastRole, text });
+      } else if (lastIndex < match.index && lastRole === null) {
+        // Text before any marker — could be standalone content
+        const text = cleaned.slice(lastIndex, match.index).trim();
+        if (text) splits.push({ role: 'unknown', text });
+      }
+      const markerLower = (match[1] || '').toLowerCase();
+      lastRole = markerLower.includes('you') ? 'user' : 'assistant';
+      lastIndex = match.index + match[0].length;
+    }
+
+    // Flush remaining text
+    if (lastIndex < cleaned.length) {
+      const text = cleaned.slice(lastIndex).trim();
+      if (text) {
+        splits.push({ role: lastRole || 'unknown', text });
+      }
+    }
+
+    // If no markers were found, return the whole block unsplit
+    if (splits.length === 0 && cleaned) {
+      splits.push({ role: 'unknown', text: cleaned });
+    }
+
+    return splits;
+  }
+
+  /**
+   * Strip Gemini UI noise from extracted content.
+   */
+  function stripGeminiNoise(text) {
+    if (!text) return '';
+    let cleaned = text;
+    for (const pattern of GEMINI_NOISE_PATTERNS) {
+      cleaned = cleaned.replace(pattern, '');
+    }
+    // Remove "You said" / "Gemini said" wrapper markers from content
+    cleaned = cleaned.replace(/(?:^|\n)\s*(You said|Gemini said|Model said)\s*(?:\n|$)/gi, '\n');
+    return cleaned.replace(/\n{3,}/g, '\n\n').trim();
+  }
+
   class GeminiExtractor {
     constructor(options = {}) {
       this.options = options;
@@ -147,40 +237,66 @@
       let role = 'unknown';
       let confidence = 0.35;
       const txt = (el.innerText || '').toLowerCase();
-      const aria = `${el.getAttribute('aria-label') || ''} ${el.getAttribute('data-test-id') || ''}`.toLowerCase();
+      const aria = `${el.getAttribute('aria-label') || ''} ${el.getAttribute('data-test-id') || ''} ${el.getAttribute('data-content-type') || ''}`.toLowerCase();
+      const cls = (el.className || '').toString().toLowerCase();
+
+      // D3: Check for text-based role markers (strongest signal for Gemini)
+      const startsWithYouSaid = /^you said\b/i.test(txt.trim());
+      const startsWithGeminiSaid = /^(gemini said|model said)\b/i.test(txt.trim());
+      if (startsWithYouSaid) {
+        role = 'user';
+        confidence += 0.45;
+        evidence.push('text-marker:you-said');
+      } else if (startsWithGeminiSaid) {
+        role = 'assistant';
+        confidence += 0.45;
+        evidence.push('text-marker:gemini-said');
+      }
+
+      // D3: Check class/attribute patterns for query vs response
+      if (/query|user-turn|user-message|user-query/i.test(cls) || /query|user/i.test(aria)) {
+        if (role === 'unknown') role = 'user';
+        confidence += 0.3;
+        evidence.push('class-or-aria:user-hint');
+      }
+      if (/response|model-turn|model-message|model-response/i.test(cls) || /response|model|gemini/i.test(aria)) {
+        if (role === 'unknown') role = 'assistant';
+        confidence += 0.3;
+        evidence.push('class-or-aria:model-hint');
+      }
 
       const avatarUser = !!el.querySelector('img[src*="googleusercontent"], img[alt*="profile" i], img[alt*="avatar" i]');
       if (avatarUser || /user-query|user/.test(aria)) {
-        role = 'user';
-        confidence += 0.3;
+        if (role === 'unknown') role = 'user';
+        confidence += 0.2;
         evidence.push('user-avatar-or-aria-hint');
       }
 
       const modelHint = /gemini|model/.test(aria) || /regenerate|draft response|thought/i.test(txt);
       const geminiIcon = !!el.querySelector('svg[aria-label*="Gemini" i], [aria-label*="Gemini" i], [aria-label*="Model" i]');
       if (modelHint || geminiIcon) {
-        role = 'assistant';
-        confidence += 0.3;
+        if (role === 'unknown') role = 'assistant';
+        confidence += 0.2;
         evidence.push('model-aria-or-control-hint');
       }
 
-      if (scopeEl) {
+      if (scopeEl && role === 'unknown') {
         const rect = el.getBoundingClientRect();
         const sRect = scopeEl.getBoundingClientRect();
         const delta = (rect.left + rect.width / 2) - (sRect.left + sRect.width / 2);
         if (delta > sRect.width * 0.12) {
           evidence.push('layout:right');
-          if (role === 'unknown') role = 'user';
+          role = 'user';
           confidence += 0.1;
         } else if (delta < -sRect.width * 0.12) {
           evidence.push('layout:left');
-          if (role === 'unknown') role = 'assistant';
+          role = 'assistant';
           confidence += 0.1;
         }
       }
 
       confidence = Math.min(0.98, confidence);
-      if (confidence < 0.5) role = 'unknown';
+      if (confidence < 0.42) role = 'unknown';
       return { role, confidence: Number(confidence.toFixed(2)), evidence };
     }
 
@@ -465,10 +581,37 @@
 
         const messages = [];
         for (const m of analysis.messages) {
-          const role = m.inferredRole.role === 'assistant' ? 'Gemini' : (m.inferredRole.role === 'user' ? 'User' : 'Unknown');
-          const content = await composeContentFromBlocks(m.parsed.blocks, options);
-          if (content) {
-            messages.push({ role, content, meta: { platform: this.name, sourceSelector: m.signature, confidence: m.inferredRole.confidence, evidence: m.inferredRole.evidence } });
+          const rawContent = await composeContentFromBlocks(m.parsed.blocks, options);
+          if (!rawContent) continue;
+
+          // D3: Try to split combined transcript blocks ("You said ... Gemini said ...")
+          const inferredRole = m.inferredRole.role;
+          const fullText = m.parsed.textPlain || rawContent;
+          const hasBothMarkers = /You said/i.test(fullText) && /(Gemini said|Model said)/i.test(fullText);
+
+          if (hasBothMarkers) {
+            // Split the combined block into separate turns
+            const splits = splitGeminiTranscriptBlock(fullText);
+            for (const split of splits) {
+              const cleanedContent = stripGeminiNoise(split.text);
+              if (!cleanedContent) continue;
+              const role = split.role === 'user' ? 'User' : (split.role === 'assistant' ? 'Gemini' : 'Unknown');
+              messages.push({
+                role,
+                content: cleanedContent,
+                meta: { platform: this.name, sourceSelector: m.signature, confidence: 0.85, evidence: ['transcript-marker-split', `original-role:${inferredRole}`] }
+              });
+            }
+          } else {
+            // Single-role block — use inferredRole + strip noise
+            const cleanedContent = stripGeminiNoise(rawContent);
+            if (!cleanedContent) continue;
+            const role = inferredRole === 'assistant' ? 'Gemini' : (inferredRole === 'user' ? 'User' : 'Unknown');
+            messages.push({
+              role,
+              content: cleanedContent,
+              meta: { platform: this.name, sourceSelector: m.signature, confidence: m.inferredRole.confidence, evidence: [...m.inferredRole.evidence, 'noise-stripped'] }
+            });
           }
         }
 
