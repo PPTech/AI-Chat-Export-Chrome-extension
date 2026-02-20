@@ -1,6 +1,6 @@
 // License: MIT
 // Author: Dr. Babak Sorkhpour (with help of AI)
-// script.js - Main Controller v0.11.0
+// script.js - Main Controller v0.12.0
 
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
@@ -170,8 +170,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const unknownCount = msgs.filter((m) => /unknown/i.test(m.role)).length;
     const total = msgs.length;
     const diag = {
-      schema_version: 'diagnostics.v5',
-      run: { run_id: runId, started_at_utc: new Date().toISOString(), ended_at_utc: new Date().toISOString(), tool_version: '0.11.0', platform: res?.platform || 'unknown' },
+      schema_version: 'diagnostics.v6',
+      run: { run_id: runId, started_at_utc: new Date().toISOString(), ended_at_utc: new Date().toISOString(), tool_version: '0.12.0', platform: res?.platform || 'unknown' },
       tabScope: activeTabId != null ? `tab:${activeTabId}` : 'global',
       phase: 'extraction',
       status,
@@ -189,7 +189,8 @@ document.addEventListener('DOMContentLoaded', () => {
       verbose: false,
     };
     // Store as lastDiagnostics so Download Diagnostics works immediately
-    if (!lastDiagnostics) lastDiagnostics = diag;
+    // INVARIANT: always overwrite with latest extraction diagnostics
+    lastDiagnostics = diag;
     // Persist to SW
     try {
       chrome.runtime.sendMessage({ action: 'STORE_DIAGNOSTICS', runId, payload: diag }, () => {
@@ -444,7 +445,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // A) Always include a canonical JSON manifest of what was exported
     const exportManifest = {
-      schema: 'export-manifest.v1',
+      schema: 'export-bundle-manifest.v1',
       runId,
       platform: currentChatData.platform,
       title: currentChatData.title,
@@ -454,11 +455,12 @@ document.addEventListener('DOMContentLoaded', () => {
       formatErrors,
       assetsResolved: assetResult.urlMap.size,
       assetFailures: lastAssetFailures.length,
+      assetFailureReasons: lastAssetFailures.map((f) => ({ url: (f.url || '').slice(0, 80), reason: f.reason || f.reason_code || 'unknown' })),
       assetsEmbedded: assetResult.assetFiles.length > 0,
       exportedAt: new Date().toISOString(),
       debugMode: debug,
     };
-    files.push({ name: `${baseName}.export_manifest.json`, content: JSON.stringify(exportManifest, null, 2), mime: 'application/json' });
+    files.push({ name: `${baseName}.export_bundle_manifest.json`, content: JSON.stringify(exportManifest, null, 2), mime: 'application/json' });
 
     // C) Run inline invariant checks
     const msgs = currentChatData.messages || [];
@@ -476,21 +478,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
     try {
       // A) Even if some formats failed, emit what we have (fail-soft)
+      // INVARIANT: always force bundle mode to include manifest + diagnostics
+      setProcessingProgress(90, 'Packaging');
+      // B) Include minimal diagnostics summary in ZIP (always, not just multi-file)
+      const diagSummary = {
+        runId, platform: currentChatData.platform,
+        counts: { messages_total: msgs.length, messages_unknown: unknownCount, assets_failed: lastAssetFailures.length, assets_resolved: assetResult.urlMap.size },
+        invariants: invariantResult,
+        formatErrors,
+        gestureValid: _gestureTokenValid,
+      };
+      files.push({ name: `${baseName}.diagnostics_summary.json`, content: JSON.stringify(diagSummary, null, 2), mime: 'application/json' });
+
       if (files.length === 1 && !checkZip.checked) {
+        // edge case: no content files generated, only manifest — single-file download
         setProcessingProgress(95, 'Finalizing');
         downloadBlob(new Blob([files[0].content], { type: files[0].mime }), files[0].name);
       } else {
-        setProcessingProgress(90, 'Packaging');
-        // B) Include minimal diagnostics summary in ZIP when debug is OFF
-        const diagSummary = {
-          runId, platform: currentChatData.platform,
-          counts: { messages_total: msgs.length, messages_unknown: unknownCount, assets_failed: lastAssetFailures.length, assets_resolved: assetResult.urlMap.size },
-          invariants: invariantResult,
-          formatErrors,
-          gestureValid: _gestureTokenValid,
-        };
-        files.push({ name: `${baseName}.diagnostics_summary.json`, content: JSON.stringify(diagSummary, null, 2), mime: 'application/json' });
-
         const zip = await createRobustZip(files);
         setProcessingProgress(98, 'Downloading');
         downloadBlob(zip, `${baseName}.zip`);
@@ -798,7 +802,6 @@ document.addEventListener('DOMContentLoaded', () => {
     /claude\.ai/i,
     /gemini\.google\.com/i,
     /aistudio\.google\.com/i,
-    /githubusercontent\.com/i,
   ];
 
   function isAllowedAssetUrl(url) {
@@ -1451,12 +1454,6 @@ document.addEventListener('DOMContentLoaded', () => {
     return out;
   }
 
-  function _unused_detectScriptProfile() {
-    const s = String('');
-    const isRtl = /[֐-ࣿיִ-﷽ﹰ-ﻼ]/.test(s);
-    const isCjk = /[぀-ヿ㐀-鿿豈-﫿]/.test(s);
-    return { isRtl, isCjk };
-  }
 
   function splitContentAndImages(content) {
     const parts = [];

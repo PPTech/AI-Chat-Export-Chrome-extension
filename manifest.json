@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AI Chat Exporter (Ultimate)",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "Industrial-grade multi-platform chat extraction. Secure local-first architecture. No external APIs.",
   "action": {
     "default_popup": "index.html",
@@ -10,7 +10,13 @@
   "background": {
     "service_worker": "background.js"
   },
-  "permissions": ["activeTab", "scripting", "storage", "tabs", "downloads"],
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "tabs",
+    "downloads"
+  ],
   "host_permissions": [
     "<all_urls>"
   ],
@@ -25,12 +31,14 @@
   "content_scripts": [
     {
       "matches": [
-        "*://chatgpt.com/*", 
-        "*://gemini.google.com/*", 
+        "*://chatgpt.com/*",
+        "*://gemini.google.com/*",
         "*://claude.ai/*",
         "*://aistudio.google.com/*"
       ],
-      "js": ["content.js"]
+      "js": [
+        "content.js"
+      ]
     }
   ]
 }

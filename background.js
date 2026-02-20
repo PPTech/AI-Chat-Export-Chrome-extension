@@ -1,9 +1,12 @@
 // License: MIT
 // Author: Dr. Babak Sorkhpour (with help of AI)
-// background.js - Service Worker: State Manager + Diagnostics Broker v0.11.0
+// background.js - Service Worker: State Manager + Diagnostics Broker v0.12.0
 //
 // MV3 message rule: every handler MUST call sendResponse() and the listener
 // MUST return true so Chrome keeps the message channel open for async replies.
+//
+// INVARIANT: every COMMAND_IN must produce exactly one COMMAND_OUT
+// (sendResponse). The default case handles unknown actions to guarantee this.
 
 const tabStates = {};
 const appLogs = [];
@@ -100,8 +103,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         break;
       }
 
+      case 'GET_DIAGNOSTICS':
       case 'GET_DIAGNOSTICS_JSONL': {
         // Returns diagnostics for latest run (or specific runId).
+        // GET_DIAGNOSTICS is an alias for backwards compatibility.
         const targetId = message.runId || Object.keys(diagnosticsStore).pop();
         if (!targetId || !diagnosticsStore[targetId]) {
           sendResponse({ ok: false, reason: 'no diagnostics available' });
