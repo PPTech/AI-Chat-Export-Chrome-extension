@@ -59,9 +59,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ success: true });
         break;
 
+      case 'LOG_INFO':
+        log('INFO', message.message, message.details);
+        sendResponse({ success: true });
+        break;
+
       case 'GET_LOGS':
         sendResponse(appLogs);
         break;
+
+      // --- Extraction progress from content script ---
+      case 'EXTRACTION_PROGRESS': {
+        const pct = message.percent || 0;
+        const lbl = message.label || 'Processing';
+        log('INFO', `Extraction progress: ${pct}% — ${lbl}`, { tabId, details: message.details });
+        sendResponse({ ok: true });
+        break;
+      }
 
       // --- Phase 1: Diagnostics message handlers (MUST always respond) ---
 

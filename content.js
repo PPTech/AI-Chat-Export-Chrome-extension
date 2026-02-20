@@ -1228,8 +1228,8 @@
     const messages = utils.dedupe(extracted.messages || []);
 
     reportProgress(85, `Found ${messages.length} messages`);
-    chrome.runtime.sendMessage({ action: 'LOG_ERROR', message: 'Extraction Result', details: `${engine.name} found ${messages.length} messages.` });
-    chrome.runtime.sendMessage({ action: 'LOG_ERROR', message: 'Adaptive Analyzer', details: `Engine=${engine.name}; normalized=${messages.length}` });
+    chrome.runtime.sendMessage({ action: 'LOG_INFO', message: 'Extraction Result', details: `${engine.name} found ${messages.length} messages.` });
+    chrome.runtime.sendMessage({ action: 'LOG_INFO', message: 'Adaptive Analyzer', details: `Engine=${engine.name}; normalized=${messages.length}` });
 
     reportProgress(100, 'Extraction complete');
     return { success: messages.length > 0, platform: extracted.platform, title: extracted.title, messages };
