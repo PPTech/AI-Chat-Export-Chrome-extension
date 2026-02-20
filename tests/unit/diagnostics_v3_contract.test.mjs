@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { createFlightRecorder, redactUrl, scanForLeaks, redactSecrets } from '../../lib/diagnostics.mjs';
 
 test('flight recorder emits required v4 fields', () => {
-  const recorder = createFlightRecorder({ runId: 'test-run-1', tabId: 42, toolVersion: '0.11.0', platform: 'chatgpt' });
+  const recorder = createFlightRecorder({ runId: 'test-run-1', tabId: 42, toolVersion: '0.12.0', platform: 'chatgpt' });
   recorder.record({ lvl: 'INFO', event: 'extraction.start', module: 'content', phase: 'detect', result: 'ok', details: { strategy: 'ssot' } });
   recorder.record({ lvl: 'INFO', event: 'extraction.end', module: 'content', phase: 'collect', result: 'ok', details: { messages_found: 10 } });
 

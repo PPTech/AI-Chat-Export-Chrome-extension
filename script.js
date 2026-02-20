@@ -170,8 +170,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const unknownCount = msgs.filter((m) => /unknown/i.test(m.role)).length;
     const total = msgs.length;
     const diag = {
-      schema_version: 'diagnostics.v6',
-      run: { run_id: runId, started_at_utc: new Date().toISOString(), ended_at_utc: new Date().toISOString(), tool_version: '0.12.0', platform: res?.platform || 'unknown' },
+      schema_version: 'diagnostics.v5',
+      run: { run_id: runId, started_at_utc: new Date().toISOString(), ended_at_utc: new Date().toISOString(), tool_version: '0.11.0', platform: res?.platform || 'unknown' },
       tabScope: activeTabId != null ? `tab:${activeTabId}` : 'global',
       phase: 'extraction',
       status,
@@ -649,45 +649,96 @@ document.addEventListener('DOMContentLoaded', () => {
 
     setProcessingProgress(5, 'Fetching files...');
     const packed = [];
+    const fileFailures = [];
     let i = 1;
+
+    // Ensure content script is injected (may have been unloaded if user navigated)
+    let contentScriptReady = true;
+    try {
+      await new Promise((resolve, reject) => {
+        chrome.tabs.sendMessage(activeTabId, { action: 'ping' }, (r) => {
+          if (chrome.runtime.lastError) reject(new Error('not injected'));
+          else resolve(r);
+        });
+      });
+    } catch {
+      // Re-inject content script
+      try {
+        await chrome.scripting.executeScript({ target: { tabId: activeTabId }, files: ['content.js'] });
+        await new Promise((r) => setTimeout(r, 500)); // wait for script init
+      } catch {
+        contentScriptReady = false;
+      }
+    }
+
     for (const file of filesFound) {
       try {
         setProcessingProgress(5 + (i / filesFound.length) * 80, `Fetching file ${i}/${filesFound.length}`);
-        // Try fetching via content script (page context) first — the popup can't
-        // access session-authenticated URLs (ChatGPT backend-api, etc.)
         let blob;
-        try {
-          const resp = await new Promise((resolve, reject) => {
-            chrome.tabs.sendMessage(activeTabId, { action: 'FETCH_FILE', url: file.url }, (r) => {
-              if (chrome.runtime.lastError || !r?.ok) reject(new Error(r?.error || 'content-script fetch failed'));
-              else resolve(r);
+        let fetchedVia = 'none';
+        // Try fetching via content script (page context) first
+        if (contentScriptReady) {
+          try {
+            const resp = await new Promise((resolve, reject) => {
+              chrome.tabs.sendMessage(activeTabId, { action: 'FETCH_FILE', url: file.url }, (r) => {
+                if (chrome.runtime.lastError || !r?.ok) reject(new Error(r?.error || chrome.runtime.lastError?.message || 'content-script fetch failed'));
+                else resolve(r);
+              });
             });
-          });
-          // Content script returns base64 data
-          const bin = atob(resp.data);
-          const arr = new Uint8Array(bin.length);
-          for (let j = 0; j < bin.length; j++) arr[j] = bin.charCodeAt(j);
-          blob = new Blob([arr], { type: resp.mime || 'application/octet-stream' });
-        } catch {
-          // Fallback: direct fetch from popup (works for public URLs)
-          blob = await fetch(file.url).then((r) => r.blob());
+            const bin = atob(resp.data);
+            const arr = new Uint8Array(bin.length);
+            for (let j = 0; j < bin.length; j++) arr[j] = bin.charCodeAt(j);
+            blob = new Blob([arr], { type: resp.mime || 'application/octet-stream' });
+            fetchedVia = 'content-script';
+          } catch (csErr) {
+            // Content script failed — try direct fetch
+            try {
+              const directResp = await fetch(file.url);
+              if (!directResp.ok) throw new Error(`HTTP ${directResp.status}`);
+              blob = await directResp.blob();
+              fetchedVia = 'popup-direct';
+            } catch (popupErr) {
+              throw new Error(`Content-script: ${csErr.message}; Popup: ${popupErr.message}`);
+            }
+          }
+        } else {
+          // No content script — try direct fetch only
+          try {
+            const directResp = await fetch(file.url);
+            if (!directResp.ok) throw new Error(`HTTP ${directResp.status}`);
+            blob = await directResp.blob();
+            fetchedVia = 'popup-direct';
+          } catch (popupErr) {
+            throw new Error(`No content script + popup failed: ${popupErr.message}`);
+          }
         }
         const ext = (blob.type.split('/')[1] || 'bin').replace('jpeg', 'jpg');
         const name = file.name.includes('.') ? file.name : `${file.name}.${ext}`;
         const data = new Uint8Array(await blob.arrayBuffer());
         packed.push({ name: `${String(i).padStart(3, '0')}_${name}`, content: data, mime: blob.type || 'application/octet-stream' });
         i += 1;
-      } catch {
-        // skip failed file — fail-soft
+      } catch (err) {
+        fileFailures.push({ name: file.name, url: file.url.slice(0, 100), error: (err?.message || 'unknown').slice(0, 150) });
+        i += 1;
       }
     }
-    if (!packed.length) return showError(new Error('Detected files could not be downloaded from current session. The file URLs may require an active page session.'));
+    if (!packed.length) {
+      const reasons = fileFailures.slice(0, 3).map((f) => `${f.name}: ${f.error}`).join('\n');
+      return showError(new Error(`Could not download ${filesFound.length} file(s). Make sure the chat page is still open and you are logged in.\n\nDetails:\n${reasons}`));
+    }
+    if (fileFailures.length > 0) {
+      // Partial success — pack what we got + include failure manifest
+      packed.push({ name: 'file_failures.json', content: JSON.stringify({ failures: fileFailures, total: filesFound.length, succeeded: packed.length }, null, 2), mime: 'application/json' });
+    }
     setProcessingProgress(90, 'Packing ZIP...');
     const zip = await createRobustZip(packed);
     const date = new Date().toISOString().slice(0, 10);
     const platformPrefix = (currentChatData.platform || 'Export').replace(/[^a-zA-Z0-9]/g, '');
     downloadBlob(zip, `${platformPrefix}_${date}_chat_files.zip`);
     setProcessingProgress(100, 'Done');
+    if (fileFailures.length > 0) {
+      showInfo('Partial Download', `${packed.length - 1} of ${filesFound.length} file(s) downloaded. ${fileFailures.length} failed. See file_failures.json in the ZIP for details.`);
+    }
   });
 
   document.getElementById('link-legal').onclick = () => showInfo('Legal', 'This is a local-processing developer version. Users remain responsible for lawful and compliant use in their jurisdiction.');
