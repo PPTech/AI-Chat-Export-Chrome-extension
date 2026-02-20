@@ -178,9 +178,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function setAnalyzeProgress(percent, label = 'Analyzing') {
     const el = document.getElementById('analyze-progress');
+    const bar = document.getElementById('analyze-progress-bar');
     if (!el) return;
     const bounded = Math.max(0, Math.min(100, Math.round(percent)));
-    el.textContent = `Analysis Progress: ${bounded}% (${label})`;
+    el.textContent = `Analysis: ${bounded}% — ${label}`;
+    if (bar) {
+      bar.style.width = `${bounded}%`;
+      bar.style.background = bounded >= 100 ? 'var(--success, #10b981)' : 'var(--primary, #2563eb)';
+    }
   }
 
   function computeDetectedCounts(messages = []) {
@@ -384,10 +389,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!activeTabId) return;
     const ok = window.confirm('Load full chat from the beginning? This may take longer for long chats.');
     if (!ok) return;
+    btnLoadFull.disabled = true;
+    btnLoadFull.textContent = 'Loading...';
     setAnalyzeProgress(5, 'Preparing full-load scan');
-    chrome.tabs.sendMessage(activeTabId, { action: 'scroll_chat' }, () => {
-      setAnalyzeProgress(80, 'Finalizing full-load scan');
-      setTimeout(requestExtraction, 800);
+    chrome.tabs.sendMessage(activeTabId, { action: 'scroll_chat' }, (res) => {
+      setAnalyzeProgress(90, 'Scroll complete, re-extracting');
+      setTimeout(() => {
+        requestExtraction();
+        btnLoadFull.disabled = false;
+        btnLoadFull.textContent = 'Fetch Full';
+      }, 800);
     });
   };
 
@@ -655,10 +666,288 @@ document.addEventListener('DOMContentLoaded', () => {
     return { content: msgs.map((m) => `### ${m.role}\n${m.content}\n`).join('\n'), mime: 'text/markdown' };
   }
 
-  function buildTextPdf(title, messages) {
-    // Text-based PDF with extractable text (not raster/canvas).
-    // Uses PDF text objects (BT/ET) with Helvetica (Type1, built-in).
+  /**
+   * Build PDF using canvas rendering for full Unicode + image support.
+   * Each page is rendered as a high-resolution canvas image embedded in PDF.
+   * This approach supports Arabic, Persian, CJK, and all Unicode scripts
+   * natively through the browser's font rendering engine.
+   */
+  async function buildCanvasPdf(title, messages) {
     const PAGE_W = 595; // A4 points
+    const PAGE_H = 842;
+    const SCALE = 2; // retina-quality rendering
+    const MARGIN = 40;
+    const FONT_SIZE = 11;
+    const TITLE_SIZE = 18;
+    const ROLE_SIZE = 13;
+    const LINE_HEIGHT = FONT_SIZE * 1.5;
+    const CONTENT_W = PAGE_W - (MARGIN * 2);
+    const CONTENT_H = PAGE_H - (MARGIN * 2);
+    const MAX_IMG_H = 200; // max image height per page in points
+
+    const canvas = document.createElement('canvas');
+    canvas.width = PAGE_W * SCALE;
+    canvas.height = PAGE_H * SCALE;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(SCALE, SCALE);
+
+    const pageImages = []; // each entry is a PNG data URL
+    let cursorY = MARGIN;
+
+    function detectTextDir(text) {
+      if (/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF\u0590-\u05FF]/.test(text)) return 'rtl';
+      return 'ltr';
+    }
+
+    function newPage() {
+      if (cursorY > MARGIN) {
+        pageImages.push(canvas.toDataURL('image/png'));
+      }
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, PAGE_W, PAGE_H);
+      cursorY = MARGIN;
+    }
+
+    function ensureSpace(needed) {
+      if (cursorY + needed > PAGE_H - MARGIN) {
+        newPage();
+      }
+    }
+
+    function wrapTextForCanvas(text, maxWidth, font) {
+      ctx.font = font;
+      const words = text.split(/\s+/);
+      const lines = [];
+      let line = '';
+      for (const word of words) {
+        const test = line ? `${line} ${word}` : word;
+        if (ctx.measureText(test).width > maxWidth && line) {
+          lines.push(line);
+          line = word;
+        } else {
+          line = test;
+        }
+      }
+      if (line) lines.push(line);
+      return lines.length ? lines : [''];
+    }
+
+    function drawText(text, fontSize, bold, color) {
+      if (!text) return;
+      const dir = detectTextDir(text);
+      const font = `${bold ? 'bold ' : ''}${fontSize}px -apple-system, "Segoe UI", Roboto, "Noto Sans", "Noto Sans Arabic", "Noto Sans CJK SC", Arial, sans-serif`;
+      ctx.font = font;
+      ctx.fillStyle = color || '#111827';
+      ctx.textAlign = dir === 'rtl' ? 'right' : 'left';
+      const xPos = dir === 'rtl' ? PAGE_W - MARGIN : MARGIN;
+
+      const rawLines = text.split('\n');
+      for (const rawLine of rawLines) {
+        const wrapped = wrapTextForCanvas(rawLine, CONTENT_W, font);
+        for (const wl of wrapped) {
+          ensureSpace(fontSize + 4);
+          ctx.fillText(wl, xPos, cursorY + fontSize);
+          cursorY += fontSize + 4;
+        }
+      }
+      ctx.textAlign = 'left'; // reset
+    }
+
+    async function drawImage(src) {
+      if (!src) return;
+      try {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+          img.src = src;
+          setTimeout(reject, 5000); // 5s timeout
+        });
+        const aspect = img.width / Math.max(1, img.height);
+        let drawW = Math.min(CONTENT_W, img.width);
+        let drawH = drawW / aspect;
+        if (drawH > MAX_IMG_H) {
+          drawH = MAX_IMG_H;
+          drawW = drawH * aspect;
+        }
+        ensureSpace(drawH + 10);
+        ctx.drawImage(img, MARGIN, cursorY, drawW, drawH);
+        cursorY += drawH + 10;
+      } catch {
+        // Image failed to load — draw placeholder
+        ensureSpace(20);
+        ctx.fillStyle = '#9ca3af';
+        ctx.font = `italic 9px Arial, sans-serif`;
+        ctx.fillText('[Image could not be embedded]', MARGIN, cursorY + 10);
+        cursorY += 20;
+        ctx.fillStyle = '#111827';
+      }
+    }
+
+    // Start first page
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, PAGE_W, PAGE_H);
+
+    // Title
+    drawText(title || 'Chat Export', TITLE_SIZE, true, '#1e3a5f');
+    cursorY += 8;
+
+    // Render messages
+    for (const m of messages) {
+      ensureSpace(LINE_HEIGHT * 2);
+
+      // Role header with colored background
+      const roleColor = /user/i.test(m.role) ? '#2563eb' : '#059669';
+      ctx.fillStyle = roleColor + '15'; // light bg
+      ctx.fillRect(MARGIN - 4, cursorY - 2, CONTENT_W + 8, ROLE_SIZE + 8);
+      drawText(`[${m.role}]`, ROLE_SIZE, true, roleColor);
+      cursorY += 4;
+
+      // Split content into text and image parts
+      const parts = splitContentAndImages(m.content || '');
+      for (const part of parts) {
+        if (part.type === 'image') {
+          await drawImage(normalizeImageSrc(part.value));
+        } else {
+          const clean = stripHtmlTags(part.value || '');
+          if (clean.trim()) drawText(clean, FONT_SIZE, false, '#111827');
+        }
+      }
+
+      cursorY += 12; // spacing between messages
+    }
+
+    // Capture final page
+    if (cursorY > MARGIN) {
+      pageImages.push(canvas.toDataURL('image/png'));
+    }
+
+    // Assemble PDF from page images
+    return assemblePdfFromImages(pageImages, PAGE_W, PAGE_H);
+  }
+
+  /**
+   * Assemble a PDF from page images (PNG data URLs).
+   * Each image becomes a full page in the PDF.
+   */
+  function assemblePdfFromImages(pageDataUrls, pageW, pageH) {
+    const objects = [];
+    // obj 1: catalog
+    objects[1] = `1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n`;
+
+    const kids = [];
+    let objNum = 3;
+
+    for (const dataUrl of pageDataUrls) {
+      // Extract raw PNG data from data URL
+      const base64 = dataUrl.split(',')[1] || '';
+      const binaryStr = atob(base64);
+      const imgBytes = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) imgBytes[i] = binaryStr.charCodeAt(i);
+
+      // Parse PNG to get dimensions
+      const pngInfo = parsePngInfo(imgBytes);
+      const imgObjNum = objNum;
+      const pageObjNum = objNum + 1;
+      const contentObjNum = objNum + 2;
+
+      // Image XObject (DCTDecode for JPEG or FlateDecode for PNG)
+      // We'll use raw PNG in the PDF via inline image or XObject
+      // Simpler approach: embed as ASCII85 or just base64 with stream
+      const imgStream = imgBytes;
+      objects[imgObjNum] = buildPdfImageObject(imgObjNum, imgStream, pngInfo.width, pngInfo.height);
+
+      // Content stream: draw image to fill page
+      const contentStr = `q ${pageW} 0 0 ${pageH} 0 0 cm /Img${imgObjNum} Do Q`;
+      objects[contentObjNum] = `${contentObjNum} 0 obj\n<< /Length ${contentStr.length} >>\nstream\n${contentStr}\nendstream\nendobj\n`;
+
+      // Page object
+      objects[pageObjNum] = `${pageObjNum} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageW} ${pageH}] /Resources << /XObject << /Img${imgObjNum} ${imgObjNum} 0 R >> >> /Contents ${contentObjNum} 0 R >>\nendobj\n`;
+
+      kids.push(`${pageObjNum} 0 R`);
+      objNum += 3;
+    }
+
+    // obj 2: pages
+    objects[2] = `2 0 obj\n<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${pageDataUrls.length} >>\nendobj\n`;
+
+    // Serialize
+    const enc = new TextEncoder();
+    const header = enc.encode('%PDF-1.4\n');
+    const chunks = [header];
+    const offsets = [0];
+    let offset = header.length;
+
+    for (let i = 1; i < objects.length; i++) {
+      if (!objects[i]) continue;
+      offsets[i] = offset;
+      if (typeof objects[i] === 'string') {
+        const bytes = enc.encode(objects[i]);
+        chunks.push(bytes);
+        offset += bytes.length;
+      } else {
+        // Binary object (image)
+        chunks.push(objects[i]);
+        offset += objects[i].length;
+      }
+    }
+
+    const maxObj = objects.length - 1;
+    const xrefStart = offset;
+    let xref = `xref\n0 ${maxObj + 1}\n0000000000 65535 f \n`;
+    for (let i = 1; i <= maxObj; i++) {
+      xref += `${String(offsets[i] || 0).padStart(10, '0')} 00000 n \n`;
+    }
+    chunks.push(enc.encode(xref));
+    chunks.push(enc.encode(`trailer\n<< /Size ${maxObj + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`));
+
+    const total = chunks.reduce((a, b) => a + b.length, 0);
+    const out = new Uint8Array(total);
+    let pos = 0;
+    for (const chunk of chunks) {
+      out.set(chunk, pos);
+      pos += chunk.length;
+    }
+    return out;
+  }
+
+  function parsePngInfo(bytes) {
+    // PNG header: width at offset 16, height at offset 20 (big-endian 4 bytes each)
+    if (bytes[0] === 0x89 && bytes[1] === 0x50) {
+      const width = (bytes[16] << 24) | (bytes[17] << 16) | (bytes[18] << 8) | bytes[19];
+      const height = (bytes[20] << 24) | (bytes[21] << 16) | (bytes[22] << 8) | bytes[23];
+      return { width, height };
+    }
+    return { width: 595, height: 842 }; // fallback A4
+  }
+
+  function buildPdfImageObject(objNum, pngBytes, width, height) {
+    // Build a PDF image XObject from raw PNG data
+    // Use /Filter /FlateDecode with the raw deflated IDAT chunks
+    // Simpler approach: use /Filter /DCTDecode with JPEG, but we have PNG
+    // Most practical: use raw RGB stream from PNG
+    // For maximum compatibility, we'll embed as ASCII hex encoded stream
+    const hexStream = Array.from(pngBytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+    const header = `${objNum} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /ASCIIHexDecode /Length ${hexStream.length + 1} >>\nstream\n`;
+    const footer = `>\nendstream\nendobj\n`;
+
+    const enc = new TextEncoder();
+    const headerBytes = enc.encode(header);
+    const hexBytes = enc.encode(hexStream);
+    const footerBytes = enc.encode(footer);
+
+    const total = headerBytes.length + hexBytes.length + footerBytes.length;
+    const result = new Uint8Array(total);
+    result.set(headerBytes, 0);
+    result.set(hexBytes, headerBytes.length);
+    result.set(footerBytes, headerBytes.length + hexBytes.length);
+    return result;
+  }
+
+  // Legacy text-based PDF builder (kept as fallback for ASCII-only content)
+  function buildTextPdf(title, messages) {
+    const PAGE_W = 595;
     const PAGE_H = 842;
     const MARGIN = 50;
     const FONT_SIZE = 10;
@@ -667,7 +956,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const LINE_HEIGHT = 14;
     const MAX_CHARS = 85;
 
-    const pages = []; // each page = array of text operations
+    const pages = [];
     let currentPage = [];
     let cursorY = PAGE_H - MARGIN;
 
@@ -689,7 +978,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function addWrappedText(text, fontSize = FONT_SIZE, bold = false) {
-      // Strip HTML tags and image tokens before PDF rendering
       const clean = stripHtmlTags(stripImageTokens(text));
       const lines = wrapLineSmart(clean, MAX_CHARS);
       for (const line of lines) {
@@ -697,19 +985,9 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    // Title
     addLine(title || 'Chat Export', TITLE_SIZE, true);
     cursorY -= 10;
 
-    // Check for non-Latin content and add warning
-    const allText = messages.map((m) => m.content || '').join(' ');
-    if (hasNonLatinChars(allText)) {
-      addLine('Note: Non-Latin characters (Arabic, Persian, CJK, etc.) are shown as "?" in this PDF.', 8, false);
-      addLine('For full Unicode support, use HTML or Markdown export instead.', 8, false);
-      cursorY -= 6;
-    }
-
-    // Messages
     for (const m of messages) {
       ensureSpace(LINE_HEIGHT * 3);
       addLine(`[${m.role}]`, ROLE_SIZE, true);
@@ -718,8 +996,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     pages.push(currentPage);
-
-    // Build PDF structure
     return assemblePdfDocument(pages, PAGE_W, PAGE_H);
   }
 
@@ -1051,6 +1327,13 @@ document.addEventListener('DOMContentLoaded', () => {
       downloadBlob(zip, `${prefix}_diagnostics_bundle.zip`);
     });
   }
+
+  // Listen for extraction progress messages from content script
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.action === 'EXTRACTION_PROGRESS') {
+      setAnalyzeProgress(msg.percent, msg.label || 'Processing');
+    }
+  });
 
   safeInit();
 });

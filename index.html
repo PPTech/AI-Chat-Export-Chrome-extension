@@ -136,7 +136,10 @@
           <div class="message-count" id="msg-count">0</div>
           <div class="message-label">Messages Ready</div>
           <div class="message-label" id="detected-summary" style="margin-top:2px;">Detected: 0 messages • 0 photos • 0 files • 0 others</div>
-          <div id="analyze-progress" class="message-label" style="margin-top:4px;">Analysis Progress: 0%</div>
+          <div id="analyze-progress" class="message-label" style="margin-top:4px;">Analysis: 0%</div>
+          <div style="width:100%;height:4px;background:var(--border);border-radius:2px;margin-top:4px;overflow:hidden;">
+            <div id="analyze-progress-bar" style="width:0%;height:100%;background:var(--primary);border-radius:2px;transition:width 0.3s ease;"></div>
+          </div>
           <div class="action-row">
             <button id="btn-preview" class="action-btn" title="Preview extracted messages before export">Preview</button>
             <button id="btn-load-full" class="action-btn" title="Load full chat history from beginning">Fetch Full</button>

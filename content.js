@@ -8,6 +8,19 @@
 
   const CHATGPT_ANALYSIS_KEY = 'CHATGPT_DOM_ANALYSIS';
 
+  // Progress reporting: sends extraction progress to popup and background
+  function reportProgress(percent, label, details = null) {
+    try {
+      chrome.runtime.sendMessage({
+        action: 'EXTRACTION_PROGRESS',
+        percent: Math.max(0, Math.min(100, Math.round(percent))),
+        label: label || 'Processing',
+        details: details || null,
+        timestamp: Date.now()
+      });
+    } catch (_) { /* popup may be closed */ }
+  }
+
 
   class GeminiExtractor {
     constructor(options = {}) {
@@ -250,6 +263,7 @@
               messages: ordered.map((n) => ({
                 role: n.message.author?.role === 'user' ? 'User' : 'Assistant',
                 content: n.message.content.parts.join('\n'),
+                timestamp: n.message.create_time ? new Date(n.message.create_time * 1000).toISOString() : null,
                 meta: { platform: 'ChatGPT', sourceSelector: 'ssot:__NEXT_DATA__', confidence: 0.99, evidence: ['ssot-server-data'] }
               }))
             };
@@ -274,6 +288,7 @@
               messages: ordered.map((n) => ({
                 role: n.message.author?.role === 'user' ? 'User' : 'Assistant',
                 content: n.message.content.parts.join('\n'),
+                timestamp: n.message.create_time ? new Date(n.message.create_time * 1000).toISOString() : null,
                 meta: { platform: 'ChatGPT', sourceSelector: 'ssot:__remixContext', confidence: 0.99, evidence: ['ssot-remix-data'] }
               }))
             };
@@ -282,7 +297,59 @@
       }
     } catch { /* Remix data unavailable */ }
 
+    // Attempt 3: Same-origin conversation API (ChatGPT backend-api)
+    // Extract conversation ID from URL and try fetching full conversation JSON
     return null;
+  }
+
+  /**
+   * Try fetching full ChatGPT conversation via same-origin API.
+   * This gets ALL messages without scrolling — the complete chat history.
+   * Only works on chatgpt.com with active session cookies.
+   */
+  async function tryChatGptApiFetch() {
+    try {
+      const match = location.pathname.match(/\/c\/([a-f0-9-]+)/i) || location.pathname.match(/\/([a-f0-9-]{36})/);
+      if (!match) return null;
+      const conversationId = match[1];
+      reportProgress(25, 'Fetching full conversation via API');
+      const resp = await fetch(`/backend-api/conversation/${conversationId}`, {
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' }
+      });
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      if (!data?.mapping) return null;
+      const ordered = Object.values(data.mapping)
+        .filter((n) => n.message?.content?.parts?.length && n.message?.author?.role !== 'system')
+        .sort((a, b) => (a.message?.create_time || 0) - (b.message?.create_time || 0));
+      if (ordered.length === 0) return null;
+      reportProgress(50, `API returned ${ordered.length} messages`);
+      return {
+        strategy: 'api:backend-api',
+        title: data.title || document.title,
+        messages: ordered.map((n) => {
+          const parts = n.message.content.parts || [];
+          // Handle multimodal content (images referenced in parts)
+          const textParts = parts.filter((p) => typeof p === 'string');
+          const imageParts = parts.filter((p) => typeof p === 'object' && p?.content_type?.startsWith('image'));
+          let content = textParts.join('\n');
+          for (const img of imageParts) {
+            const assetUrl = img.asset_pointer ? `https://chatgpt.com/backend-api/files/${img.asset_pointer.replace('file-service://', '')}` : '';
+            if (assetUrl) content += `\n[[IMG:${assetUrl}]]`;
+          }
+          return {
+            role: n.message.author?.role === 'user' ? 'User' : 'Assistant',
+            content,
+            timestamp: n.message.create_time ? new Date(n.message.create_time * 1000).toISOString() : null,
+            meta: { platform: 'ChatGPT', sourceSelector: 'api:backend-api', confidence: 0.99, evidence: ['api-full-conversation'] }
+          };
+        })
+      };
+    } catch (e) {
+      console.log('[ChatGPT] API fetch failed (expected on some builds):', e.message);
+      return null;
+    }
   }
 
   function computeCoverageMetrics(messages, domNodeCount) {
@@ -306,7 +373,20 @@
       name: 'ChatGPT',
       matches: () => location.hostname.includes('chatgpt.com') || location.hostname.includes('chat.openai.com'),
       async extract(options, utils) {
+        reportProgress(15, 'Trying bulk data sources');
+
+        // Strategy 0: Same-origin API fetch (gets ALL messages without scrolling)
+        const apiFetch = await tryChatGptApiFetch();
+        if (apiFetch && apiFetch.messages.length > 0) {
+          const isCodex = /chatgpt\.com\/codex/i.test(location.href);
+          const platformName = isCodex ? 'ChatGPT Codex' : this.name;
+          const coverage = computeCoverageMetrics(apiFetch.messages, apiFetch.messages.length);
+          console.log(`[ChatGPT] API fetch via ${apiFetch.strategy}: ${apiFetch.messages.length} messages`, coverage);
+          return { platform: platformName, title: apiFetch.title || document.title, messages: apiFetch.messages, _extraction: { strategy: apiFetch.strategy, coverage } };
+        }
+
         // Strategy 1: SSOT extraction from embedded JSON data
+        reportProgress(25, 'Trying embedded data');
         const ssot = tryChatGptSsotExtraction();
         if (ssot && ssot.messages.length > 0) {
           const isCodex = /chatgpt\.com\/codex/i.test(location.href);
@@ -317,6 +397,7 @@
         }
 
         // Strategy 2: DOM analysis (controlled scroll if fullLoad)
+        reportProgress(35, 'Analyzing DOM');
         const analysis = await runChatGptDomAnalysis(options.fullLoad ? 'full' : 'visible', options, utils);
         let messages = [];
         for (const m of analysis.messages) {
@@ -1134,15 +1215,23 @@
   }
 
   async function extractChatData(options) {
+    reportProgress(10, 'Detecting platform');
     const engine = Object.values(PlatformEngines).find((e) => e.matches());
-    if (!engine) return { success: false, platform: 'Unsupported', messages: [] };
+    if (!engine) {
+      reportProgress(100, 'Unsupported platform');
+      return { success: false, platform: 'Unsupported', messages: [] };
+    }
 
+    reportProgress(20, `Extracting from ${engine.name}`);
     const extracted = await engine.extract(options, utils);
+    reportProgress(70, 'Normalizing messages');
     const messages = utils.dedupe(extracted.messages || []);
 
+    reportProgress(85, `Found ${messages.length} messages`);
     chrome.runtime.sendMessage({ action: 'LOG_ERROR', message: 'Extraction Result', details: `${engine.name} found ${messages.length} messages.` });
     chrome.runtime.sendMessage({ action: 'LOG_ERROR', message: 'Adaptive Analyzer', details: `Engine=${engine.name}; normalized=${messages.length}` });
 
+    reportProgress(100, 'Extraction complete');
     return { success: messages.length > 0, platform: extracted.platform, title: extracted.title, messages };
   }
 
@@ -1156,17 +1245,28 @@
     let stable = 0;
     let prev = scroller.scrollHeight;
     let rounds = 0;
+    const maxRounds = 50;
+    const stableTarget = 5;
+    reportProgress(5, 'Loading full history');
     const timer = setInterval(() => {
       rounds += 1;
       scroller.scrollTop = 0;
       if (Math.abs(scroller.scrollHeight - prev) < 24) stable += 1;
       else stable = 0;
       prev = scroller.scrollHeight;
-      if (stable >= 10 || rounds >= 45) {
+      // Report progress: rounds / maxRounds mapped to 5-90%
+      const pct = 5 + Math.round((rounds / maxRounds) * 85);
+      reportProgress(Math.min(90, pct), `Scrolling (${rounds}/${maxRounds})`, {
+        scrollHeight: scroller.scrollHeight,
+        stableCount: stable,
+        round: rounds
+      });
+      if (stable >= stableTarget || rounds >= maxRounds) {
         clearInterval(timer);
-        sendResponse({ status: 'done' });
+        reportProgress(95, 'Scroll complete, extracting');
+        sendResponse({ status: 'done', rounds, scrollHeight: scroller.scrollHeight });
       }
-    }, 1200);
+    }, 1000);
   }
 
   function discoverClaudeStructure() {
