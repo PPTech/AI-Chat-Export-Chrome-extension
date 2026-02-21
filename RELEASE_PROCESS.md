@@ -30,5 +30,5 @@
 6. Tag in GitHub: `vX.Y.Z`.
 
 ## License and Dependency Review
-- Verify any new package/library license compatibility with MIT distribution.
+- Verify any new package/library license compatibility with AGPL-3.0 distribution.
 - Record third-party license notes in `LICENSES_THIRD_PARTY.md`.

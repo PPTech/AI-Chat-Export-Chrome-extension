@@ -1,4 +1,4 @@
-﻿// License: AGPL-3.0
+// License: AGPL-3.0
 // Author: Dr. Babak Sorkhpour (with help of AI)
 // script.js - Main Controller v0.12.1
 
@@ -10,6 +10,17 @@ import {
 } from './core/utils.js';
 
 import { buildSearchablePdf, buildCanvasPdf, buildTextPdf } from './export/pdf.js';
+
+import {
+  getDefaultSettings, collectSettings as collectSettingsFromLib,
+  applySettings as applySettingsFromLib, saveSettingsToStorage as saveSettingsToStorageLib,
+  loadSettingsFromStorage as loadSettingsFromStorageLib, isDebugMode as isDebugModeLib
+} from './lib/state.mjs';
+
+import {
+  generateContent as generateContentFromLib, createRobustZip as createRobustZipLib,
+  computeDetectedCounts as computeDetectedCountsLib
+} from './lib/export.mjs';
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
   let activeTabId = null;
@@ -44,63 +55,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const SETTINGS_KEY = 'ai_exporter_settings_v1';
 
-  function getDefaultSettings() {
-    return {
-      convertImages: true,
-      highlightCode: true,
-      rawHtml: false,
-      zip: false,
-      photoZip: true,
-      exportFiles: true,
-      advancedLinks: false,
-      debugMode: false,
-      rasterPdf: false
-    };
+  // --- Delegate settings functions to lib/state.mjs ---
+  function uiEls() {
+    return { checkImages, checkCode, checkRawHtml, checkZip, checkPhotoZip, checkExportFiles, checkAdvancedLinks, checkDebugMode, checkRasterPdf, btnDownloadDiagnostics };
   }
-
-  function collectSettings() {
-    return {
-      convertImages: !!checkImages.checked,
-      highlightCode: !!checkCode.checked,
-      rawHtml: !!checkRawHtml.checked,
-      zip: !!checkZip.checked,
-      photoZip: !!checkPhotoZip.checked,
-      exportFiles: !!checkExportFiles.checked,
-      advancedLinks: !!checkAdvancedLinks.checked,
-      debugMode: !!checkDebugMode.checked,
-      rasterPdf: !!checkRasterPdf?.checked,
-      updatedAt: new Date().toISOString()
-    };
-  }
-
-  function isDebugMode() {
-    return !!checkDebugMode.checked;
-  }
-
-  function applySettings(settings) {
-    const s = { ...getDefaultSettings(), ...(settings || {}) };
-    checkImages.checked = !!s.convertImages;
-    checkCode.checked = !!s.highlightCode;
-    checkRawHtml.checked = !!s.rawHtml;
-    checkZip.checked = !!s.zip;
-    checkPhotoZip.checked = !!s.photoZip;
-    checkExportFiles.checked = !!s.exportFiles;
-    checkAdvancedLinks.checked = !!s.advancedLinks;
-    checkDebugMode.checked = !!s.debugMode;
-    if (checkRasterPdf) checkRasterPdf.checked = !!s.rasterPdf;
-    // B) Diagnostics button always visible (diagnostics always exist)
-    if (btnDownloadDiagnostics) btnDownloadDiagnostics.style.display = 'block';
-  }
-
-  function saveSettingsToStorage(settings) {
-    chrome.storage.local.set({ [SETTINGS_KEY]: settings });
-  }
-
-  function loadSettingsFromStorage() {
-    chrome.storage.local.get([SETTINGS_KEY], (res) => {
-      applySettings(res?.[SETTINGS_KEY] || getDefaultSettings());
-    });
-  }
+  // getDefaultSettings imported directly from lib/state.mjs (top-level import)
+  function collectSettings() { return collectSettingsFromLib(uiEls()); }
+  function isDebugMode() { return isDebugModeLib(uiEls()); }
+  function applySettings(settings) { applySettingsFromLib(settings, uiEls()); }
+  function saveSettingsToStorage(settings) { saveSettingsToStorageLib(settings); }
+  function loadSettingsFromStorage() { loadSettingsFromStorageLib(uiEls()); }
 
   function exportSettingsCfg(settings) {
     const lines = Object.entries(settings).map(([k, v]) => `${k}=${String(v)}`);
@@ -247,18 +211,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function computeDetectedCounts(messages = []) {
-    let photos = 0;
-    let files = 0;
-    let others = 0;
-    const imgRegex = /\[\[IMG:[\s\S]*?\]\]|!\[[^\]]*\]\((data:image\/[^)]+|https?:\/\/[^)]+)\)/g;
-    const fileRegex = /\[\[FILE:([^|\]]+)\|([^\]]+)\]\]/g;
-    for (const m of messages) {
-      const content = m.content || '';
-      photos += (content.match(imgRegex) || []).length;
-      files += (content.match(fileRegex) || []).length;
-      others += (content.match(/```/g) || []).length / 2;
-    }
-    return { messages: messages.length, photos: Math.round(photos), files: Math.round(files), others: Math.round(others) };
+    return computeDetectedCountsLib(messages);
   }
 
   function updateDetectedSummary(messages = []) {
@@ -804,8 +757,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Returns { assetFiles: [{name, content, mime}], urlMap: Map<originalUrl, localPath>, failures: [] }
 
   const ASSET_ALLOWLIST = [
-    /^data:image\//i,
-    /\.(png|jpg|jpeg|gif|webp|svg|bmp|ico)(\?|$)/i,
+    /^data:/i,
+    /^blob:/i,
+    /\.(png|jpg|jpeg|gif|webp|svg|bmp|ico|pdf|csv|json|txt|md|docx|xlsx|zip)(\?|$)/i,
     /googleusercontent\.com/i,
     /oaiusercontent\.com/i,
     /oaistatic\.com/i,
@@ -813,11 +767,13 @@ document.addEventListener('DOMContentLoaded', () => {
     /claude\.ai/i,
     /gemini\.google\.com/i,
     /aistudio\.google\.com/i,
+    /anthropic\.com/i,
   ];
 
   function isAllowedAssetUrl(url) {
     if (!url) return false;
-    if (/^data:image\//i.test(url)) return true;
+    if (/^data:/i.test(url)) return true;
+    if (/^blob:/i.test(url)) return true;
     if (!/^https?:\/\//i.test(url)) return false;
     return ASSET_ALLOWLIST.some((re) => re.test(url));
   }
@@ -829,6 +785,24 @@ document.addEventListener('DOMContentLoaded', () => {
       .replace(/[\/\\:*?"<>|\x00-\x1F]/g, '_')
       .replace(/^_+/, '')
       .slice(0, 120) || 'asset';
+  }
+
+  // Bug 2 fix: comprehensive MIME type → file extension lookup
+  function mimeToExt(mimeType, fallback = 'bin') {
+    const MAP = {
+      'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/jfif': 'jpg', 'image/pjpeg': 'jpg',
+      'image/png': 'png', 'image/x-png': 'png',
+      'image/gif': 'gif', 'image/webp': 'webp',
+      'image/svg+xml': 'svg', 'image/bmp': 'bmp',
+      'image/ico': 'ico', 'image/x-icon': 'ico', 'image/vnd.microsoft.icon': 'ico',
+      'application/pdf': 'pdf', 'text/csv': 'csv',
+      'application/json': 'json', 'text/plain': 'txt', 'text/markdown': 'md',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+      'application/zip': 'zip', 'application/octet-stream': fallback,
+    };
+    const normalized = (mimeType || '').toLowerCase().split(';')[0].trim();
+    return MAP[normalized] || (normalized.split('/')[1] || fallback).replace(/[^a-z0-9]/gi, '').slice(0, 10) || fallback;
   }
 
   async function resolveAndEmbedAssets(messages, recorder, parentEventId) {
@@ -879,7 +853,8 @@ document.addEventListener('DOMContentLoaded', () => {
             blob = await fetch(src).then((r) => r.blob());
           }
         }
-        const ext = (blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg').replace('svg+xml', 'svg');
+        // Bug 2 fix: use mimeToExt for correct extension from MIME type
+        const ext = mimeToExt(blob.type, 'png');
         const fullName = `${assetName}.${sanitizeAssetPath(ext)}`;
         const data = new Uint8Array(await blob.arrayBuffer());
         assetFiles.push({ name: fullName, content: data, mime: blob.type || 'application/octet-stream' });
@@ -898,7 +873,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const safeName = sanitizeAssetPath(file.name);
       const assetName = `assets/${String(idx).padStart(3, '0')}_${safeName}`;
       try {
-        if (!isAllowedAssetUrl(file.url) && !/^https?:\/\//i.test(file.url)) {
+        if (!isAllowedAssetUrl(file.url)) {
           failures.push({ url: file.url.slice(0, 200), reason: 'not-allowlisted' });
           continue;
         }
@@ -917,8 +892,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch {
           blob = await fetch(file.url).then((r) => r.blob());
         }
-        const ext = (blob.type.split('/')[1] || 'bin').replace('jpeg', 'jpg');
-        const fullName = assetName.includes('.') ? assetName : `${assetName}.${ext}`;
+        // Bug 2 fix: use mimeToExt for correct extension (e.g. docx, xlsx, pdf)
+        const ext = (assetName.includes('.') ? '' : `.${mimeToExt(blob.type, 'bin')}`);
+        const fullName = assetName.includes('.') ? assetName : `${assetName}${ext}`;
         const data = new Uint8Array(await blob.arrayBuffer());
         assetFiles.push({ name: fullName, content: data, mime: blob.type || 'application/octet-stream' });
         urlMap.set(file.url, fullName);
@@ -992,118 +968,21 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
 
-  /**
-
   async function generateContent(fmt, data, urlMap) {
-    const msgs = data.messages || [];
-    const title = data.title || 'Export';
-    const platform = data.platform || 'Unknown';
-    const exportDate = new Date().toISOString();
-
-    if (fmt === 'pdf') {
-      const useRaster = document.getElementById('check-raster-pdf')?.checked || false;
-      if (useRaster) {
-        // Legacy raster PDF: canvas â†’ PNG â†’ image-based PDF (not searchable)
-        const allText = msgs.map((m) => m.content || '').join(' ');
-        const needsCanvasPdf = hasNonLatinChars(allText) || extractAllImageSources(msgs).length > 0;
-        const pdf = needsCanvasPdf ? await buildCanvasPdf(title, msgs) : buildTextPdf(title, msgs);
-        return { content: pdf, mime: 'application/pdf' };
-      }
-      // Default: searchable PDF via chrome.debugger PrintToPDF
-      try {
-        const pdf = await buildSearchablePdf(title, msgs, platform, urlMap);
-        return { content: pdf, mime: 'application/pdf' };
-      } catch (cdpErr) {
-        // Graceful fallback to raster if debugger fails
-        console.warn('[PDF] chrome.debugger failed, falling back to raster:', cdpErr.message);
-        const allText = msgs.map((m) => m.content || '').join(' ');
-        const needsCanvasPdf = hasNonLatinChars(allText) || extractAllImageSources(msgs).length > 0;
-        const pdf = needsCanvasPdf ? await buildCanvasPdf(title, msgs) : buildTextPdf(title, msgs);
-        return { content: pdf, mime: 'application/pdf' };
-      }
-    }
-
-    if (fmt === 'doc') {
-      // Word-compatible HTML document (.doc extension opens in Word/LibreOffice)
-      // D6: Use local asset paths when available (ZIP export)
-      const style = 'body{font-family:Arial,sans-serif;max-width:900px;margin:auto;padding:20px;line-height:1.6}img{max-width:100%;height:auto}.msg{margin-bottom:20px;padding:12px;border:1px solid #e5e7eb;border-radius:8px}.role{font-weight:700;margin-bottom:8px}';
-      const renderFn = urlMap ? (c) => renderRichMessageHtmlWithAssets(c, urlMap) : renderRichMessageHtml;
-      const body = msgs.map((m) => {
-        return `<div class="msg"><div class="role">${escapeHtml(m.role)}</div><div>${renderFn(m.content)}</div></div>`;
-      }).join('');
-      const html = `<!DOCTYPE html><html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>${style}</style></head><body><h1>${escapeHtml(title)}</h1>${body}</body></html>`;
-      return { content: html, mime: 'application/msword', ext: 'doc' };
-    }
-
-    if (fmt === 'html') {
-      // D6: Use local asset paths when available (ZIP export)
-      const style = 'body{font-family:Arial,sans-serif;max-width:900px;margin:auto;padding:20px;line-height:1.6}img{max-width:100%;height:auto}.msg{margin-bottom:20px;padding:12px;border:1px solid #e5e7eb;border-radius:8px}.role{font-weight:700;margin-bottom:8px}';
-      const renderFn = urlMap ? (c) => renderRichMessageHtmlWithAssets(c, urlMap) : renderRichMessageHtml;
-      const body = msgs.map((m) => {
-        return `<div class="msg"><div class="role">${escapeHtml(m.role)}</div><div>${renderFn(m.content)}</div></div>`;
-      }).join('');
-      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><style>${style}</style></head><body><h1>${escapeHtml(title)}</h1>${body}</body></html>`;
-      return { content: html, mime: 'text/html' };
-    }
-
-    if (fmt === 'json') return { content: JSON.stringify({ schema: 'chat-export.v1', platform, exported_at: exportDate, title, messages: msgs.map((m, i) => ({ index: i, role: m.role, content: stripImageTokens(m.content) })) }, null, 2), mime: 'application/json' };
-    if (fmt === 'csv') {
-      const header = '\uFEFFIndex,Role,Platform,Content,ExportedAt';
-      const rows = msgs.map((m, i) => `${i},"${m.role.replace(/"/g, '""')}","${platform.replace(/"/g, '""')}","${stripImageTokens(m.content).replace(/"/g, '""').replace(/\n/g, ' ')}","${exportDate}"`);
-      return { content: `${header}\n${rows.join('\n')}`, mime: 'text/csv' };
-    }
-    if (fmt === 'sql') return { content: `CREATE TABLE chat_export (id SERIAL PRIMARY KEY, msg_index INT, role VARCHAR(50), platform VARCHAR(100), content TEXT, exported_at TIMESTAMP);\n` + msgs.map((m, i) => `INSERT INTO chat_export (msg_index, role, platform, content, exported_at) VALUES (${i}, '${m.role.replace(/'/g, "''")}', '${platform.replace(/'/g, "''")}', '${stripImageTokens(m.content).replace(/'/g, "''")}', '${exportDate}');`).join('\n'), mime: 'application/sql' };
-    if (fmt === 'txt') return { content: msgs.map((m, i) => `[${i}] [${m.role}] ${stripImageTokens(m.content)}`).join('\n\n'), mime: 'text/plain' };
-    // Markdown: rewrite image URLs to local asset paths if available
-    const mdContent = msgs.map((m) => {
-      const content = urlMap ? rewriteContentWithLocalAssets(m.content, urlMap) : m.content;
-      return `### ${m.role}\n${content}\n`;
-    }).join('\n');
-    return { content: mdContent, mime: 'text/markdown' };
+    // Delegate to lib/export.mjs with checkers for PDF functions
+    const checkers = {
+      useRaster: document.getElementById('check-raster-pdf')?.checked || false,
+      hasNonLatinChars,
+      buildSearchablePdf,
+      // Bug 4 fix: pass urlMap to buildCanvasPdf so local asset paths work in raster PDF
+      buildCanvasPdf: (title, msgs) => buildCanvasPdf(title, msgs, urlMap),
+      buildTextPdf,
+    };
+    return generateContentFromLib(fmt, data, urlMap, checkers);
   }
 
-  /**
-
-  const crcTable = new Int32Array(256);
-  for (let i = 0; i < 256; i += 1) {
-    let c = i;
-    for (let k = 0; k < 8; k += 1) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
-    crcTable[i] = c;
-  }
-  function crc32(bytes) {
-    let crc = -1;
-    for (let i = 0; i < bytes.length; i += 1) crc = (crc >>> 8) ^ crcTable[(crc ^ bytes[i]) & 0xFF];
-    return (crc ^ (-1)) >>> 0;
-  }
-  async function createRobustZip(files) {
-    const parts = [];
-    const cd = [];
-    let offset = 0;
-    const enc = new TextEncoder();
-    for (const f of files) {
-      let data = f.content;
-      if (typeof data === 'string') data = enc.encode(data);
-      const name = enc.encode(f.name);
-      const size = data.length;
-      const crc = crc32(data);
-      const local = new Uint8Array(30 + name.length + size);
-      const lv = new DataView(local.buffer);
-      lv.setUint32(0, 0x04034b50, true); lv.setUint16(4, 20, true); lv.setUint16(26, name.length, true);
-      lv.setUint32(14, crc, true); lv.setUint32(18, size, true); lv.setUint32(22, size, true);
-      local.set(name, 30); local.set(data, 30 + name.length); parts.push(local);
-
-      const central = new Uint8Array(46 + name.length);
-      const cv = new DataView(central.buffer);
-      cv.setUint32(0, 0x02014b50, true); cv.setUint16(4, 20, true); cv.setUint16(6, 20, true); cv.setUint16(28, name.length, true);
-      cv.setUint32(16, crc, true); cv.setUint32(20, size, true); cv.setUint32(24, size, true); cv.setUint32(42, offset, true);
-      central.set(name, 46); cd.push(central); offset += local.length;
-    }
-    const cdSize = cd.reduce((a, b) => a + b.length, 0);
-    const end = new Uint8Array(22);
-    const ev = new DataView(end.buffer);
-    ev.setUint32(0, 0x06054b50, true); ev.setUint16(8, files.length, true); ev.setUint16(10, files.length, true); ev.setUint32(12, cdSize, true); ev.setUint32(16, offset, true);
-    return new Blob([...parts, ...cd, end], { type: 'application/zip' });
-  }
+  // --- createRobustZip delegated to lib/export.mjs ---
+  async function createRobustZip(files) { return createRobustZipLib(files); }
 
   // --- D) GestureToken enforcement ---
   // Chrome loses user gesture context after first await. We use a time-windowed

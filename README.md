@@ -1,7 +1,7 @@
 # AI Chat Exporter (Ultimate)
 
 **Version**: 0.12.1
-**License**: MIT
+**License**: AGPL-3.0
 **Author**: Dr. Babak Sorkhpour ([@Drbabakskr](https://x.com/Drbabakskr))
 
 Local-only Chrome extension for exporting AI chat conversations. No external APIs, no telemetry, no runtime model downloads. All processing happens in your browser.
