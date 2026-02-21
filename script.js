@@ -1,7 +1,15 @@
-// License: AGPL-3.0
+﻿// License: AGPL-3.0
 // Author: Dr. Babak Sorkhpour (with help of AI)
 // script.js - Main Controller v0.12.1
 
+import {
+  escapeHtml, normalizeImageSrc, stripImageTokens, replaceImageTokensForText,
+  replaceImageTokensForHtml, renderImgTag, splitContentAndImages, renderRichMessageHtml,
+  extractAllImageSources, extractAllFileSources, rewriteContentWithLocalAssets,
+  renderRichMessageHtmlWithAssets, stripHtmlTags, hasNonLatinChars, pdfEscapeText, wrapLineSmart
+} from './core/utils.js';
+
+import { buildSearchablePdf, buildCanvasPdf, buildTextPdf } from './export/pdf.js';
 document.addEventListener('DOMContentLoaded', () => {
   let currentChatData = null;
   let activeTabId = null;
@@ -24,6 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const checkExportFiles = document.getElementById('check-export-files');
   const checkAdvancedLinks = document.getElementById('check-advanced-links');
   const checkDebugMode = document.getElementById('check-debug-mode');
+  const checkRasterPdf = document.getElementById('check-raster-pdf');
   const btnDownloadDiagnostics = document.getElementById('btn-download-diagnostics');
 
   const settingsModal = document.getElementById('settings-modal');
@@ -44,7 +53,8 @@ document.addEventListener('DOMContentLoaded', () => {
       photoZip: true,
       exportFiles: true,
       advancedLinks: false,
-      debugMode: false
+      debugMode: false,
+      rasterPdf: false
     };
   }
 
@@ -58,6 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
       exportFiles: !!checkExportFiles.checked,
       advancedLinks: !!checkAdvancedLinks.checked,
       debugMode: !!checkDebugMode.checked,
+      rasterPdf: !!checkRasterPdf?.checked,
       updatedAt: new Date().toISOString()
     };
   }
@@ -76,6 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
     checkExportFiles.checked = !!s.exportFiles;
     checkAdvancedLinks.checked = !!s.advancedLinks;
     checkDebugMode.checked = !!s.debugMode;
+    if (checkRasterPdf) checkRasterPdf.checked = !!s.rasterPdf;
     // B) Diagnostics button always visible (diagnostics always exist)
     if (btnDownloadDiagnostics) btnDownloadDiagnostics.style.display = 'block';
   }
@@ -227,7 +239,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const bar = document.getElementById('analyze-progress-bar');
     if (!el) return;
     const bounded = Math.max(0, Math.min(100, Math.round(percent)));
-    el.textContent = `Analysis: ${bounded}% — ${label}`;
+    el.textContent = `Analysis: ${bounded}% â€” ${label}`;
     if (bar) {
       bar.style.width = `${bounded}%`;
       bar.style.background = bounded >= 100 ? 'var(--success, #10b981)' : 'var(--primary, #2563eb)';
@@ -253,10 +265,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const el = document.getElementById('detected-summary');
     if (!el) return;
     const c = computeDetectedCounts(messages);
-    el.textContent = `Detected: ${c.messages} messages • ${c.photos} photos • ${c.files} files • ${c.others} others`;
+    el.textContent = `Detected: ${c.messages} messages â€¢ ${c.photos} photos â€¢ ${c.files} files â€¢ ${c.others} others`;
   }
 
-  // --- D7: Flight Recorder v3 — structured events + run correlation + redaction ---
+  // --- D7: Flight Recorder v3 â€” structured events + run correlation + redaction ---
   // Always-on minimal recording. Debug ON = verbose with raw details.
   // Redaction: in non-verbose mode, content is hashed (length + first 8 chars of SHA-256).
 
@@ -396,7 +408,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const debug = isDebugMode();
     const runId = `export-${Date.now()}`;
-    // B) ALWAYS create a recorder — minimal (debug OFF) or verbose (debug ON)
+    // B) ALWAYS create a recorder â€” minimal (debug OFF) or verbose (debug ON)
     const recorder = createPopupFlightRecorder(runId, currentChatData.platform, debug);
     lastAssetFailures = [];
 
@@ -419,7 +431,7 @@ document.addEventListener('DOMContentLoaded', () => {
         recorder.record({ event: 'asset.resolve.done', module: 'export', phase: 'assets', result: 'ok', parentEventId: exportStartEvent.eventId, details: { resolved: assetResult.urlMap.size, failed: assetResult.failures.length } });
       } catch (assetErr) {
         recorder.record({ lvl: 'WARN', event: 'asset.resolve.fail', module: 'export', phase: 'assets', result: 'fail', parentEventId: exportStartEvent.eventId, details: { error: (assetErr?.message || '').slice(0, 200) } });
-        // Asset failure is not fatal — continue without local assets
+        // Asset failure is not fatal â€” continue without local assets
       }
     }
     const urlMap = assetResult.urlMap;
@@ -434,7 +446,7 @@ document.addEventListener('DOMContentLoaded', () => {
         files.push({ name: `${baseName}.${fileExt}`, content: generated.content, mime: generated.mime });
         recorder.record({ event: `export.format.done`, module: 'export', phase: 'assemble', result: 'ok', parentEventId: exportStartEvent.eventId, details: { format: fmt } });
       } catch (fmtErr) {
-        // A) Format failure is not fatal — record and continue
+        // A) Format failure is not fatal â€” record and continue
         formatErrors.push({ format: fmt, error: (fmtErr?.message || '').slice(0, 200) });
         recorder.record({ lvl: 'ERROR', event: `export.format.fail`, module: 'export', phase: 'assemble', result: 'fail', parentEventId: exportStartEvent.eventId, details: { format: fmt, error: (fmtErr?.message || '').slice(0, 200) } });
       }
@@ -494,7 +506,7 @@ document.addEventListener('DOMContentLoaded', () => {
       };
       files.push({ name: `${baseName}.diagnostics_summary.json`, content: JSON.stringify(diagSummary, null, 2), mime: 'application/json' });
 
-      // B2) min_forensics.json — always present in every ZIP
+      // B2) min_forensics.json â€” always present in every ZIP
       const minForensics = {
         schema: 'min-forensics.v1',
         runId,
@@ -507,7 +519,7 @@ document.addEventListener('DOMContentLoaded', () => {
       };
       files.push({ name: `${baseName}.min_forensics.json`, content: JSON.stringify(minForensics, null, 2), mime: 'application/json' });
 
-      // B3) diagnostics.jsonl — included when debug mode is ON
+      // B3) diagnostics.jsonl â€” included when debug mode is ON
       if (debug) {
         const jsonlLines = recorder.toJsonl();
         if (jsonlLines) {
@@ -516,7 +528,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       if (files.length === 1 && !checkZip.checked) {
-        // edge case: no content files generated, only manifest — single-file download
+        // edge case: no content files generated, only manifest â€” single-file download
         setProcessingProgress(95, 'Finalizing');
         downloadBlob(new Blob([files[0].content], { type: files[0].mime }), files[0].name);
       } else {
@@ -720,7 +732,7 @@ document.addEventListener('DOMContentLoaded', () => {
             blob = new Blob([arr], { type: resp.mime || 'application/octet-stream' });
             fetchedVia = 'content-script';
           } catch (csErr) {
-            // Content script failed — try direct fetch
+            // Content script failed â€” try direct fetch
             try {
               const directResp = await fetch(file.url);
               if (!directResp.ok) throw new Error(`HTTP ${directResp.status}`);
@@ -731,7 +743,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
           }
         } else {
-          // No content script — try direct fetch only
+          // No content script â€” try direct fetch only
           try {
             const directResp = await fetch(file.url);
             if (!directResp.ok) throw new Error(`HTTP ${directResp.status}`);
@@ -756,7 +768,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return showError(new Error(`Could not download ${filesFound.length} file(s). Make sure the chat page is still open and you are logged in.\n\nDetails:\n${reasons}`));
     }
     if (fileFailures.length > 0) {
-      // Partial success — pack what we got + include failure manifest
+      // Partial success â€” pack what we got + include failure manifest
       packed.push({ name: 'file_failures.json', content: JSON.stringify({ failures: fileFailures, total: filesFound.length, succeeded: packed.length }, null, 2), mime: 'application/json' });
     }
     setProcessingProgress(90, 'Packing ZIP...');
@@ -786,87 +798,6 @@ document.addEventListener('DOMContentLoaded', () => {
     errorModal.style.display = 'flex';
   }
 
-  function escapeHtml(text) {
-    return (text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
-  }
-
-  function normalizeImageSrc(src) {
-    if (!src) return '';
-    if (/^data:image\//i.test(src)) return src;
-    if (/^https?:\/\//i.test(src)) return src;
-    return '';
-  }
-
-  function stripImageTokens(content) {
-    return (content || '')
-      .replace(/\[\[IMG:[\s\S]*?\]\]/g, '')
-      .replace(/!\[[^\]]*\]\((data:image\/[^)]+|https?:\/\/[^)]+)\)/g, '')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
-  }
-
-  function replaceImageTokensForText(content) {
-    return stripImageTokens(content);
-  }
-
-  function replaceImageTokensForHtml(content) {
-    const tokenRegex = /\[\[IMG:([\s\S]*?)\]\]/g;
-    const markdownRegex = /!\[[^\]]*\]\((data:image\/[^)]+|https?:\/\/[^)]+)\)/g;
-    return content
-      .replace(tokenRegex, (_, src) => renderImgTag(src))
-      .replace(markdownRegex, (_, src) => renderImgTag(src));
-  }
-
-  function renderImgTag(rawSrc) {
-    const src = normalizeImageSrc((rawSrc || '').trim());
-    if (!src) return '';
-    return `<img src="${src}" alt="Image" style="max-width:100%;height:auto;display:block;margin:12px 0;border-radius:6px;">`;
-  }
-
-  function renderRichMessageHtml(content) {
-    const parts = splitContentAndImages(content || '');
-    return parts.map((part) => {
-      if (part.type === 'image') return renderImgTag(part.value);
-      return escapeHtml(part.value || '').replace(/\n/g, '<br>');
-    }).join('');
-  }
-
-  function extractAllImageSources(messages) {
-    const set = new Set();
-    const tokenRegex = /\[\[IMG:([\s\S]*?)\]\]/g;
-    const mdRegex = /!\[[^\]]*\]\((data:image\/[^)]+|https?:\/\/[^)]+)\)/g;
-    for (const m of messages || []) {
-      let match;
-      while ((match = tokenRegex.exec(m.content || '')) !== null) {
-        const src = normalizeImageSrc((match[1] || '').trim());
-        if (src) set.add(src);
-      }
-      while ((match = mdRegex.exec(m.content || '')) !== null) {
-        const src = normalizeImageSrc((match[1] || '').trim());
-        if (src) set.add(src);
-      }
-    }
-    return Array.from(set);
-  }
-
-  function extractAllFileSources(messages) {
-    const files = [];
-    for (const m of messages || []) {
-      // Create regex inside loop to reset lastIndex per message
-      const fileRegex = /\[\[FILE:([^|\]]+)\|([^\]]+)\]\]/g;
-      let match;
-      while ((match = fileRegex.exec(m.content || '')) !== null) {
-        const rawUrl = (match[1] || '').trim();
-        const fileName = (match[2] || 'file.bin').trim();
-        if (!rawUrl) continue;
-        const safeName = fileName.replace(/[\/:*?"<>|]+/g, '_') || 'file.bin';
-        files.push({ url: rawUrl, name: safeName });
-      }
-    }
-    const uniq = new Map();
-    files.forEach((f) => { if (!uniq.has(f.url)) uniq.set(f.url, f); });
-    return Array.from(uniq.values());
-  }
 
   // --- D6: Asset resolution + embedding in export ZIP ---
   // Resolves images/files to binary data, stores in assets/ folder.
@@ -922,7 +853,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         let blob;
         if (/^data:image\//i.test(src)) {
-          // Data URL — decode directly
+          // Data URL â€” decode directly
           const parts = src.split(',');
           const mimeMatch = src.match(/^data:(image\/[^;]+)/);
           const mime = mimeMatch ? mimeMatch[1] : 'image/png';
@@ -997,47 +928,71 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    // Asset manifest
+    // Build per-asset entries for the manifest
+    const assetEntries = [];
+    for (const [originalUrl, localPath] of urlMap) {
+      const matchingFile = assetFiles.find((f) => f.name === localPath);
+      let originHost = '';
+      let scheme = '';
+      try {
+        if (/^https?:\/\//i.test(originalUrl)) {
+          const u = new URL(originalUrl);
+          originHost = u.hostname;
+          scheme = u.protocol;
+        } else if (/^data:/i.test(originalUrl)) {
+          scheme = 'data:';
+          originHost = '(inline)';
+        }
+      } catch { /* invalid URL */ }
+      assetEntries.push({
+        assetId: localPath.replace('assets/', '').replace(/\.[^.]+$/, ''),
+        fileName: localPath,
+        byteLength: matchingFile ? matchingFile.content.length || 0 : 0,
+        mime: matchingFile ? matchingFile.mime : 'unknown',
+        originHost,
+        scheme,
+        status: 'resolved',
+        failureReason: null,
+      });
+    }
+    // Add failed assets to entries
+    for (const f of failures) {
+      let originHost = '';
+      let scheme = '';
+      try {
+        if (/^https?:\/\//i.test(f.url)) {
+          const u = new URL(f.url);
+          originHost = u.hostname;
+          scheme = u.protocol;
+        }
+      } catch { /* invalid URL */ }
+      assetEntries.push({
+        assetId: null,
+        fileName: null,
+        byteLength: 0,
+        mime: null,
+        originHost,
+        scheme,
+        status: 'failed',
+        failureReason: f.reason || 'unknown',
+      });
+    }
+
+    // Asset manifest v2 with per-asset entries
     const assetManifest = {
-      schema: 'asset-manifest.v1',
+      schema: 'asset-manifest.v2',
       resolved: urlMap.size,
       failed: failures.length,
       total: imageSources.length + fileSources.length,
-      failures,
+      entries: assetEntries,
     };
     assetFiles.push({ name: 'assets/asset_manifest.json', content: JSON.stringify(assetManifest, null, 2), mime: 'application/json' });
 
     return { assetFiles, urlMap, failures };
   }
 
-  /**
-   * Replace image/file URLs in content with local asset paths (for ZIP export).
-   */
-  function rewriteContentWithLocalAssets(content, urlMap) {
-    if (!urlMap || urlMap.size === 0) return content;
-    let result = content;
-    for (const [originalUrl, localPath] of urlMap) {
-      // Replace in [[IMG:...]] tokens
-      result = result.split(originalUrl).join(localPath);
-    }
-    return result;
-  }
 
-  function renderRichMessageHtmlWithAssets(content, urlMap) {
-    const rewritten = urlMap ? rewriteContentWithLocalAssets(content, urlMap) : content;
-    const parts = splitContentAndImages(rewritten || '');
-    return parts.map((part) => {
-      if (part.type === 'image') {
-        const src = (part.value || '').trim();
-        if (!src) return '';
-        // For local asset paths, use relative path; for data URIs / URLs, use as-is
-        const safeSrc = /^(data:|https?:\/\/)/.test(src) ? normalizeImageSrc(src) : escapeHtml(src);
-        if (!safeSrc) return '';
-        return `<img src="${safeSrc}" alt="Image" style="max-width:100%;height:auto;display:block;margin:12px 0;border-radius:6px;">`;
-      }
-      return escapeHtml(part.value || '').replace(/\n/g, '<br>');
-    }).join('');
-  }
+  /**
 
   async function generateContent(fmt, data, urlMap) {
     const msgs = data.messages || [];
@@ -1046,12 +1001,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const exportDate = new Date().toISOString();
 
     if (fmt === 'pdf') {
-      // Use canvas PDF for Unicode content (Arabic, Persian, CJK, etc.)
-      // Fall back to text PDF for ASCII-only content (smaller file size)
-      const allText = msgs.map((m) => m.content || '').join(' ');
-      const needsCanvasPdf = hasNonLatinChars(allText) || extractAllImageSources(msgs).length > 0;
-      const pdf = needsCanvasPdf ? await buildCanvasPdf(title, msgs) : buildTextPdf(title, msgs);
-      return { content: pdf, mime: 'application/pdf' };
+      const useRaster = document.getElementById('check-raster-pdf')?.checked || false;
+      if (useRaster) {
+        // Legacy raster PDF: canvas â†’ PNG â†’ image-based PDF (not searchable)
+        const allText = msgs.map((m) => m.content || '').join(' ');
+        const needsCanvasPdf = hasNonLatinChars(allText) || extractAllImageSources(msgs).length > 0;
+        const pdf = needsCanvasPdf ? await buildCanvasPdf(title, msgs) : buildTextPdf(title, msgs);
+        return { content: pdf, mime: 'application/pdf' };
+      }
+      // Default: searchable PDF via chrome.debugger PrintToPDF
+      try {
+        const pdf = await buildSearchablePdf(title, msgs, platform, urlMap);
+        return { content: pdf, mime: 'application/pdf' };
+      } catch (cdpErr) {
+        // Graceful fallback to raster if debugger fails
+        console.warn('[PDF] chrome.debugger failed, falling back to raster:', cdpErr.message);
+        const allText = msgs.map((m) => m.content || '').join(' ');
+        const needsCanvasPdf = hasNonLatinChars(allText) || extractAllImageSources(msgs).length > 0;
+        const pdf = needsCanvasPdf ? await buildCanvasPdf(title, msgs) : buildTextPdf(title, msgs);
+        return { content: pdf, mime: 'application/pdf' };
+      }
     }
 
     if (fmt === 'doc') {
@@ -1094,514 +1063,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /**
-   * Build PDF using canvas rendering for full Unicode + image support.
-   * Each page is rendered as a high-resolution canvas image embedded in PDF.
-   * This approach supports Arabic, Persian, CJK, and all Unicode scripts
-   * natively through the browser's font rendering engine.
-   */
-  async function buildCanvasPdf(title, messages) {
-    const PAGE_W = 595; // A4 points
-    const PAGE_H = 842;
-    const SCALE = 2; // retina-quality rendering
-    const MARGIN = 40;
-    const FONT_SIZE = 11;
-    const TITLE_SIZE = 18;
-    const ROLE_SIZE = 13;
-    const LINE_HEIGHT = FONT_SIZE * 1.5;
-    const CONTENT_W = PAGE_W - (MARGIN * 2);
-    const CONTENT_H = PAGE_H - (MARGIN * 2);
-    const MAX_IMG_H = 200; // max image height per page in points
-
-    const canvas = document.createElement('canvas');
-    canvas.width = PAGE_W * SCALE;
-    canvas.height = PAGE_H * SCALE;
-    const ctx = canvas.getContext('2d');
-    ctx.scale(SCALE, SCALE);
-
-    const pageImages = []; // each entry is a PNG data URL
-    let cursorY = MARGIN;
-
-    function detectTextDir(text) {
-      if (/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF\u0590-\u05FF]/.test(text)) return 'rtl';
-      return 'ltr';
-    }
-
-    function newPage() {
-      if (cursorY > MARGIN) {
-        pageImages.push(canvas.toDataURL('image/png'));
-      }
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, PAGE_W, PAGE_H);
-      cursorY = MARGIN;
-    }
-
-    function ensureSpace(needed) {
-      if (cursorY + needed > PAGE_H - MARGIN) {
-        newPage();
-      }
-    }
-
-    function wrapTextForCanvas(text, maxWidth, font) {
-      ctx.font = font;
-      const words = text.split(/\s+/);
-      const lines = [];
-      let line = '';
-      for (const word of words) {
-        const test = line ? `${line} ${word}` : word;
-        if (ctx.measureText(test).width > maxWidth && line) {
-          lines.push(line);
-          line = word;
-        } else {
-          line = test;
-        }
-      }
-      if (line) lines.push(line);
-      return lines.length ? lines : [''];
-    }
-
-    function drawText(text, fontSize, bold, color) {
-      if (!text) return;
-      const dir = detectTextDir(text);
-      const font = `${bold ? 'bold ' : ''}${fontSize}px -apple-system, "Segoe UI", Roboto, "Noto Sans", "Noto Sans Arabic", "Noto Sans CJK SC", Arial, sans-serif`;
-      ctx.font = font;
-      ctx.fillStyle = color || '#111827';
-      ctx.textAlign = dir === 'rtl' ? 'right' : 'left';
-      const xPos = dir === 'rtl' ? PAGE_W - MARGIN : MARGIN;
-
-      const rawLines = text.split('\n');
-      for (const rawLine of rawLines) {
-        const wrapped = wrapTextForCanvas(rawLine, CONTENT_W, font);
-        for (const wl of wrapped) {
-          ensureSpace(fontSize + 4);
-          ctx.fillText(wl, xPos, cursorY + fontSize);
-          cursorY += fontSize + 4;
-        }
-      }
-      ctx.textAlign = 'left'; // reset
-    }
-
-    async function drawImage(src) {
-      if (!src) return;
-      try {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        await new Promise((resolve, reject) => {
-          img.onload = resolve;
-          img.onerror = reject;
-          img.src = src;
-          setTimeout(reject, 5000); // 5s timeout
-        });
-        const aspect = img.width / Math.max(1, img.height);
-        let drawW = Math.min(CONTENT_W, img.width);
-        let drawH = drawW / aspect;
-        if (drawH > MAX_IMG_H) {
-          drawH = MAX_IMG_H;
-          drawW = drawH * aspect;
-        }
-        ensureSpace(drawH + 10);
-        ctx.drawImage(img, MARGIN, cursorY, drawW, drawH);
-        cursorY += drawH + 10;
-      } catch {
-        // Image failed to load — draw placeholder
-        ensureSpace(20);
-        ctx.fillStyle = '#9ca3af';
-        ctx.font = `italic 9px Arial, sans-serif`;
-        ctx.fillText('[Image could not be embedded]', MARGIN, cursorY + 10);
-        cursorY += 20;
-        ctx.fillStyle = '#111827';
-      }
-    }
-
-    // Start first page
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, PAGE_W, PAGE_H);
-
-    // Title
-    drawText(title || 'Chat Export', TITLE_SIZE, true, '#1e3a5f');
-    cursorY += 8;
-
-    // Render messages
-    for (const m of messages) {
-      ensureSpace(LINE_HEIGHT * 2);
-
-      // Role header with colored background
-      const roleColor = /user/i.test(m.role) ? '#2563eb' : '#059669';
-      ctx.fillStyle = roleColor + '15'; // light bg
-      ctx.fillRect(MARGIN - 4, cursorY - 2, CONTENT_W + 8, ROLE_SIZE + 8);
-      drawText(`[${m.role}]`, ROLE_SIZE, true, roleColor);
-      cursorY += 4;
-
-      // Split content into text and image parts
-      const parts = splitContentAndImages(m.content || '');
-      for (const part of parts) {
-        if (part.type === 'image') {
-          await drawImage(normalizeImageSrc(part.value));
-        } else {
-          const clean = stripHtmlTags(part.value || '');
-          if (clean.trim()) drawText(clean, FONT_SIZE, false, '#111827');
-        }
-      }
-
-      cursorY += 12; // spacing between messages
-    }
-
-    // Capture final page
-    if (cursorY > MARGIN) {
-      pageImages.push(canvas.toDataURL('image/png'));
-    }
-
-    // Assemble PDF from page images
-    return assemblePdfFromImages(pageImages, PAGE_W, PAGE_H);
-  }
-
-  /**
-   * Assemble a PDF from page images (PNG data URLs).
-   * Each image becomes a full page in the PDF.
-   */
-  function assemblePdfFromImages(pageDataUrls, pageW, pageH) {
-    const objects = [];
-    // obj 1: catalog
-    objects[1] = `1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n`;
-
-    const kids = [];
-    let objNum = 3;
-
-    for (const dataUrl of pageDataUrls) {
-      // Extract raw PNG data from data URL
-      const base64 = dataUrl.split(',')[1] || '';
-      const binaryStr = atob(base64);
-      const imgBytes = new Uint8Array(binaryStr.length);
-      for (let i = 0; i < binaryStr.length; i++) imgBytes[i] = binaryStr.charCodeAt(i);
-
-      // Parse PNG to get dimensions
-      const pngInfo = parsePngInfo(imgBytes);
-      const imgObjNum = objNum;
-      const pageObjNum = objNum + 1;
-      const contentObjNum = objNum + 2;
-
-      // Image XObject (DCTDecode for JPEG or FlateDecode for PNG)
-      // We'll use raw PNG in the PDF via inline image or XObject
-      // Simpler approach: embed as ASCII85 or just base64 with stream
-      const imgStream = imgBytes;
-      objects[imgObjNum] = buildPdfImageObject(imgObjNum, imgStream, pngInfo.width, pngInfo.height);
-
-      // Content stream: draw image to fill page
-      const contentStr = `q ${pageW} 0 0 ${pageH} 0 0 cm /Img${imgObjNum} Do Q`;
-      objects[contentObjNum] = `${contentObjNum} 0 obj\n<< /Length ${contentStr.length} >>\nstream\n${contentStr}\nendstream\nendobj\n`;
-
-      // Page object
-      objects[pageObjNum] = `${pageObjNum} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageW} ${pageH}] /Resources << /XObject << /Img${imgObjNum} ${imgObjNum} 0 R >> >> /Contents ${contentObjNum} 0 R >>\nendobj\n`;
-
-      kids.push(`${pageObjNum} 0 R`);
-      objNum += 3;
-    }
-
-    // obj 2: pages
-    objects[2] = `2 0 obj\n<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${pageDataUrls.length} >>\nendobj\n`;
-
-    // Serialize
-    const enc = new TextEncoder();
-    const header = enc.encode('%PDF-1.4\n');
-    const chunks = [header];
-    const offsets = [0];
-    let offset = header.length;
-
-    for (let i = 1; i < objects.length; i++) {
-      if (!objects[i]) continue;
-      offsets[i] = offset;
-      if (typeof objects[i] === 'string') {
-        const bytes = enc.encode(objects[i]);
-        chunks.push(bytes);
-        offset += bytes.length;
-      } else {
-        // Binary object (image)
-        chunks.push(objects[i]);
-        offset += objects[i].length;
-      }
-    }
-
-    const maxObj = objects.length - 1;
-    const xrefStart = offset;
-    let xref = `xref\n0 ${maxObj + 1}\n0000000000 65535 f \n`;
-    for (let i = 1; i <= maxObj; i++) {
-      xref += `${String(offsets[i] || 0).padStart(10, '0')} 00000 n \n`;
-    }
-    chunks.push(enc.encode(xref));
-    chunks.push(enc.encode(`trailer\n<< /Size ${maxObj + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`));
-
-    const total = chunks.reduce((a, b) => a + b.length, 0);
-    const out = new Uint8Array(total);
-    let pos = 0;
-    for (const chunk of chunks) {
-      out.set(chunk, pos);
-      pos += chunk.length;
-    }
-    return out;
-  }
-
-  function parsePngInfo(bytes) {
-    // PNG header: width at offset 16, height at offset 20 (big-endian 4 bytes each)
-    if (bytes[0] === 0x89 && bytes[1] === 0x50) {
-      const width = (bytes[16] << 24) | (bytes[17] << 16) | (bytes[18] << 8) | bytes[19];
-      const height = (bytes[20] << 24) | (bytes[21] << 16) | (bytes[22] << 8) | bytes[23];
-      return { width, height };
-    }
-    return { width: 595, height: 842 }; // fallback A4
-  }
-
-  function buildPdfImageObject(objNum, pngBytes, width, height) {
-    // Build a PDF image XObject from raw PNG data
-    // Use /Filter /FlateDecode with the raw deflated IDAT chunks
-    // Simpler approach: use /Filter /DCTDecode with JPEG, but we have PNG
-    // Most practical: use raw RGB stream from PNG
-    // For maximum compatibility, we'll embed as ASCII hex encoded stream
-    const hexStream = Array.from(pngBytes).map((b) => b.toString(16).padStart(2, '0')).join('');
-    const header = `${objNum} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /ASCIIHexDecode /Length ${hexStream.length + 1} >>\nstream\n`;
-    const footer = `>\nendstream\nendobj\n`;
-
-    const enc = new TextEncoder();
-    const headerBytes = enc.encode(header);
-    const hexBytes = enc.encode(hexStream);
-    const footerBytes = enc.encode(footer);
-
-    const total = headerBytes.length + hexBytes.length + footerBytes.length;
-    const result = new Uint8Array(total);
-    result.set(headerBytes, 0);
-    result.set(hexBytes, headerBytes.length);
-    result.set(footerBytes, headerBytes.length + hexBytes.length);
-    return result;
-  }
-
-  // Legacy text-based PDF builder (kept as fallback for ASCII-only content)
-  function buildTextPdf(title, messages) {
-    const PAGE_W = 595;
-    const PAGE_H = 842;
-    const MARGIN = 50;
-    const FONT_SIZE = 10;
-    const TITLE_SIZE = 16;
-    const ROLE_SIZE = 12;
-    const LINE_HEIGHT = 14;
-    const MAX_CHARS = 85;
-
-    const pages = [];
-    let currentPage = [];
-    let cursorY = PAGE_H - MARGIN;
-
-    function ensureSpace(needed) {
-      if (cursorY - needed < MARGIN) {
-        pages.push(currentPage);
-        currentPage = [];
-        cursorY = PAGE_H - MARGIN;
-      }
-    }
-
-    function addLine(text, fontSize = FONT_SIZE, bold = false) {
-      const cleaned = pdfEscapeText(text);
-      if (!cleaned) return;
-      ensureSpace(fontSize + 4);
-      const fontName = bold ? '/F2' : '/F1';
-      currentPage.push(`BT ${fontName} ${fontSize} Tf ${MARGIN} ${cursorY.toFixed(1)} Td (${cleaned}) Tj ET`);
-      cursorY -= (fontSize + 4);
-    }
-
-    function addWrappedText(text, fontSize = FONT_SIZE, bold = false) {
-      const clean = stripHtmlTags(stripImageTokens(text));
-      const lines = wrapLineSmart(clean, MAX_CHARS);
-      for (const line of lines) {
-        addLine(line, fontSize, bold);
-      }
-    }
-
-    addLine(title || 'Chat Export', TITLE_SIZE, true);
-    cursorY -= 10;
-
-    for (const m of messages) {
-      ensureSpace(LINE_HEIGHT * 3);
-      addLine(`[${m.role}]`, ROLE_SIZE, true);
-      addWrappedText(m.content || '', FONT_SIZE, false);
-      cursorY -= 8;
-    }
-
-    pages.push(currentPage);
-    return assemblePdfDocument(pages, PAGE_W, PAGE_H);
-  }
-
-  /**
-   * Strip HTML tags from text, preserving content.
-   */
-  function stripHtmlTags(text) {
-    return String(text || '')
-      .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<\/(p|div|li|h[1-6])>/gi, '\n')
-      .replace(/<[^>]+>/g, '')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&#0?39;/g, "'")
-      .replace(/&nbsp;/g, ' ');
-  }
-
-  /**
-   * Detect if text contains non-Latin characters (Arabic, Persian, CJK, etc.)
-   */
-  function hasNonLatinChars(text) {
-    // eslint-disable-next-line no-control-regex
-    return /[^\x00-\x7F\xA0-\xFF]/.test(text);
-  }
-
-  function pdfEscapeText(text) {
-    return String(text || '')
-      // Strip any HTML tags that leaked through
-      .replace(/<[^>]+>/g, '')
-      .replace(/\\/g, '\\\\')
-      .replace(/\(/g, '\\(')
-      .replace(/\)/g, '\\)')
-      // Keep printable ASCII + common Latin-1 supplement (accented chars)
-      // Replace non-Latin chars with ? (Type1 Helvetica limitation)
-      .replace(/[^\x20-\x7E\xA0-\xFF\\()]/g, '?')
-      .trim();
-  }
-
-  function assemblePdfDocument(pages, pageW, pageH) {
-    const objects = [];
-
-    // obj 1: catalog
-    objects[1] = `1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n`;
-
-    // obj 3: Helvetica font
-    objects[3] = `3 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj\n`;
-
-    // obj 4: Helvetica-Bold font
-    objects[4] = `4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>\nendobj\n`;
-
-    // Resources shared by all pages
-    const resourcesRef = '<< /Font << /F1 3 0 R /F2 4 0 R >> >>';
-
-    // Build page objects
-    const kids = [];
-    let objNum = 5;
-    const pageDefs = [];
-
-    for (const ops of pages) {
-      const pageObj = objNum;
-      const contentObj = objNum + 1;
-      kids.push(`${pageObj} 0 R`);
-
-      const stream = ops.join('\n');
-      objects[contentObj] = `${contentObj} 0 obj\n<< /Length ${stream.length} >>\nstream\n${stream}\nendstream\nendobj\n`;
-      objects[pageObj] = `${pageObj} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageW} ${pageH}] /Resources ${resourcesRef} /Contents ${contentObj} 0 R >>\nendobj\n`;
-
-      pageDefs.push({ pageObj, contentObj });
-      objNum += 2;
-    }
-
-    // obj 2: pages
-    objects[2] = `2 0 obj\n<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${pages.length} >>\nendobj\n`;
-
-    // Serialize
-    const enc = new TextEncoder();
-    const header = enc.encode('%PDF-1.4\n');
-    const chunks = [header];
-    const offsets = [0];
-    let offset = header.length;
-
-    for (let i = 1; i < objects.length; i++) {
-      if (!objects[i]) continue;
-      offsets[i] = offset;
-      const bytes = enc.encode(objects[i]);
-      chunks.push(bytes);
-      offset += bytes.length;
-    }
-
-    const maxObj = objects.length - 1;
-    const xrefStart = offset;
-    let xref = `xref\n0 ${maxObj + 1}\n0000000000 65535 f \n`;
-    for (let i = 1; i <= maxObj; i++) {
-      xref += `${String(offsets[i] || 0).padStart(10, '0')} 00000 n \n`;
-    }
-    chunks.push(enc.encode(xref));
-    chunks.push(enc.encode(`trailer\n<< /Size ${maxObj + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`));
-
-    // Concatenate
-    const total = chunks.reduce((a, b) => a + b.length, 0);
-    const out = new Uint8Array(total);
-    let pos = 0;
-    for (const chunk of chunks) {
-      out.set(chunk, pos);
-      pos += chunk.length;
-    }
-    return out;
-  }
-
-
-  function splitContentAndImages(content) {
-    const parts = [];
-    const regex = /\[\[IMG:([\s\S]*?)\]\]|!\[[^\]]*\]\((data:image\/[^)]+|https?:\/\/[^)]+)\)/g;
-    let lastIndex = 0;
-    let match;
-    while ((match = regex.exec(content || '')) !== null) {
-      const start = match.index;
-      if (start > lastIndex) parts.push({ type: 'text', value: (content || '').slice(lastIndex, start) });
-      parts.push({ type: 'image', value: match[1] || match[2] || '' });
-      lastIndex = regex.lastIndex;
-    }
-    if (lastIndex < (content || '').length) parts.push({ type: 'text', value: (content || '').slice(lastIndex) });
-    if (!parts.length) parts.push({ type: 'text', value: content || '' });
-    return parts;
-  }
-
-  function wrapLineSmart(text, max, profile = { isRtl: false, isCjk: false }) {
-    const normalized = String(text || '').replace(/\r/g, '').trim();
-    if (!normalized) return [''];
-
-    if (profile.isCjk) {
-      const chars = Array.from(normalized.replace(/\s+/g, ''));
-      const out = [];
-      let line = '';
-      for (const ch of chars) {
-        if ((line + ch).length > max) {
-          out.push(line);
-          line = ch;
-        } else {
-          line += ch;
-        }
-      }
-      if (line) out.push(line);
-      return out;
-    }
-
-    if (profile.isRtl) {
-      const tokens = normalized.split(/\s+/).filter(Boolean);
-      const out = [];
-      let line = '';
-      for (const tok of tokens) {
-        const candidate = line ? `${tok} ${line}` : tok;
-        if (candidate.length > max && line) {
-          out.push(line);
-          line = tok;
-        } else {
-          line = candidate;
-        }
-      }
-      if (line) out.push(line);
-      return out;
-    }
-
-    const words = normalized.replace(/\s+/g, ' ').split(' ');
-    const linesOut = [];
-    let line = '';
-    for (const w of words) {
-      if ((line + ' ' + w).trim().length > max) {
-        if (line.trim()) linesOut.push(line.trim());
-        line = w;
-      } else {
-        line += ` ${w}`;
-      }
-    }
-    if (line.trim()) linesOut.push(line.trim());
-    return linesOut.length ? linesOut : [''];
-  }
 
   const crcTable = new Int32Array(256);
   for (let i = 0; i < 256; i += 1) {
@@ -1713,7 +1174,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Forensic bundle export: 3-file download (diagnostics.jsonl, run_summary.json, asset_failures.json)
   if (btnDownloadDiagnostics) {
     btnDownloadDiagnostics.onclick = withGesture(async () => {
-      // D2: 3-tier fallback: (1) local cache → (2) SW storage → (3) chrome.storage.local
+      // D2: 3-tier fallback: (1) local cache â†’ (2) SW storage â†’ (3) chrome.storage.local
       if (!lastDiagnostics) {
         try {
           const swResp = await new Promise((resolve) => {
@@ -1734,7 +1195,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const date = new Date().toISOString().slice(0, 10);
       const prefix = `${(currentChatData?.platform || 'Export').replace(/[^a-zA-Z0-9]/g, '')}_${date}`;
 
-      // INVARIANT: always produce a downloadable bundle — never "No Diagnostics"
+      // INVARIANT: always produce a downloadable bundle â€” never "No Diagnostics"
       if (!lastDiagnostics) {
         // Produce minimal empty-state diagnostics file
         lastDiagnostics = {

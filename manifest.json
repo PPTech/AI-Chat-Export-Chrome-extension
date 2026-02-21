@@ -38,7 +38,23 @@
         "*://aistudio.google.com/*"
       ],
       "js": [
+        "lib/extractors/utils.mjs",
+        "lib/extractors/chatgpt.mjs",
+        "lib/extractors/claude.mjs",
+        "lib/extractors/gemini.mjs",
+        "lib/extractors/aistudio.mjs",
+        "lib/extractors/index.mjs",
         "content.js"
+      ]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "pdf_render.html"
+      ],
+      "matches": [
+        "<all_urls>"
       ]
     }
   ]

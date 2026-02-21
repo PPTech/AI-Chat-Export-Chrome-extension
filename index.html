@@ -859,6 +859,12 @@
                 title="Enable flight recorder, invariant checks, and forensic diagnostics bundle"></label>
             <span class="setting-info">Flight recorder + invariant checks + forensic export</span>
           </div>
+          <div class="setting-item">
+            <label class="setting-row"><span class="setting-label">Raster PDF (not searchable)</span><input
+                type="checkbox" id="check-raster-pdf"
+                title="Use canvas-rendered PDF instead of searchable PDF. Only use if chrome.debugger is unavailable."></label>
+            <span class="setting-info">Falls back to image-based PDF (no text selection)</span>
+          </div>
           <!-- Encryption Removed per Security Audit -->
           <button id="btn-export-config" class="settings-btn" title="Download settings as local .cfg file">Export
             Settings Config (.cfg)</button>
@@ -922,7 +928,7 @@
       </div>
     </div>
   </div>
-  <script src="script.js"></script>
+  <script type="module" src="script.js"></script>
 </body>
 
 </html>
