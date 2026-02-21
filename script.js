@@ -170,8 +170,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const unknownCount = msgs.filter((m) => /unknown/i.test(m.role)).length;
     const total = msgs.length;
     const diag = {
-      schema_version: 'diagnostics.v5',
-      run: { run_id: runId, started_at_utc: new Date().toISOString(), ended_at_utc: new Date().toISOString(), tool_version: '0.11.0', platform: res?.platform || 'unknown' },
+      schema_version: 'diagnostics.v6',
+      run: { run_id: runId, started_at_utc: new Date().toISOString(), ended_at_utc: new Date().toISOString(), tool_version: '0.12.1', platform: res?.platform || 'unknown' },
       tabScope: activeTabId != null ? `tab:${activeTabId}` : 'global',
       phase: 'extraction',
       status,
@@ -197,6 +197,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (chrome.runtime.lastError) console.warn('[Diagnostics] SW store failed:', chrome.runtime.lastError.message);
       });
     } catch (_) { /* SW may be inactive */ }
+    // Persist to chrome.storage.local as durable fallback (SW can die)
+    try {
+      chrome.storage.local.set({ last_min_forensics: diag });
+    } catch (_) { /* storage unavailable */ }
   }
 
   document.querySelectorAll('.format-item').forEach((item) => {
@@ -334,7 +338,7 @@ document.addEventListener('DOMContentLoaded', () => {
         details: redactDetails(opts.details || null, verbose),
       };
       entries.push(entry);
-      if (entries.length > 2000) entries.shift();
+      if (entries.length > 5000) entries.shift();
       return entry;
     }
     function finish(counts = {}, failures = [], invariantResult = null) {
@@ -490,6 +494,27 @@ document.addEventListener('DOMContentLoaded', () => {
       };
       files.push({ name: `${baseName}.diagnostics_summary.json`, content: JSON.stringify(diagSummary, null, 2), mime: 'application/json' });
 
+      // B2) min_forensics.json — always present in every ZIP
+      const minForensics = {
+        schema: 'min-forensics.v1',
+        runId,
+        platform: currentChatData.platform,
+        toolVersion: '0.12.1',
+        exportedAt: new Date().toISOString(),
+        messageCount: msgs.length,
+        anomalyScore: invariantResult.pass ? 0 : 30,
+        triageCategory: invariantResult.pass ? 'ok' : (formatErrors.length > 0 ? 'partial_fail' : 'warnings'),
+      };
+      files.push({ name: `${baseName}.min_forensics.json`, content: JSON.stringify(minForensics, null, 2), mime: 'application/json' });
+
+      // B3) diagnostics.jsonl — included when debug mode is ON
+      if (debug) {
+        const jsonlLines = recorder.toJsonl();
+        if (jsonlLines) {
+          files.push({ name: `${baseName}.diagnostics.jsonl`, content: jsonlLines, mime: 'application/x-ndjson' });
+        }
+      }
+
       if (files.length === 1 && !checkZip.checked) {
         // edge case: no content files generated, only manifest — single-file download
         setProcessingProgress(95, 'Finalizing');
@@ -520,6 +545,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (chrome.runtime.lastError) console.warn('[Diagnostics] SW store failed:', chrome.runtime.lastError.message);
       });
     } catch (_swErr) { /* SW may be inactive; popup still has lastDiagnostics */ }
+    // Phase 2: Persist to chrome.storage.local as durable fallback
+    try {
+      chrome.storage.local.set({ last_min_forensics: lastDiagnostics });
+    } catch (_stErr) { /* storage unavailable */ }
 
     // Show warning if formats failed but export continued
     if (formatErrors.length > 0) {
@@ -1684,7 +1713,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Forensic bundle export: 3-file download (diagnostics.jsonl, run_summary.json, asset_failures.json)
   if (btnDownloadDiagnostics) {
     btnDownloadDiagnostics.onclick = withGesture(async () => {
-      // D2: Try local cache first, then fall back to SW storage
+      // D2: 3-tier fallback: (1) local cache → (2) SW storage → (3) chrome.storage.local
       if (!lastDiagnostics) {
         try {
           const swResp = await new Promise((resolve) => {
@@ -1694,14 +1723,36 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (_) { /* SW unavailable */ }
       }
       if (!lastDiagnostics) {
-        showInfo('No Diagnostics', 'No extraction or export has run yet. Navigate to a supported chat page and try again.');
-        return;
+        // Tier 3: chrome.storage.local
+        try {
+          const stored = await new Promise((resolve) => {
+            chrome.storage.local.get('last_min_forensics', (r) => resolve(r));
+          });
+          if (stored?.last_min_forensics) lastDiagnostics = stored.last_min_forensics;
+        } catch (_) { /* storage unavailable */ }
       }
       const date = new Date().toISOString().slice(0, 10);
       const prefix = `${(currentChatData?.platform || 'Export').replace(/[^a-zA-Z0-9]/g, '')}_${date}`;
 
+      // INVARIANT: always produce a downloadable bundle — never "No Diagnostics"
+      if (!lastDiagnostics) {
+        // Produce minimal empty-state diagnostics file
+        lastDiagnostics = {
+          schema_version: 'diagnostics.v6',
+          run: { run_id: 'none', started_at_utc: null, ended_at_utc: null, tool_version: '0.12.1', platform: currentChatData?.platform || 'unknown' },
+          tabScope: activeTabId != null ? `tab:${activeTabId}` : 'global',
+          entries: [],
+          counts: { messages_total: 0, messages_unknown: 0, assets_failed: 0 },
+          failures: [],
+          scorecard: { messages_total: 0, unknown_role_ratio: 0, unknown_role_pass: false, has_messages: false, anomalyScore: 100 },
+          invariants: null,
+          verbose: false,
+          _empty_reason: 'no_export_has_run_yet',
+        };
+      }
+
       // File 1: diagnostics.jsonl (all flight recorder entries)
-      const jsonlContent = lastDiagnostics.entries.map((e) => JSON.stringify(e)).join('\n');
+      const jsonlContent = (lastDiagnostics.entries || []).map((e) => JSON.stringify(e)).join('\n');
       // File 2: run_summary.json (run metadata + scorecard)
       const runSummary = {
         schema_version: lastDiagnostics.schema_version,
@@ -1709,18 +1760,30 @@ document.addEventListener('DOMContentLoaded', () => {
         tabScope: lastDiagnostics.tabScope,
         counts: lastDiagnostics.counts,
         scorecard: lastDiagnostics.scorecard,
-        entryCount: lastDiagnostics.entries.length,
+        entryCount: (lastDiagnostics.entries || []).length,
       };
       // File 3: asset_failures.json
       const assetFailures = {
         failures: lastDiagnostics.failures || [],
         failureCount: (lastDiagnostics.failures || []).length,
       };
+      // File 4: min_forensics.json (always present)
+      const minForensics = {
+        schema: 'min-forensics.v1',
+        runId: lastDiagnostics.run?.run_id || 'none',
+        platform: lastDiagnostics.run?.platform || 'unknown',
+        toolVersion: lastDiagnostics.run?.tool_version || '0.12.1',
+        exportedAt: new Date().toISOString(),
+        messageCount: lastDiagnostics.counts?.messages_total || 0,
+        anomalyScore: lastDiagnostics.scorecard?.anomalyScore ?? -1,
+        triageCategory: lastDiagnostics._empty_reason ? 'empty' : (lastDiagnostics.scorecard?.anomalyScore > 30 ? 'warnings' : 'ok'),
+      };
 
       const bundleFiles = [
-        { name: `${prefix}.diagnostics.jsonl`, content: jsonlContent, mime: 'application/x-ndjson' },
+        { name: `${prefix}.diagnostics.jsonl`, content: jsonlContent || '', mime: 'application/x-ndjson' },
         { name: `${prefix}.run_summary.json`, content: JSON.stringify(runSummary, null, 2), mime: 'application/json' },
         { name: `${prefix}.asset_failures.json`, content: JSON.stringify(assetFailures, null, 2), mime: 'application/json' },
+        { name: `${prefix}.min_forensics.json`, content: JSON.stringify(minForensics, null, 2), mime: 'application/json' },
       ];
 
       const zip = await createRobustZip(bundleFiles);

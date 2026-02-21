@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>PDF Render</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+Arabic:wght@400;700&family=Noto+Sans+SC:wght@400;700&family=Noto+Sans+JP:wght@400;700&display=swap"
+        rel="stylesheet">
+    <style>
+        @page {
+            size: A4;
+            margin: 20mm 18mm;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', 'Noto Sans Arabic', 'Noto Sans SC', 'Noto Sans JP', Arial, sans-serif;
+            font-size: 11pt;
+            line-height: 1.6;
+            color: #1a1a2e;
+            background: #fff;
+            padding: 0;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
+
+        h1 {
+            font-size: 20pt;
+            font-weight: 700;
+            color: #1e3a5f;
+            margin-bottom: 12pt;
+            padding-bottom: 8pt;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .msg {
+            margin-bottom: 16pt;
+            page-break-inside: avoid;
+        }
+
+        .role {
+            font-size: 12pt;
+            font-weight: 700;
+            padding: 4pt 10pt;
+            border-radius: 4pt;
+            display: inline-block;
+            margin-bottom: 4pt;
+        }
+
+        .role-user {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .role-assistant {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .role-other {
+            background: #f3f4f6;
+            color: #374151;
+        }
+
+        .msg-content {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-size: 11pt;
+            line-height: 1.6;
+            padding: 6pt 0;
+        }
+
+        .msg-content img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 8pt 0;
+            border-radius: 6pt;
+        }
+
+        pre,
+        code {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 9.5pt;
+            background: #f8f9fa;
+            border-radius: 4pt;
+        }
+
+        pre {
+            padding: 8pt 12pt;
+            overflow-x: auto;
+            margin: 6pt 0;
+            border: 1px solid #e5e7eb;
+            page-break-inside: avoid;
+        }
+
+        code {
+            padding: 1pt 3pt;
+        }
+
+        .footer {
+            font-size: 8pt;
+            color: #9ca3af;
+            margin-top: 24pt;
+            border-top: 1px solid #e5e7eb;
+            padding-top: 6pt;
+            page-break-before: avoid;
+        }
+
+        /* RTL support */
+        [dir="rtl"] {
+            text-align: right;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="render-root"></div>
+    <script>
+        /* Render chat data from chrome.storage.local into DOM for PrintToPDF */
+        (async function () {
+            const stored = await new Promise(r => chrome.storage.local.get('pdf_render_data', r));
+            const data = stored?.pdf_render_data;
+            if (!data) {
+                document.getElementById('render-root').textContent = 'No data to render.';
+                return;
+            }
+
+            const root = document.getElementById('render-root');
+            const { title, messages, platform, exportDate } = data;
+
+            // Title
+            const h1 = document.createElement('h1');
+            h1.textContent = title || 'Chat Export';
+            root.appendChild(h1);
+
+            // Detect text direction
+            function detectDir(text) {
+                if (/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF\u0590-\u05FF]/.test(text)) return 'rtl';
+                return 'ltr';
+            }
+
+            // Escape HTML
+            function esc(t) {
+                return (t || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            }
+
+            // Process message content: convert [[IMG:...]] tokens and markdown images to <img>
+            function processContent(content) {
+                let html = esc(content || '');
+                // [[IMG:...]] tokens
+                html = html.replace(/\[\[IMG:([\s\S]*?)\]\]/g, (_, src) => {
+                    const s = src.trim();
+                    if (/^(data:image\/|https?:\/\/)/.test(s)) return `<img src="${s}" alt="Image">`;
+                    return '';
+                });
+                // Markdown images: ![alt](src)
+                html = html.replace(/!\[[^\]]*\]\((data:image\/[^)]+|https?:\/\/[^)]+)\)/g, (_, src) => {
+                    return `<img src="${src}" alt="Image">`;
+                });
+                // Code blocks
+                html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+                    return `<pre><code>${code}</code></pre>`;
+                });
+                // Newlines to <br>
+                html = html.replace(/\n/g, '<br>');
+                return html;
+            }
+
+            for (const m of (messages || [])) {
+                const div = document.createElement('div');
+                div.className = 'msg';
+
+                const dir = detectDir(m.content || '');
+                if (dir === 'rtl') div.setAttribute('dir', 'rtl');
+
+                const roleClass = /user/i.test(m.role) ? 'role-user' : (/assistant/i.test(m.role) ? 'role-assistant' : 'role-other');
+                const roleEl = document.createElement('div');
+                roleEl.className = `role ${roleClass}`;
+                roleEl.textContent = m.role || 'Unknown';
+                div.appendChild(roleEl);
+
+                const contentEl = document.createElement('div');
+                contentEl.className = 'msg-content';
+                contentEl.innerHTML = processContent(m.content);
+                div.appendChild(contentEl);
+
+                root.appendChild(div);
+            }
+
+            // Footer
+            const footer = document.createElement('div');
+            footer.className = 'footer';
+            footer.textContent = `Exported from ${platform || 'AI Chat'} on ${exportDate || new Date().toISOString()} — AI Chat Exporter v0.12.1`;
+            root.appendChild(footer);
+
+            // Signal ready for PrintToPDF
+            document.title = 'PDF_RENDER_READY';
+        })();
+    </script>
+</body>
+
+</html>
