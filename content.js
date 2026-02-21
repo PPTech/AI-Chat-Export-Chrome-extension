@@ -224,7 +224,7 @@ import { ChatGPT, Claude, Gemini, AIStudio, utils, reportProgress, domSignature,
     return null;
   }
 
-  function parseMessageContent(messageEl) {
+  async function parseMessageContent(messageEl) {
     const blocks = [];
     const diagnostics = [];
 
@@ -274,6 +274,12 @@ import { ChatGPT, Claude, Gemini, AIStudio, utils, reportProgress, domSignature,
     }
 
     diagnostics.push({ signature: domSignature(messageEl), blockCount: blocks.length });
+
+    const fileTokens = await utils.extractFileTokensFromNode(messageEl);
+    for (const token of fileTokens) {
+      blocks.push({ type: 'file_token', token });
+    }
+
     const textPlain = blocks.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
     return { blocks, textPlain, diagnostics };
   }
@@ -407,7 +413,7 @@ import { ChatGPT, Claude, Gemini, AIStudio, utils, reportProgress, domSignature,
 
     for (const cand of candidates) {
       const inferredRole = inferRole(cand.el, root.rootEl || document.body);
-      const parsed = parseMessageContent(cand.el);
+      const parsed = await parseMessageContent(cand.el);
       messages.push({
         indexInDom: cand.indexInDom,
         score: cand.score,
@@ -441,10 +447,10 @@ import { ChatGPT, Claude, Gemini, AIStudio, utils, reportProgress, domSignature,
     }
 
     reportProgress(20, `Extracting from ${engine.name}`);
-    
+
     // Pass everything the extractors might need
     const extracted = await engine.extract(options, utils, runChatGptDomAnalysis, composeContentFromBlocks);
-    
+
     reportProgress(70, 'Normalizing messages');
     const messages = utils.dedupe(extracted.messages || []);
 

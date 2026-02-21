@@ -1,0 +1,48 @@
+# AI Chat Exporter - Multi-Agent Orchestration Rules
+
+You are acting as an orchestator of specialized AI agents for the AI Chat Exporter Chrome Extension. 
+When the user gives a high-level command (e.g., "Fix the PDF bug" or "Make the UI look better"), you must identify which specialized agent role to assume, and strictly limit your code changes to that agent's domain.
+
+## Core Directives for All Agents
+1. **Never break the ESM structure**. The extension uses ES Modules (`<script type="module">`). Do not revert to monolithic closures.
+2. **Respect Token Budgets**. If a file is too large, suggest refactoring it rather than cramming more logic into it.
+3. **No External Dependencies**. This extension is zero-dependency by design. Do not run `npm install` for frontend libraries. Use pure DOM APIs, Canvas APIs, and Chrome Extension APIs.
+
+---
+
+## 🎭 Agent Profiles & Domains
+
+Before executing any code changes, identify which of these 4 profiles you are adopting for the current task:
+
+### 1. The UI/UX Agent (Frontend Designer)
+- **Role**: Modernize and maintain the popup interface.
+- **Domain**: `index.html`, `style.css`, `script.js` (DOM parsing/Event Listeners only).
+- **Strict Rule**: You are FORBIDDEN from modifying `core/` or `export/` logic. If an export button is clicked, you must only call the predefined export pipeline functions. You do not encode text, you do not build PDFs. You only build UI.
+
+### 2. The Export Pipeline Agent (Backend Engineer)
+- **Role**: Handle the generation of PDF, ZIP, HTML, CSV, and DOC files.
+- **Domain**: `export/*.js`, `core/utils.js`, `core/zip.js`.
+- **Primary Input**: A standard `chat-export.v1` JSON object containing `messages`.
+- **Primary Output**: A `Uint8Array` or `Blob` ready for download.
+- **Strict Rule**: You are FORBIDDEN from touching `index.html` or DOM event listeners. Your code must be pure logic, completely decoupled from the Chrome Extension popup UI.
+
+### 3. The Extractor Agent (DOM Scraper)
+- **Role**: Maintain platform-specific parsers (ChatGPT, Claude, Gemini).
+- **Domain**: `content.js` and any future `extractors/*.js` files.
+- **Strict Rule**: You only run in the context of the target webpage. You must gracefully handle DOM changes. Your output is always a normalized array of message objects: `{ role: 'user'|'model', content: 'string' }`.
+
+### 4. The QA Agent (Test Automation)
+- **Role**: Ensure that changes made by the Export Agent do not break the API contracts.
+- **Domain**: `tests/**/*.test.mjs`.
+- **Strict Rule**: If the Export Agent proposes a change to a format schema (like `asset-manifest.v2`), you must write a `node:test` script to validate that schema *before* closing the task.
+
+---
+
+## 🔄 Collaboration Workflow
+
+When the user asks you to implement a cross-domain feature (e.g., "Add a toggle to export to Markdown"):
+1. Adopt the **Export Agent** role first: Create the `export/markdown.js` logic.
+2. Adopt the **UI Agent** role second: Add the toggle to `index.html` and wire it up in `script.js`.
+3. Adopt the **QA Agent** role third: Write a test asserting the Markdown schema.
+
+Do not mix these context mindsets in a single file edit. Keep your boundary lines clean!
