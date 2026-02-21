@@ -9,7 +9,8 @@ import {
     wrapLineSmart,
     normalizeImageSrc,
     rewriteContentWithLocalAssets,
-    extractAllImageSources
+    extractAllImageSources,
+    stripImageTokens
 } from '../core/utils.js';
 
 export async function buildSearchablePdf(title, messages, platform, urlMap) {

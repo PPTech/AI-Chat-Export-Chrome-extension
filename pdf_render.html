@@ -163,6 +163,10 @@
                     if (/^(data:image\/|https?:\/\/)/.test(s)) return `<img src="${s}" alt="Image">`;
                     return '';
                 });
+                // [[FILE:url|name]] tokens
+                html = html.replace(/\[\[FILE:([^|\]]+)\|([^\]]+)\]\]/g, (_, url, name) => {
+                    return `<div style="padding: 6pt; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 4pt; margin: 4pt 0; display: inline-block;"><strong>📎 Attachment:</strong> ${esc(name)}</div>`;
+                });
                 // Markdown images: ![alt](src)
                 html = html.replace(/!\[[^\]]*\]\((data:image\/[^)]+|https?:\/\/[^)]+)\)/g, (_, src) => {
                     return `<img src="${src}" alt="Image">`;
