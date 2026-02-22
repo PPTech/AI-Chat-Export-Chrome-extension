@@ -43,31 +43,47 @@
         }
 
         .msg {
-            margin-bottom: 16pt;
+            margin-bottom: 20pt;
             page-break-inside: avoid;
+            padding-left: 12pt;
         }
 
         .role {
-            font-size: 12pt;
+            font-size: 11pt;
             font-weight: 700;
-            padding: 4pt 10pt;
+            padding: 3pt 8pt;
             border-radius: 4pt;
             display: inline-block;
-            margin-bottom: 4pt;
+            margin-bottom: 6pt;
+        }
+
+        /* User Message Styling */
+        .msg.msg-user {
+            border-left: 3px solid #dbeafe;
         }
 
         .role-user {
-            background: #dbeafe;
+            background: #eff6ff;
             color: #1e40af;
         }
 
+        /* Assistant Message Styling */
+        .msg.msg-assistant {
+            border-left: 3px solid #d1fae5;
+        }
+
         .role-assistant {
-            background: #d1fae5;
+            background: #f0fdf4;
             color: #065f46;
         }
 
+        /* Other Message Styling */
+        .msg.msg-other {
+            border-left: 3px solid #e5e7eb;
+        }
+
         .role-other {
-            background: #f3f4f6;
+            background: #f9fafb;
             color: #374151;
         }
 
@@ -96,11 +112,15 @@
         }
 
         pre {
-            padding: 8pt 12pt;
-            overflow-x: auto;
-            margin: 6pt 0;
+            padding: 10pt 12pt;
+            white-space: pre-wrap;
+            /* Forces PDF to wrap code lines instead of clipping */
+            word-wrap: break-word;
+            margin: 8pt 0;
             border: 1px solid #e5e7eb;
             page-break-inside: avoid;
+            border-left: 3px solid #cbd5e1;
+            background: #f8fafc;
         }
 
         code {
@@ -108,11 +128,11 @@
         }
 
         .footer {
-            font-size: 8pt;
-            color: #9ca3af;
-            margin-top: 24pt;
+            font-size: 9pt;
+            color: #64748b;
+            margin-top: 30pt;
             border-top: 1px solid #e5e7eb;
-            padding-top: 6pt;
+            padding-top: 8pt;
             page-break-before: avoid;
         }
 
@@ -182,14 +202,17 @@
 
             for (const m of (messages || [])) {
                 const div = document.createElement('div');
-                div.className = 'msg';
+                const isUser = /user/i.test(m.role);
+                const isAssistant = /assistant|system/i.test(m.role);
+                const roleSuffix = isUser ? 'user' : (isAssistant ? 'assistant' : 'other');
+
+                div.className = `msg msg-${roleSuffix}`;
 
                 const dir = detectDir(m.content || '');
                 if (dir === 'rtl') div.setAttribute('dir', 'rtl');
 
-                const roleClass = /user/i.test(m.role) ? 'role-user' : (/assistant/i.test(m.role) ? 'role-assistant' : 'role-other');
                 const roleEl = document.createElement('div');
-                roleEl.className = `role ${roleClass}`;
+                roleEl.className = `role role-${roleSuffix}`;
                 roleEl.textContent = m.role || 'Unknown';
                 div.appendChild(roleEl);
 

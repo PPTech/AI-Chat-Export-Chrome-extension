@@ -12,36 +12,36 @@
   <style>
     /* ─── Design Tokens ─── */
     :root {
-      --bg-color: #f0f2f5;
-      --bg-gradient: linear-gradient(135deg, #f0f2f5 0%, #e2e8f0 50%, #dbeafe 100%);
+      --bg-color: #f8fafc;
+      --bg-gradient: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e2e8f0 100%);
       --text-main: #0f172a;
-      --text-sub: #64748b;
-      --border: rgba(148, 163, 184, 0.25);
-      --primary: #6366f1;
-      --primary-hover: #4f46e5;
-      --primary-glow: rgba(99, 102, 241, 0.25);
-      --accent-gradient: linear-gradient(135deg, #6366f1 0%, #06b6d4 100%);
-      --surface: rgba(255, 255, 255, 0.72);
-      --surface-hover: rgba(255, 255, 255, 0.88);
-      --glass-blur: blur(16px);
+      --text-sub: #475569;
+      --border: rgba(148, 163, 184, 0.4);
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --primary-glow: rgba(79, 70, 229, 0.25);
+      --accent-gradient: linear-gradient(135deg, #4f46e5 0%, #0ea5e9 100%);
+      --surface: rgba(255, 255, 255, 0.85);
+      --surface-hover: rgba(255, 255, 255, 1);
+      --glass-blur: blur(20px);
       --danger: #ef4444;
       --warning: #f59e0b;
       --success: #10b981;
-      --card-shadow: 0 4px 24px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.04);
-      --modal-shadow: 0 25px 60px -12px rgba(15, 23, 42, 0.2);
+      --card-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(15, 23, 42, 0.04);
+      --modal-shadow: 0 25px 60px -12px rgba(15, 23, 42, 0.25);
     }
 
     body.dark {
-      --bg-color: #0c0f1a;
-      --bg-gradient: linear-gradient(135deg, #0c0f1a 0%, #111827 50%, #0f172a 100%);
-      --text-main: #f1f5f9;
-      --text-sub: #94a3b8;
-      --border: rgba(148, 163, 184, 0.12);
-      --surface: rgba(30, 41, 59, 0.65);
-      --surface-hover: rgba(30, 41, 59, 0.85);
-      --primary-glow: rgba(99, 102, 241, 0.18);
-      --card-shadow: 0 4px 24px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.15);
-      --modal-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.5);
+      --bg-color: #0b0f19;
+      --bg-gradient: linear-gradient(135deg, #0b0f19 0%, #0f172a 50%, #1e293b 100%);
+      --text-main: #f8fafc;
+      --text-sub: #cbd5e1;
+      --border: rgba(148, 163, 184, 0.2);
+      --surface: rgba(15, 23, 42, 0.75);
+      --surface-hover: rgba(30, 41, 59, 0.95);
+      --primary-glow: rgba(99, 102, 241, 0.25);
+      --card-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+      --modal-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.6);
     }
 
     /* ─── Reset & Base ─── */
@@ -443,14 +443,13 @@
     }
 
     .export-action:disabled {
-      background: var(--border);
-      opacity: 0.5;
+      background: var(--surface);
+      color: var(--text-sub);
       cursor: not-allowed;
+      border-color: var(--border);
+      opacity: 0.6;
       box-shadow: none;
-    }
-
-    .export-action:disabled::before {
-      display: none;
+      transform: none;
     }
 
     /* ─── Modal Styles ─── */
@@ -721,14 +720,55 @@
   <div class="container">
     <header>
       <div class="logo-area">
-        <h1>AI Exporter <span class="dev-badge">ULTIMATE</span></h1>
+        <h1>
+          AI Exporter
+          <span class="dev-badge">ULTIMATE</span>
+        </h1>
       </div>
-      <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
-        <button id="btn-open-settings" class="icon-btn" title="Settings">⚙️</button>
-        <button id="btn-open-about" class="icon-btn" title="About draft page">ℹ️</button>
-        <button id="btn-open-login" class="icon-btn" title="Login draft page">🔐</button>
-        <button id="btn-open-contact" class="icon-btn" title="Contact draft page">✉️</button>
-        <button id="theme-btn" class="icon-btn" title="Theme">🌓</button>
+      <div style="display:flex;gap:8px;">
+        <!-- Settings Icon -->
+        <button class="icon-btn" id="btn-open-settings" title="Settings">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path
+              d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z">
+            </path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+        </button>
+        <!-- About Icon -->
+        <button class="icon-btn" id="btn-open-about" title="About">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M12 16v-4"></path>
+            <path d="M12 8h.01"></path>
+          </svg>
+        </button>
+        <!-- Login Account Icon -->
+        <button class="icon-btn" id="btn-open-login" title="Account">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+        </button>
+        <!-- Contact Icon -->
+        <button class="icon-btn" id="btn-open-contact" title="Support">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path
+              d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z">
+            </path>
+          </svg>
+        </button>
+        <!-- Theme Toggle Icon -->
+        <button class="icon-btn" id="btn-toggle-theme" title="Toggle Theme" style="border-radius:20px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"></path>
+          </svg>
+        </button>
       </div>
     </header>
 
@@ -763,37 +803,131 @@
 
       <div class="section-title">Output Formats</div>
       <div class="format-grid">
-        <div class="format-item" data-ext="md" title="Export Markdown format">
-          <span class="format-icon">📝</span>
-          <div class="format-text"><label>Markdown</label><span class="tooltip">Clean notes</span></div>
+        <div class="format-item" data-ext="md">
+          <div class="format-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+          </div>
+          <div class="format-text">
+            <label>Markdown</label>
+            <span class="tooltip">Clean notes</span>
+          </div>
         </div>
-        <div class="format-item" data-ext="html" title="Export HTML with embedded images">
-          <span class="format-icon">🌐</span>
-          <div class="format-text"><label>HTML Web</label><span class="tooltip">Full layout</span></div>
+
+        <div class="format-item" data-ext="html">
+          <div class="format-icon" style="color:var(--primary);">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="2" y1="12" x2="22" y2="12"></line>
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z">
+              </path>
+            </svg>
+          </div>
+          <div class="format-text">
+            <label>HTML Web</label>
+            <span class="tooltip">Full layout</span>
+          </div>
         </div>
-        <div class="format-item" data-ext="json" title="Export structured JSON data">
-          <span class="format-icon">📊</span>
-          <div class="format-text"><label>JSON Data</label><span class="tooltip">Raw data</span></div>
+
+        <div class="format-item" data-ext="json">
+          <div class="format-icon" style="color:var(--success);">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="9" y1="3" x2="9" y2="21"></line>
+            </svg>
+          </div>
+          <div class="format-text">
+            <label>JSON Data</label>
+            <span class="tooltip">Raw data</span>
+          </div>
         </div>
-        <div class="format-item" data-ext="doc" title="Export Word-compatible HTML document">
-          <span class="format-icon">📄</span>
-          <div class="format-text"><label>Word Doc</label><span class="tooltip">Embedded images</span></div>
+
+        <div class="format-item" data-ext="doc">
+          <div class="format-icon" style="color:#2563eb;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+          </div>
+          <div class="format-text">
+            <label>Word Doc</label>
+            <span class="tooltip">Embedded images</span>
+          </div>
         </div>
-        <div class="format-item" data-ext="csv" title="Export CSV for Excel">
-          <span class="format-icon">📈</span>
-          <div class="format-text"><label>Excel CSV</label><span class="tooltip">Spreadsheet</span></div>
+
+        <div class="format-item" data-ext="csv">
+          <div class="format-icon" style="color:#ef4444;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <polyline points="3 9 21 9"></polyline>
+              <polyline points="9 21 9 9"></polyline>
+            </svg>
+          </div>
+          <div class="format-text">
+            <label>Excel CSV</label>
+            <span class="tooltip">Spreadsheet</span>
+          </div>
         </div>
-        <div class="format-item" data-ext="sql" title="Export SQL insert statements">
-          <span class="format-icon">🗄️</span>
-          <div class="format-text"><label>SQL DB</label><span class="tooltip">Database Dump</span></div>
+
+        <div class="format-item" data-ext="sql">
+          <div class="format-icon" style="color:#f59e0b;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+              <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+              <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+            </svg>
+          </div>
+          <div class="format-text">
+            <label>SQL DB</label>
+            <span class="tooltip">Database Dump</span>
+          </div>
         </div>
-        <div class="format-item" data-ext="txt" title="Export plain text">
-          <span class="format-icon">📃</span>
-          <div class="format-text"><label>Plain Text</label><span class="tooltip">Simple text</span></div>
+
+        <div class="format-item" data-ext="txt">
+          <div class="format-icon" style="color:var(--text-sub);">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+          </div>
+          <div class="format-text">
+            <label>Plain Text</label>
+            <span class="tooltip">Simple text</span>
+          </div>
         </div>
-        <div class="format-item" data-ext="pdf" title="Export standalone PDF">
-          <span class="format-icon">📕</span>
-          <div class="format-text"><label>PDF</label><span class="tooltip">Standalone File</span></div>
+
+        <div class="format-item" data-ext="pdf">
+          <div class="format-icon" style="color:#dc2626; background: rgba(220,38,38,0.1);">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <rect x="9" y="14" width="6" height="4"></rect>
+              <path d="M12 18v3"></path>
+            </svg>
+          </div>
+          <div class="format-text">
+            <label>PDF</label>
+            <span class="tooltip">Standalone File</span>
+          </div>
         </div>
       </div>
 
