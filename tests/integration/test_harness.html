@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Visual A/B Pipeline Test</title>
+    <style>
+        body { font-family: system-ui, sans-serif; padding: 20px; max-width: 1200px; margin: auto; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .box { border: 1px solid #ccc; border-radius: 8px; padding: 10px; background: #fff; }
+        h2 { margin-top: 0; font-size: 1.2rem; border-bottom: 2px solid #eee; padding-bottom: 5px; }
+        pre { background: #f4f4f4; padding: 10px; white-space: pre-wrap; font-size: 12px; }
+        iframe { width: 100%; height: 400px; border: 1px solid #eee; background: #fafafa; }
+    </style>
+</head>
+<body>
+    <h1>Export Pipeline Visual Validation</h1>
+    <p>Testing HTML and DOCX rendering with .md, .xls, .docx, .txt and .png simulated attachments.</p>
+
+    <div class="grid">
+        <div class="box">
+            <h2>HTML Export Render</h2>
+            <iframe id="html-frame"></iframe>
+        </div>
+        <div class="box">
+            <h2>DOC Export Source (HTML format)</h2>
+            <iframe id="doc-frame"></iframe>
+        </div>
+        <div class="box">
+            <h2>Markdown Source</h2>
+            <pre id="md-source"></pre>
+        </div>
+        <div class="box">
+            <h2>Test Log</h2>
+            <pre id="log"></pre>
+        </div>
+    </div>
+
+    <script type="module">
+        import { generateContent } from '../../lib/export.mjs';
+
+        // Set up mock image using a data URL for actual rendering
+        const dummyImgData = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+        const mockMessages = [
+            {
+                role: 'User',
+                content: 'Please give me a report and some data.'
+            },
+            {
+                role: 'Assistant',
+                content: 'Here is your report and data.\n\n[[FILE:https://chatgpt.com/backend-api/files/file-abc|report.md]]\n[[FILE:https://chatgpt.com/backend-api/files/file-def|financials.xlsx]]\n[[FILE:https://chatgpt.com/backend-api/files/file-ghi|contract.docx]]\n[[FILE:https://chatgpt.com/backend-api/files/file-jkl|notes.txt]]\n\nAnd here is a red pixel image:\n[[IMG:https://chatgpt.com/backend-api/files/img-123]]'
+            }
+        ];
+
+        const data = {
+            title: 'ChatGPT File Test Export',
+            platform: 'ChatGPT',
+            messages: mockMessages
+        };
+
+        // Simulate urlMap after resolveAndEmbedAssets (ZIP context)
+        const urlMap = new Map();
+        urlMap.set('https://chatgpt.com/backend-api/files/file-abc', 'assets/001_report.md');
+        urlMap.set('https://chatgpt.com/backend-api/files/file-def', 'assets/002_financials.xlsx');
+        urlMap.set('https://chatgpt.com/backend-api/files/file-ghi', 'assets/003_contract.docx');
+        urlMap.set('https://chatgpt.com/backend-api/files/file-jkl', 'assets/004_notes.txt');
+        // Map the image to the actual data URL so it renders in the browser
+        urlMap.set('https://chatgpt.com/backend-api/files/img-123', dummyImgData);
+
+        const checkers = {
+            useRaster: false,
+            hasNonLatinChars: () => false,
+            buildSearchablePdf: async () => new Uint8Array([1, 2, 3]), // mock
+            buildCanvasPdf: async () => new Uint8Array([1, 2, 3]), // mock
+            buildTextPdf: () => new Uint8Array([1, 2, 3]), // mock
+        };
+
+        function log(msg) {
+            document.getElementById('log').textContent += msg + '\n';
+        }
+
+        async function runTest() {
+            try {
+                log('Generating HTML...');
+                const htmlRes = await generateContent('html', data, urlMap, checkers);
+                const htmlBlob = new Blob([htmlRes.content], { type: 'text/html' });
+                document.getElementById('html-frame').src = URL.createObjectURL(htmlBlob);
+                log('HTML output generated successfully.');
+
+                log('Generating DOC (HTML-compatible word format)...');
+                const docRes = await generateContent('doc', data, urlMap, checkers);
+                const docBlob = new Blob([docRes.content], { type: 'text/html' });
+                document.getElementById('doc-frame').src = URL.createObjectURL(docBlob);
+                log('DOC output generated successfully.');
+
+                log('Generating MD...');
+                const mdRes = await generateContent('md', data, urlMap, checkers);
+                document.getElementById('md-source').textContent = mdRes.content;
+                log('MD output generated successfully.');
+                log('\nSUCCESS! Visual rendering ready.');
+            } catch (err) {
+                log('ERROR: ' + err.message + '\n' + err.stack);
+            }
+        }
+
+        runTest();
+    </script>
+</body>
+</html>

@@ -35,7 +35,7 @@ export function replaceImageTokensForHtml(content) {
 export function renderImgTag(rawSrc) {
     const src = normalizeImageSrc((rawSrc || '').trim());
     if (!src) return '';
-    return `<img src="${src}" alt="Image" style="max-width:100%;height:auto;display:block;margin:12px 0;border-radius:6px;">`;
+    return `<img src="${escapeHtml(src)}" alt="Image" style="max-width:100%;height:auto;display:block;margin:12px 0;border-radius:6px;">`;
 }
 
 export function splitContentAndImages(content) {
@@ -116,7 +116,7 @@ export function renderRichMessageHtmlWithAssets(content, urlMap) {
             if (!src) return '';
             const safeSrc = /^(data:|https?:\/\/)/.test(src) ? normalizeImageSrc(src) : escapeHtml(src);
             if (!safeSrc) return '';
-            return `<img src="${safeSrc}" alt="Image" style="max-width:100%;height:auto;display:block;margin:12px 0;border-radius:6px;">`;
+            return `<img src="${escapeHtml(safeSrc)}" alt="Image" style="max-width:100%;height:auto;display:block;margin:12px 0;border-radius:6px;">`;
         }
         return escapeHtml(part.value || '').replace(/\n/g, '<br>');
     }).join('');
