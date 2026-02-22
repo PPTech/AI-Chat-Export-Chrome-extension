@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AI Chat Exporter (Ultimate)",
-  "version": "0.13.0",
+  "version": "0.13.1",
   "description": "Industrial-grade multi-platform chat extraction. Secure local-first architecture. No external APIs.",
   "action": {
     "default_popup": "index.html",
@@ -38,12 +38,6 @@
         "*://aistudio.google.com/*"
       ],
       "js": [
-        "lib/extractors/utils.mjs",
-        "lib/extractors/chatgpt.mjs",
-        "lib/extractors/claude.mjs",
-        "lib/extractors/gemini.mjs",
-        "lib/extractors/aistudio.mjs",
-        "lib/extractors/index.mjs",
         "content.js"
       ]
     }
@@ -51,7 +45,8 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "pdf_render.html"
+        "pdf_render.html",
+        "lib/extractors/*.mjs"
       ],
       "matches": [
         "<all_urls>"

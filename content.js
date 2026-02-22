@@ -2,11 +2,16 @@
 // Author: Dr. Babak Sorkhpour (with help of AI)
 // content.js - Platform Engine Orchestrator v0.12.1
 
-import { ChatGPT, Claude, Gemini, AIStudio, utils, reportProgress, domSignature, normalizeContent, composeContentFromBlocks } from './lib/extractors/index.mjs';
+import('./lib/extractors/index.mjs').catch(() => { }); // Hint for IDE
 
-(() => {
+(async () => {
   if (window.hasRunContent) return;
   window.hasRunContent = true;
+
+  // Dynamically load ES modules since content scripts execute as classic scripts
+  const modUrl = chrome.runtime.getURL('lib/extractors/index.mjs');
+  const extractors = await import(modUrl);
+  const { ChatGPT, Claude, Gemini, AIStudio, utils, reportProgress, domSignature, normalizeContent, composeContentFromBlocks } = extractors;
 
   const CHATGPT_ANALYSIS_KEY = 'CHATGPT_DOM_ANALYSIS';
 
